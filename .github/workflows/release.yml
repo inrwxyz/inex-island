@@ -1,0 +1,52 @@
+name: 'Release Inex Island'
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    permissions:
+      contents: write
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build Tauri Application
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: v__VERSION__
+          releaseName: 'Inex Island v__VERSION__'
+          releaseBody: |
+            ## Inex Island v__VERSION__
+
+            ### ✨ What's New in v__VERSION__
+            - 🎵 **Enhanced 5-Band Audio Visualizer**: Upgraded WASAPI Loopback FFT analyzer with realistic dynamic treble response, bringing high-frequency transients and beats to life.
+            - ⚡ **P2P Wireless File Drop Improvements**: Added in-flight transfer cancel button (✕) in the notch, host room exit controls, and strict peer disconnect isolation.
+            - ☁️ **Private Firebase Signaling**: Support for user-configured private Firebase Realtime Database URLs via Settings.
+            - 🌦️ **Crisp Vector Weather**: Modern, crisp vector SVG weather icons with automatic location detection and strict CSP protection.
+            - 🔒 **Inex Locker Priority**: Dynamic unlocking animations with automatic priority restoration for running file transfers.
+            - 📄 **GNU GPL-3.0 License**: Fully protected under the GNU General Public License v3.0.
+
+            ### 📦 Installation
+            Download `Inex Island___VERSION___x64-setup.exe` below and run the installer.
+          releaseDraft: false
+          prerelease: false

@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="dark" />
+  <title>Inex Island Settings</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&family=Lexend:wght@400;500;600;700&family=Montserrat:wght@400;500;600;700&family=Outfit:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700&family=Poppins:wght@400;500;600;700&family=Raleway:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=Syne:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="settings.css" />
+</head>
+<body>
+  <div class="win">
+    <header id="titlebar">
+      <div class="header-left">
+        <span class="slash">/</span>
+        <span class="header-title">Settings</span>
+      </div>
+      <div class="header-right">
+        <button id="btn-reset-header" class="btn-reset-header" title="Reset all settings to factory defaults">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 3v6h6"/></svg>
+          <span>Reset to Defaults</span>
+        </button>
+        <button id="btn-close" class="x" title="Close">×</button>
+      </div>
+    </header>
+    <div class="body">
+      <nav id="nav"></nav>
+      <main id="page"></main>
+    </div>
+  </div>
+  <script type="module" src="settings.js"></script>
+</body>
+</html>

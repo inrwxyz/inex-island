@@ -1,0 +1,16 @@
+{
+  "name": "inex-island",
+  "private": false,
+  "version": "0.2.0",
+  "license": "GPL-3.0-or-later",
+  "scripts": {
+    "tauri": "tauri",
+    "dev": "tauri dev",
+    "build": "tauri build",
+    "build:main": "node scripts/build-main.mjs",
+    "clean": "cargo clean --manifest-path src-tauri/Cargo.toml"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.0.0"
+  }
+}
