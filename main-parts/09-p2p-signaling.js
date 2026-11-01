@@ -19,30 +19,48 @@ function updateP2PExpiryUI() {
   timerEl.classList.remove('hidden');
 }
 
-document.getElementById('btn-gen-code').addEventListener('click', async () => {
+document.getElementById('btn-open-p2p-settings')?.addEventListener('click', () => {
+  invokeTauri('open_settings');
+});
+
+document.getElementById('btn-gen-code')?.addEventListener('click', async () => {
   appState.isCodeHost = true;
   appState.manuallyDisconnected.clear();
   const code = String(Math.floor(100000 + Math.random() * 900000));
-  document.getElementById('btn-gen-code').classList.add('hidden');
+  document.getElementById('btn-gen-code')?.classList.add('hidden');
+  document.getElementById('p2p-join-box')?.classList.add('hidden');
   const badge = document.getElementById('code-display-box');
-  badge.classList.remove('hidden');
+  badge?.classList.remove('hidden');
   document.getElementById('my-p2p-code').textContent = code;
   document.getElementById('btn-exit-room')?.classList.remove('hidden');
   await startFirebaseSignalingRoom(code, true);
 });
 
-document.getElementById('code-display-box').addEventListener('click', () => {
-  const code = document.getElementById('my-p2p-code').textContent;
-  navigator.clipboard?.writeText(code);
+document.getElementById('code-display-box')?.addEventListener('click', () => {
+  const code = document.getElementById('my-p2p-code')?.textContent;
+  if (code && code !== '------') {
+    navigator.clipboard?.writeText(code);
+    showToast('unlock', 'Code copied to clipboard!', 1500);
+  }
 });
 
-document.getElementById('btn-join-code').addEventListener('click', async () => {
+const handleP2PJoin = async () => {
+  const code = document.getElementById('input-peer-code')?.value.trim();
+  if (!code || code.length < 4) {
+    showToast('lock', 'Enter valid 6-digit code', 1800);
+    return;
+  }
   appState.isCodeHost = false;
   appState.manuallyDisconnected.clear();
-  const code = document.getElementById('input-peer-code').value.trim();
-  if (code.length < 4) return;
+  document.getElementById('btn-gen-code')?.classList.add('hidden');
+  document.getElementById('p2p-join-box')?.classList.add('hidden');
   document.getElementById('btn-exit-room')?.classList.remove('hidden');
   await startFirebaseSignalingRoom(code, false);
+};
+
+document.getElementById('btn-join-code')?.addEventListener('click', handleP2PJoin);
+document.getElementById('input-peer-code')?.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') handleP2PJoin();
 });
 
 document.getElementById('btn-exit-room')?.addEventListener('click', () => {
@@ -87,6 +105,9 @@ async function exitP2PRoom(isManual = true) {
   for (const id of Array.from(rtcPeers.keys())) {
     cleanupPeer(id);
   }
+  if (typeof broadcastDirectState === 'function') {
+    broadcastDirectState({ phase: 'standby' });
+  }
 
   // 3. Clear timers
   if (appState.pollSignalTimer) {
@@ -112,6 +133,7 @@ async function exitP2PRoom(isManual = true) {
   // 5. Reset UI
   document.getElementById('code-display-box')?.classList.add('hidden');
   document.getElementById('btn-gen-code')?.classList.remove('hidden');
+  document.getElementById('p2p-join-box')?.classList.remove('hidden');
   document.getElementById('btn-exit-room')?.classList.add('hidden');
   const timerEl = document.getElementById('p2p-expiry-timer');
   if (timerEl) timerEl.classList.add('hidden');
@@ -457,6 +479,9 @@ function cleanupPeer(peerId) {
     dropTransferState(entry);
     try { if (entry.dc) { entry.dc.onclose = null; entry.dc.close(); } } catch (_) {}
     try { if (entry.pc) entry.pc.close(); } catch (_) {}
+  }
+  if (peerId === 'direct-peer' && typeof broadcastDirectState === 'function') {
+    broadcastDirectState({ phase: 'standby' });
   }
   syncConnectedPeersList();
   refreshTransferUI();

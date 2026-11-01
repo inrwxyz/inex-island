@@ -6,7 +6,7 @@
 [![Backend](https://img.shields.io/badge/Backend-Rust%202021-DEA584?style=flat-square&logo=rust)](https://github.com/inrwxyz/inex-island)
 [![Framework](https://img.shields.io/badge/Framework-Tauri%202-FFC131?style=flat-square&logo=tauri)](https://tauri.app/)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg?style=flat-square)](LICENSE)
-[![Release](https://img.shields.io/badge/Release-v0.2.0-brightgreen?style=flat-square)](https://github.com/inrwxyz/inex-island/releases)
+[![Release](https://img.shields.io/badge/Release-v0.3.0-brightgreen?style=flat-square)](https://github.com/inrwxyz/inex-island/releases)
 
 ---
 
@@ -17,17 +17,31 @@
   - **Floating Island**: Clean, rounded pill floating beneath the top edge.
   - **Fullscreen Awareness**: Automatically hides when gaming or running fullscreen apps.
 
-- 🎵 **5-Band Real Audio Visualizer (WASAPI Loopback + FFT)**:
-  - Direct hardware audio capture through Windows WASAPI Loopback (no virtual audio drivers needed).
-  - 512-point Fast Fourier Transform (FFT) with tuned dynamic compensation across all 5 bands (Sub-bass, Bass, Midrange, High-Mid, and responsive Treble).
-  - Event-driven ~32ms rendering with **0% idle CPU footprint**.
-
-- ⚡ **Direct WebRTC P2P Wireless File Drop**:
-  - Blazing-fast device-to-device file transfer directly over WebRTC DataChannels.
+- ⚡ **Dual P2P Wireless File Drop**:
+  - **Firebase Cloud Signaling**: Quick 6-digit room discovery with live 5-minute countdown and multi-peer support (up to 5 PCs).
+  - **Serverless Direct 1-on-1 Handshake**: Zero-cloud, completely offline P2P connection using compressed host & reply codes.
   - Streamed chunk-by-chunk to disk to prevent RAM bloat on large transfers.
   - **Mid-Transfer Cancel**: Cancel button (✕) in the island to stop in-flight transfers cleanly.
-  - **Room Host Controls & Clean Disconnect**: Host room exit disconnects all participants cleanly; disconnected peers remain permanently isolated without reconnect loops.
+  - **Clean Room Controls**: Disconnect cleanly at any time with a dedicated Exit Room button.
   - Drag & drop files straight onto the notch or shelf.
+
+- 🎧 **Audio Output Switcher (Native Windows CoreAudio COM)**:
+  - 1-click device switching between Speakers, Headphones, and Bluetooth headsets directly from the media player or control center.
+  - In-process Windows `IPolicyConfig` COM implementation with 0% terminal overhead.
+
+- 📅 **Interactive Calendar & Pomodoro Focus Timer**:
+  - Full interactive monthly calendar with month-by-month navigation and current-day highlights.
+  - Standalone Pomodoro Focus Timer with quick presets (5m, 15m, 25m, 45m), live notch countdown, and acoustic chime.
+
+- 📝 **In-Island Quick Notes (Scratchpad)**:
+  - Built-in scratchpad widget in quick action tiles.
+  - Real-time persistence across reboots, live character counter, and 1-click copy-to-clipboard.
+
+- 🎵 **Universal Media Player (GSMTC) & 5-Band Audio Visualizer**:
+  - Universal playback detection via Windows Global System Media Transport Controls (Spotify, YouTube/browsers, Windows Media Player, Apple Music, Deezer, etc.).
+  - Direct hardware audio capture through Windows WASAPI Loopback (no virtual audio drivers needed).
+  - 512-point Fast Fourier Transform (FFT) with tuned dynamic compensation across all 5 bands.
+  - Event-driven ~32ms rendering with **0% idle CPU footprint**.
 
 - ☁️ **Private Firebase Signaling**:
   - Users can connect their own private Firebase Realtime Database URL directly from the Settings menu.

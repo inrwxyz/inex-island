@@ -377,16 +377,25 @@ function renderPeersUI() {
   updateP2PExpiryUI();
   const exitBtn = document.getElementById('btn-exit-room');
   if (exitBtn) {
-    exitBtn.classList.toggle('hidden', !appState.roomCode);
+    exitBtn.classList.toggle('hidden', !appState.roomCode && appState.peers.length === 0);
   }
   const count = appState.peers.length;
+  const inRoomOrConnected = !!(appState.roomCode || count > 0);
+  document.getElementById('btn-gen-code')?.classList.toggle('hidden', inRoomOrConnected);
+  document.getElementById('p2p-join-box')?.classList.toggle('hidden', inRoomOrConnected);
+  if (appState.isCodeHost && appState.roomCode) {
+    document.getElementById('code-display-box')?.classList.remove('hidden');
+  } else if (!inRoomOrConnected) {
+    document.getElementById('code-display-box')?.classList.add('hidden');
+  }
+  document.getElementById('btn-open-p2p-settings')?.classList.toggle('hidden', count > 0);
   const listEl = document.getElementById('p2p-peers-list');
   const badge = document.getElementById('c-peer-badge');
   const countSpan = document.getElementById('c-peer-count');
   const tileP2P = document.getElementById('tile-p2p');
 
-  document.getElementById('tile-p2p-sub').textContent = `${count}/5 Peers`;
-  document.getElementById('p2p-cap').textContent = count > 0 ? `${count} peer${count > 1 ? 's' : ''}` : '';
+  document.getElementById('tile-p2p-sub').textContent = count > 0 ? (rtcPeers.has('direct-peer') ? 'Direct 1:1' : `${count}/5 Peers`) : 'P2P Link';
+  document.getElementById('p2p-cap').textContent = count > 0 ? (rtcPeers.has('direct-peer') ? '1 direct peer' : `${count} peer${count > 1 ? 's' : ''}`) : '';
   tileP2P.classList.toggle('active', count > 0);
 
   if (count > 0) {
@@ -402,7 +411,14 @@ function renderPeersUI() {
     const msg = appState.roomCode
       ? `Waiting for peers to join code ${appState.roomCode} (5m valid)...`
       : 'Generate a code or enter partner code (Max 5 PCs)';
-    listEl.innerHTML = `<div class="empty-hint">${msg}</div>`;
+    listEl.innerHTML = `
+      <div class="empty-hint">
+        <div>${msg}</div>
+        <button id="btn-open-p2p-settings" class="link-btn" style="margin-top:6px;font-size:10px;opacity:0.75;cursor:pointer;background:none;border:none;color:inherit;text-decoration:underline;">Or use Direct Offline P2P in Settings ↗</button>
+      </div>`;
+    document.getElementById('btn-open-p2p-settings')?.addEventListener('click', () => {
+      invokeTauri('open_settings');
+    });
     return;
   }
 

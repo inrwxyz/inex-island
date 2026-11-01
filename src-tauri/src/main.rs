@@ -1,10 +1,12 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod bluetooth;
+mod audio;
 mod brightness;
 mod live;
 mod locker_bridge;
 mod net;
+mod privacy;
 mod shelf;
 mod visualizer;
 mod wifi;
@@ -77,7 +79,7 @@ fn cmd(program: &str) -> Command {
     c
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 struct MediaInfo {
     playing: bool,
     title: String,
@@ -126,7 +128,33 @@ fn place_island(window: &WebviewWindow, width: f64, height: f64) -> bool {
     false
 }
 
-// 1. Real Windows Media Status (Spotify & YouTube)
+// 1. Real Windows Media Status (Universal Media Detection across all Windows players)
+#[cfg(target_os = "windows")]
+fn get_best_media_session(
+    manager: &windows::Media::Control::GlobalSystemMediaTransportControlsSessionManager,
+) -> Option<windows::Media::Control::GlobalSystemMediaTransportControlsSession> {
+    use windows::Media::Control::GlobalSystemMediaTransportControlsSessionPlaybackStatus as Status;
+    if let Ok(sessions) = manager.GetSessions() {
+        let mut first_valid = None;
+        for s in sessions {
+            if let Ok(info) = s.GetPlaybackInfo() {
+                if let Ok(status) = info.PlaybackStatus() {
+                    if status == Status::Playing {
+                        return Some(s);
+                    }
+                    if first_valid.is_none() && status != Status::Closed && status != Status::Stopped {
+                        first_valid = Some(s);
+                    }
+                }
+            }
+        }
+        if first_valid.is_some() {
+            return first_valid;
+        }
+    }
+    manager.GetCurrentSession().ok()
+}
+
 #[tauri::command]
 async fn get_media_status() -> MediaInfo {
     #[cfg(target_os = "windows")]
@@ -137,7 +165,7 @@ async fn get_media_status() -> MediaInfo {
         };
         if let Ok(op) = GlobalSystemMediaTransportControlsSessionManager::RequestAsync() {
             if let Ok(manager) = op.get() {
-                if let Ok(session) = manager.GetCurrentSession() {
+                if let Some(session) = get_best_media_session(&manager) {
                     let status = session
                         .GetPlaybackInfo()
                         .and_then(|info| info.PlaybackStatus())
@@ -220,7 +248,7 @@ async fn seek_media(position_sec: f64) -> bool {
         use windows::Media::Control::GlobalSystemMediaTransportControlsSessionManager;
         if let Ok(op) = GlobalSystemMediaTransportControlsSessionManager::RequestAsync() {
             if let Ok(manager) = op.get() {
-                if let Ok(session) = manager.GetCurrentSession() {
+                if let Some(session) = get_best_media_session(&manager) {
                     let ticks = (position_sec.max(0.0) * 10_000_000.0) as i64;
                     if let Ok(seek_op) = session.TryChangePlaybackPositionAsync(ticks) {
                         return seek_op.get().unwrap_or(false);
@@ -244,7 +272,7 @@ fn media_art_inner() -> Option<String> {
         .ok()?
         .get()
         .ok()?;
-    let session = manager.GetCurrentSession().ok()?;
+    let session = get_best_media_session(&manager)?;
     let props = session.TryGetMediaPropertiesAsync().ok()?.get().ok()?;
     let thumb = props.Thumbnail().ok()?;
     let stream = thumb.OpenReadAsync().ok()?.get().ok()?;
@@ -338,7 +366,7 @@ async fn media_play_pause() {
         let mut handled = false;
         if let Ok(op) = GlobalSystemMediaTransportControlsSessionManager::RequestAsync() {
             if let Ok(manager) = op.get() {
-                if let Ok(session) = manager.GetCurrentSession() {
+                if let Some(session) = get_best_media_session(&manager) {
                     if let Ok(toggle_op) = session.TryTogglePlayPauseAsync() {
                         let _ = toggle_op.get();
                         handled = true;
@@ -366,7 +394,7 @@ async fn media_next() {
         let mut handled = false;
         if let Ok(op) = GlobalSystemMediaTransportControlsSessionManager::RequestAsync() {
             if let Ok(manager) = op.get() {
-                if let Ok(session) = manager.GetCurrentSession() {
+                if let Some(session) = get_best_media_session(&manager) {
                     if let Ok(next_op) = session.TrySkipNextAsync() {
                         let _ = next_op.get();
                         handled = true;
@@ -394,7 +422,7 @@ async fn media_prev() {
         let mut handled = false;
         if let Ok(op) = GlobalSystemMediaTransportControlsSessionManager::RequestAsync() {
             if let Ok(manager) = op.get() {
-                if let Ok(session) = manager.GetCurrentSession() {
+                if let Some(session) = get_best_media_session(&manager) {
                     if let Ok(prev_op) = session.TrySkipPreviousAsync() {
                         let _ = prev_op.get();
                         handled = true;
@@ -472,6 +500,67 @@ fn get_system_brightness() -> Option<u32> {
 
 #[cfg(target_os = "windows")]
 static CPU_PREV: std::sync::Mutex<(u64, u64)> = std::sync::Mutex::new((0, 0));
+
+// ---- Net speed for the "Net Speed" hover widget -------------------------------------------
+// Bytes in/out of the real (hardware) adapters that are up, from the native IP Helper API.
+// The island only calls get_net_speed while that widget is selected, so it costs nothing otherwise.
+#[cfg(target_os = "windows")]
+static NET_PREV: std::sync::Mutex<Option<(std::time::Instant, u64, u64)>> = std::sync::Mutex::new(None);
+
+#[cfg(target_os = "windows")]
+fn net_octets() -> (u64, u64) {
+    use windows::Win32::NetworkManagement::IpHelper::{FreeMibTable, GetIfTable2, MIB_IF_TABLE2};
+    let (mut rx, mut tx) = (0u64, 0u64);
+    unsafe {
+        let mut table: *mut MIB_IF_TABLE2 = std::ptr::null_mut();
+        let _ = GetIfTable2(&mut table);
+        if table.is_null() {
+            return (0, 0);
+        }
+        let n = (*table).NumEntries as usize;
+        let rows = std::slice::from_raw_parts((*table).Table.as_ptr(), n);
+        for r in rows {
+            // OperStatus 1 = up. The first flag bit is HardwareInterface: it skips VPN, Hyper-V, WSL and loopback
+            // adapters, so the same traffic is never counted twice.
+            let hardware = (*(&r.InterfaceAndOperStatusFlags as *const _ as *const u8)) & 1 != 0;
+            if r.OperStatus.0 == 1 && hardware {
+                rx += r.InOctets;
+                tx += r.OutOctets;
+            }
+        }
+        FreeMibTable(table as *const core::ffi::c_void);
+    }
+    (rx, tx)
+}
+
+// (download, upload) in bytes per second, averaged since the previous call.
+#[tauri::command]
+async fn get_net_speed() -> (u64, u64) {
+    #[cfg(target_os = "windows")]
+    {
+        let (rx, tx) = net_octets();
+        let now = std::time::Instant::now();
+        let mut prev = NET_PREV.lock().unwrap();
+        let out = match *prev {
+            Some((t, prx, ptx)) => {
+                let dt = now.duration_since(t).as_secs_f64();
+                if dt >= 0.5 && dt <= 10.0 {
+                    (
+                        (rx.saturating_sub(prx) as f64 / dt) as u64,
+                        (tx.saturating_sub(ptx) as f64 / dt) as u64,
+                    )
+                } else {
+                    (0, 0) // first call or a long pause: no usable baseline yet
+                }
+            }
+            None => (0, 0),
+        };
+        *prev = Some((now, rx, tx));
+        return out;
+    }
+    #[cfg(not(target_os = "windows"))]
+    (0, 0)
+}
 
 #[cfg(target_os = "windows")]
 fn cpu_percent() -> u32 {
@@ -922,6 +1011,34 @@ fn take_snip() {
     }
 }
 
+#[tauri::command]
+fn launch_quick_action(id: String) {
+    #[cfg(target_os = "windows")]
+    {
+        match id.as_str() {
+            "calc" => {
+                let _ = cmd("calc.exe").spawn();
+            }
+            "taskmgr" => {
+                let _ = cmd("taskmgr.exe").spawn();
+            }
+            "terminal" => {
+                if cmd("wt.exe").spawn().is_err() {
+                    let _ = std::process::Command::new("cmd.exe").arg("/C").arg("start").arg("cmd.exe").spawn();
+                }
+            }
+            "notepad" => {
+                let _ = cmd("notepad.exe").spawn();
+            }
+            "explorer" => {
+                let _ = cmd("explorer.exe").spawn();
+            }
+            _ => {}
+        }
+    }
+}
+
+
 const RUN_KEY: &str = r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run";
 
 // True while the Windows lock screen is up (Win+L, Dynamic Lock, idle lock, sign-in screen).
@@ -1289,6 +1406,8 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             resize_island,
+            get_net_speed,
+            privacy::privacy_watch_start,
             focus_island,
             island_visible,
             is_session_locked,
@@ -1343,6 +1462,10 @@ fn main() {
             get_location,
             lock_screen,
             take_snip,
+            launch_quick_action,
+            audio::get_audio_devices,
+            audio::set_default_audio_device,
+            audio::open_sound_settings,
             bluetooth::bt_set_connection,
             net::file_info,
             net::read_file_chunk,

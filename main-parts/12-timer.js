@@ -110,3 +110,120 @@ document.querySelectorAll('.timer-presets button[data-min]').forEach((btn) => {
   });
 });
 
+// ==================== 10b. CALENDAR GRID ====================
+let calCurrent = new Date();
+
+function renderCalendarGrid() {
+  const container = document.getElementById('cal-days-grid');
+  const title = document.getElementById('cal-month-title');
+  if (!container || !title) return;
+
+  const year = calCurrent.getFullYear();
+  const month = calCurrent.getMonth();
+
+  const monthNames = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ];
+  title.textContent = `${monthNames[month]} ${year}`;
+
+  const firstDayIndex = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const daysInPrevMonth = new Date(year, month, 0).getDate();
+
+  const today = new Date();
+  const isThisMonth = today.getFullYear() === year && today.getMonth() === month;
+  const todayDate = today.getDate();
+
+  container.innerHTML = '';
+
+  for (let i = firstDayIndex - 1; i >= 0; i--) {
+    const d = document.createElement('span');
+    d.className = 'cal-day muted';
+    d.textContent = daysInPrevMonth - i;
+    container.appendChild(d);
+  }
+
+  for (let i = 1; i <= daysInMonth; i++) {
+    const d = document.createElement('span');
+    d.className = 'cal-day';
+    if (isThisMonth && i === todayDate) {
+      d.classList.add('today');
+    }
+    d.textContent = i;
+    container.appendChild(d);
+  }
+
+  const totalCells = firstDayIndex + daysInMonth;
+  const nextDays = totalCells % 7 === 0 ? 0 : 7 - (totalCells % 7);
+  for (let i = 1; i <= nextDays; i++) {
+    const d = document.createElement('span');
+    d.className = 'cal-day muted';
+    d.textContent = i;
+    container.appendChild(d);
+  }
+}
+
+document.getElementById('btn-cal-prev')?.addEventListener('click', () => {
+  calCurrent.setMonth(calCurrent.getMonth() - 1);
+  renderCalendarGrid();
+});
+document.getElementById('btn-cal-next')?.addEventListener('click', () => {
+  calCurrent.setMonth(calCurrent.getMonth() + 1);
+  renderCalendarGrid();
+});
+document.getElementById('btn-cal-today')?.addEventListener('click', () => {
+  calCurrent = new Date();
+  renderCalendarGrid();
+});
+
+// ==================== 10c. QUICK NOTES (BUILT-IN SCRATCHPAD) ====================
+const noteArea = document.getElementById('notepad-textarea');
+const noteCharCount = document.getElementById('notepad-char-count');
+
+function updateNoteCount(len) {
+  if (noteCharCount) noteCharCount.textContent = `${len} character${len === 1 ? '' : 's'}`;
+}
+
+if (noteArea) {
+  const saved = localStorage.getItem('inex.island.notes') || '';
+  noteArea.value = saved;
+  updateNoteCount(saved.length);
+
+  noteArea.addEventListener('input', (e) => {
+    const val = e.target.value;
+    try { localStorage.setItem('inex.island.notes', val); } catch (_) {}
+    updateNoteCount(val.length);
+  });
+}
+
+function focusNotepad() {
+  if (noteArea) {
+    appState.keepOpen = true;
+    invokeTauri('focus_island');
+    setTimeout(() => { noteArea.focus(); appState.keepOpen = false; }, 80);
+  }
+}
+
+document.getElementById('btn-notepad-clear')?.addEventListener('click', () => {
+  if (noteArea) {
+    noteArea.value = '';
+    try { localStorage.setItem('inex.island.notes', ''); } catch (_) {}
+    updateNoteCount(0);
+    showToast('unlock', 'Notes cleared', 1200);
+  }
+});
+
+document.getElementById('btn-notepad-copy')?.addEventListener('click', async () => {
+  if (!noteArea || !noteArea.value) {
+    showToast('snip', 'Note is empty', 1200);
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(noteArea.value);
+    showToast('snip', 'Copied to clipboard', 1200);
+  } catch (_) {
+    showToast('snip', 'Select all & Ctrl+C', 1500);
+  }
+});
+

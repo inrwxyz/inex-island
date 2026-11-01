@@ -18,8 +18,28 @@ export const DEFAULTS = {
   weather: { enabled: true, unit: 'C' },
   widgets: { left: 'weather', right: 'ram' },
   slots: { a: 'wifi', b: 'bt' },
-  overlays: { btBattery: true },
+  menu: {
+    actionTiles: ['awake', 'snip', 'calendar', 'timer', 'notepad', 'lock', 'settings']
+  },
+  overlays: { btBattery: true, privacyDot: true },
   share: { deviceName: '', firebaseUrl: '' }
+};
+
+export const DEFAULT_ACTION_TILES = ['awake', 'snip', 'calendar', 'timer', 'notepad', 'lock', 'settings'];
+
+export const ALL_ACTION_TILES = {
+  awake: { id: 'awake', label: 'Keep Awake', desc: 'Prevent PC from sleeping', icon: 'sun' },
+  snip: { id: 'snip', label: 'Snip Tool', desc: 'Screenshot crop tool (Win+Shift+S)', icon: 'snip' },
+  calendar: { id: 'calendar', label: 'Calendar', desc: 'Monthly calendar view', icon: 'calendar' },
+  timer: { id: 'timer', label: 'Focus Timer', desc: 'Productivity split timer', icon: 'clock' },
+  notepad: { id: 'notepad', label: 'Quick Notes', desc: 'Island built-in scratchpad', icon: 'notepad' },
+  lock: { id: 'lock', label: 'Lock PC', desc: 'Instantly lock Windows session', icon: 'lock' },
+  settings: { id: 'settings', label: 'Settings', desc: 'Open Inex Island settings', icon: 'gear' },
+  calc: { id: 'calc', label: 'Calculator', desc: 'Windows Calculator tool', icon: 'calc' },
+  taskmgr: { id: 'taskmgr', label: 'Task Manager', desc: 'Process and performance monitor', icon: 'activity' },
+  terminal: { id: 'terminal', label: 'Terminal', desc: 'Command Prompt / PowerShell', icon: 'terminal' },
+  explorer: { id: 'explorer', label: 'File Explorer', desc: 'Browse folders & drives', icon: 'folder' },
+  restart: { id: 'restart', label: 'Restart Island', desc: 'Restart Inex Island engine', icon: 'refresh' }
 };
 
 // Control-panel slots: id + label. The island (main.js) holds the behaviour of each id.
@@ -59,6 +79,14 @@ export function load() {
   try {
     const raw = localStorage.getItem(KEY);
     if (raw) merge(base, JSON.parse(raw));
+    if (!base.menu) base.menu = {};
+    if (!Array.isArray(base.menu.actionTiles) || base.menu.actionTiles.length === 0) {
+      base.menu.actionTiles = [...DEFAULT_ACTION_TILES];
+    }
+    base.menu.actionTiles = base.menu.actionTiles.filter((id) => ALL_ACTION_TILES[id]);
+    if (base.menu.actionTiles.length === 0) {
+      base.menu.actionTiles = [...DEFAULT_ACTION_TILES];
+    }
     if (!base.share.deviceName) base.share.deviceName = localStorage.getItem('island_pc_name') || '';
     if (!base.share.firebaseUrl) base.share.firebaseUrl = localStorage.getItem('island_firebase_url') || '';
   } catch (_) { /* storage blocked: defaults */ }

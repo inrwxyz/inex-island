@@ -12,6 +12,13 @@ async function refreshStats() {
   const stats = await invokeTauri('get_sys_stats');
   if (stats) {
     appState.stats = stats;
+    // network speed is only read while the Net Speed widget is selected
+    if (SET.widgets.left === 'net' || SET.widgets.right === 'net') {
+      try {
+        const n = await invokeTauri('get_net_speed');
+        if (Array.isArray(n)) appState.net = n;
+      } catch (_) {}
+    }
     renderWidgets();
     batteryOverlays(stats);
     if (slotRunning.has('wifi')) {
@@ -44,7 +51,7 @@ async function pollLight() {
 setInterval(pollLight, 3000);
 // safety nets only (the events below do the real work)
 setInterval(() => { if (!document.hidden) refreshRadios(); }, 30000);
-setInterval(() => { if (!document.hidden && appState.mediaPlaying) refreshMedia(); }, 2000);
+setInterval(() => { if (!document.hidden) refreshMedia(); }, 2500);
 function onTauriEvent(name, fn) {
   try {
     const r = window.__TAURI__.event.listen(name, fn);
@@ -127,11 +134,5 @@ island.addEventListener('mouseleave', () => {
 });
 
 // 4. Control Center Navigation & Sub-Menus
-document.getElementById('ctrl-clock-tab').addEventListener('click', () => {
-  if (!SET.notch.calendarTimer) return;
-  switchView('view-calendar', 'state-calendar', 346, 210);
-});
-document.getElementById('cal-back-clock').addEventListener('click', () => {
-  switchView('view-control', 'state-control', 316, 256);
-});
+// (Clock in main menu is display-only; subviews navigate back via their left back-arrow)
 

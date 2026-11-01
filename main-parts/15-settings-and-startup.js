@@ -24,12 +24,13 @@ function applySettings() {
       invokeTauri('resize_island', appState.lastWin);
     }, 35);
   }
-  document.getElementById('act-timer').classList.toggle('hidden', !SET.notch.calendarTimer);
+  renderQuickActionTiles();
   document.getElementById('view-media').classList.toggle('no-ambient', !SET.notch.ambientGlow);
   document.getElementById('c-media-btn').classList.toggle('glow', SET.notch.compactGlow);
   if (SET.share.deviceName) myDeviceName = SET.share.deviceName;
   updateClocks();
   renderWidgets();
+  applyPrivacy();
   refreshWeather();
   syncEq();
   refreshMedia();

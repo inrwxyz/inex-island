@@ -1,4 +1,4 @@
-import { DEFAULTS, SLOT_OPTIONS, load, save, subscribe } from './shared.js';
+import { DEFAULTS, SLOT_OPTIONS, ALL_ACTION_TILES, DEFAULT_ACTION_TILES, load, save, subscribe } from './shared.js';
 
 const invoke = (cmd, args) => (window.__TAURI__?.core ? window.__TAURI__.core.invoke(cmd, args) : Promise.resolve(null));
 let S = load();
@@ -37,12 +37,22 @@ const ICON = {
   reset: I('<path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 3v6h6"/>'),
   border: I('<rect x="3" y="3" width="18" height="18" rx="4"/>'),
   font: I('<polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/>'),
+  p2p: I('<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>'),
+  snip: I('<circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/>'),
+  calc: I('<rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" y1="6" x2="16" y2="6"/><line x1="16" y1="14" x2="16" y2="18"/><path d="M8 10h.01M12 10h.01M16 10h.01M8 14h.01M12 14h.01M8 18h.01M12 18h.01"/>'),
+  activity: I('<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>'),
+  terminal: I('<polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>'),
+  notepad: I('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/>'),
+  folder: I('<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>'),
+  lock: I('<rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>'),
+  plus: I('<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>'),
+  minus: I('<line x1="5" y1="12" x2="19" y2="12"/>'),
   github: I('<path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/>'),
   check: I('<polyline points="20 6 9 17 4 12"/>')
 };
 
 // ---------- settings schema ----------
-const WIDGET_OPTS = [['none', 'None'], ['weather', 'Weather'], ['ram', 'RAM'], ['cpu', 'CPU'], ['battery', 'Battery'], ['disk', 'Disk']];
+const WIDGET_OPTS = [['none', 'None'], ['weather', 'Weather'], ['ram', 'RAM'], ['cpu', 'CPU'], ['battery', 'Battery'], ['disk', 'Disk'], ['net', 'Net Speed']];
 const FONT_OPTS = [
   ['jakarta', 'Plus Jakarta Sans (Modern Clean)'],
   ['inter', 'Inter (Crisp & Minimal)'],
@@ -67,6 +77,10 @@ const PAGES = [
       { path: 'appearance.notchOpacity', type: 'range', icon: 'drop', t: 'Opacity', d: 'Solid or translucent notch', min: 30, max: 100, step: 5, unit: '%' },
       { path: 'appearance.cornerRadius', type: 'range', icon: 'corner', t: 'Corner Roundness', d: 'Curvature of the notch and menus', min: 6, max: 26, step: 1, unit: 'px' }
     ] },
+    { title: 'Typography & Scale', rows: [
+      { path: 'appearance.fontStyle', type: 'select', icon: 'font', t: 'Font Family', d: 'Curated modern typefaces applied across the island', options: FONT_OPTS },
+      { path: 'appearance.scale', type: 'range', icon: 'expand', t: 'UI Scale', d: 'Smoothly scales entire island interface and fonts', min: 80, max: 140, step: 5, unit: '%' }
+    ] },
     { title: 'Music & Visualizer', rows: [
       { path: 'notch.musicMode', type: 'toggle', icon: 'music', t: 'Music Mode', d: 'Live interactive music widget' },
       { path: 'notch.compactMode', type: 'toggle', icon: 'expand', t: 'Compact Wave', d: 'Show wave & thumbnail when collapsed', showIf: (s) => s.notch.musicMode },
@@ -81,7 +95,8 @@ const PAGES = [
       { path: 'widgets.left', type: 'select', icon: 'widgets', t: 'Left Hover Widget', d: 'Shown on the left on notch hover', options: WIDGET_OPTS },
       { path: 'widgets.right', type: 'select', icon: 'widgets', t: 'Right Hover Widget', d: 'Shown on the right on notch hover', options: WIDGET_OPTS },
       { path: 'weather.enabled', type: 'toggle', icon: 'cloud', t: 'Live Weather', d: 'Show real-time local weather' },
-      { path: 'weather.unit', type: 'seg', icon: 'sun', t: 'Unit', d: 'Celsius or Fahrenheit', options: [['C', '°C'], ['F', '°F']], showIf: (s) => s.weather.enabled }
+      { path: 'weather.unit', type: 'seg', icon: 'sun', t: 'Unit', d: 'Celsius or Fahrenheit', options: [['C', '°C'], ['F', '°F']], showIf: (s) => s.weather.enabled },
+      { path: 'overlays.privacyDot', type: 'toggle', icon: 'mic', t: 'Mic Indicator', d: 'Small dot beside the clock while an app uses your microphone' }
     ] }
   ] },
 
@@ -103,13 +118,6 @@ const PAGES = [
     ] }
   ] },
 
-  { id: 'style', label: 'Style', icon: 'palette', sections: [
-    { title: 'Typography & Scale', rows: [
-      { path: 'appearance.fontStyle', type: 'select', icon: 'font', t: 'Font Family', d: 'Curated modern typefaces applied across the island', options: FONT_OPTS },
-      { path: 'appearance.scale', type: 'range', icon: 'expand', t: 'UI Scale', d: 'Smoothly scales entire island interface and fonts', min: 80, max: 140, step: 5, unit: '%' }
-    ] }
-  ] },
-
   { id: 'connect', label: 'Connect', icon: 'bt', sections: [
     { title: 'Devices & Share', rows: [
       { path: 'overlays.btBattery', type: 'toggle', icon: 'bt', t: 'Bluetooth Battery', d: 'Show battery % on connected Bluetooth headphones' },
@@ -117,7 +125,7 @@ const PAGES = [
     ] }
   ] },
 
-  { id: 'firebase', label: 'Firebase', icon: 'cloud', firebase: true, sections: [] },
+  { id: 'p2p', label: 'P2P', icon: 'p2p', firebase: true, sections: [] },
 
   { id: 'system', label: 'System', icon: 'gear', sections: [
     { title: 'Startup & Alerts', rows: [
@@ -302,8 +310,18 @@ function renderRow(row) {
 
 // ---------- pages ----------
 let current = 'notch';
+let directState = { phase: 'standby' };
+let directTimerInterval = null;
 
-let updateStatusMsg = localStorage.getItem('inex.update.status') || 'Inex Island is up to date (v0.2.0)';
+try {
+  window.__TAURI__?.event?.listen('direct-p2p-state', (e) => {
+    directState = e.payload || { phase: 'standby' };
+    if (current === 'p2p') renderPage();
+  });
+  window.__TAURI__?.event?.emit('direct-p2p-cmd', { action: 'get-state' });
+} catch (_) {}
+
+let updateStatusMsg = localStorage.getItem('inex.update.status') || 'Inex Island is up to date (v0.3.0)';
 let updateCheckTime = localStorage.getItem('inex.update.time') || 'Checked today';
 
 let isUpdating = false;
@@ -356,35 +374,238 @@ function renderNav() {
     const b = el('button', p.id === current ? 'on' : '', ICON[p.icon] + `<span>${p.label}</span>`);
     b.addEventListener('click', () => {
       current = p.id;
+      if (current === 'p2p') {
+        try { window.__TAURI__?.event?.emit('direct-p2p-cmd', { action: 'get-state' }); } catch (_) {}
+      }
       renderNav();
       renderPage(true);
     });
     nav.append(b);
   });
 }
+const escHtml = (s) => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+function renderQuickActionTilesEditor(main) {
+  if (!S.menu) S.menu = { actionTiles: [...DEFAULT_ACTION_TILES] };
+  if (!Array.isArray(S.menu.actionTiles)) S.menu.actionTiles = [...DEFAULT_ACTION_TILES];
+
+  const addedIds = S.menu.actionTiles;
+  const moreBuiltInIds = Object.keys(ALL_ACTION_TILES).filter((id) => !addedIds.includes(id));
+
+  const secTitle = el('div', 'sec-title');
+  secTitle.style.cssText = 'display:flex;justify-content:space-between;align-items:center;';
+  secTitle.innerHTML = `<span>Quick Action Tiles</span><span style="font-size:11px;color:var(--muted);font-weight:normal;">Tap – to remove, + to add</span>`;
+  main.append(secTitle);
+
+  const card = el('div', 'card tile-manager-card');
+
+  // 1. Added Tiles (Active Bar)
+  const grp1 = el('div', 'tile-group-header');
+  grp1.innerHTML = `<span class="grp-title">Added Tiles (${addedIds.length} / 7)</span><span class="grp-sub">Shown on island menu quick action bar</span>`;
+  card.append(grp1);
+
+  const grid1 = el('div', 'tiles-grid');
+  addedIds.forEach((id) => {
+    const tile = ALL_ACTION_TILES[id];
+    if (!tile) return;
+    const it = el('div', 'action-tile-item');
+    it.title = tile.desc || tile.label;
+    it.innerHTML = `
+      <div class="tile-badge badge-remove" title="Remove tile from bar">${ICON.minus}</div>
+      <div class="tile-icon-wrap">${ICON[tile.icon] || ICON.spark}</div>
+      <div class="tile-label">${escHtml(tile.label)}</div>
+    `;
+    it.addEventListener('click', () => {
+      if (addedIds.length <= 1) {
+        toast('At least 1 tile must remain active');
+        return;
+      }
+      S.menu.actionTiles = S.menu.actionTiles.filter((x) => x !== id);
+      save(S);
+      renderPage();
+    });
+    grid1.append(it);
+  });
+  card.append(grid1);
+
+  // 2. More Tiles (Built-in)
+  if (moreBuiltInIds.length > 0) {
+    const grp2 = el('div', 'tile-group-header');
+    grp2.style.marginTop = '16px';
+    grp2.innerHTML = `<span class="grp-title">More Tiles</span><span class="grp-sub">Available system tools</span>`;
+    card.append(grp2);
+
+    const grid2 = el('div', 'tiles-grid');
+    moreBuiltInIds.forEach((id) => {
+      const tile = ALL_ACTION_TILES[id];
+      if (!tile) return;
+      const it = el('div', 'action-tile-item');
+      it.title = tile.desc;
+      it.innerHTML = `
+        <div class="tile-badge badge-add" title="Add tile">${ICON.plus}</div>
+        <div class="tile-icon-wrap">${ICON[tile.icon] || ICON.spark}</div>
+        <div class="tile-label">${escHtml(tile.label)}</div>
+      `;
+      it.addEventListener('click', () => {
+        if (addedIds.length >= 7) {
+          toast('Maximum 7 tiles allowed in action bar');
+          return;
+        }
+        S.menu.actionTiles.push(id);
+        save(S);
+        renderPage();
+      });
+      grid2.append(it);
+    });
+    card.append(grid2);
+  }
+
+  main.append(card);
+}
+
 function renderPage(resetScroll) {
   const main = document.getElementById('page');
   const keep = main.scrollTop;
   main.innerHTML = '';
   const page = PAGES.find((p) => p.id === current);
-  if (page.firebase) {
+  if (page.firebase || page.id === 'p2p') {
+    if (directTimerInterval) { clearInterval(directTimerInterval); directTimerInterval = null; }
     const isCustom = !!(S.share && S.share.firebaseUrl);
-    const rulesJson = '{\\n  \\"rules\\": {\\n    \\"rooms\\": {\\n      \\"$roomCode\\": {\\n        \\".read\\": true,\\n        \\".write\\": true\\n      }\\n    }\\n  }\\n}';
     const rulesFormatted = '{\n  "rules": {\n    "rooms": {\n      "$roomCode": {\n        ".read": true,\n        ".write": true\n      }\n    }\n  }\n}';
     const fb = el('div', 'firebase-page');
-    fb.innerHTML = `
+
+    const isConnected = directState.phase === 'connected';
+    const isOffer = directState.phase === 'offer-ready';
+    const isReply = directState.phase === 'reply-ready';
+    const isConnecting = directState.phase === 'connecting';
+    const isError = directState.phase === 'error';
+
+    // Banner
+    const bannerHtml = `
       <div class="firebase-banner">
-        <div class="fb-icon-box">${ICON.cloud}</div>
+        <div class="fb-icon-box">${ICON.p2p}</div>
         <div class="fb-info">
           <div class="fb-title-wrap">
-            <span class="fb-title">Firebase Signaling</span>
-            <span class="pill ${isCustom ? 'pill-purple' : 'pill-green'}">${isCustom ? 'Custom Database' : 'Official Server'}</span>
+            <span class="fb-title">P2P File Link</span>
+            <span class="pill ${isConnected ? 'pill-green' : 'pill-purple'}">${isConnected ? 'Direct Connected' : (isCustom ? 'Custom Database' : 'Standby')}</span>
           </div>
-          <div class="fb-sub">Encrypted WebRTC P2P signaling backend. Files are transferred directly between devices.</div>
+          <div class="fb-sub">High-speed encrypted WebRTC peer-to-peer file transfer. Files stream directly between devices.</div>
         </div>
       </div>
+    `;
 
-      <div class="sec-title">Signaling Connection</div>
+    // 1. Direct Serverless Handshake Card
+    let directCardHtml = `
+      <div class="sec-title" style="display:flex;justify-content:space-between;align-items:center;">
+        <span>Direct 1-on-1 Handshake (Zero-Server)</span>
+        <span class="pill pill-green" style="font-size:10px;">Offline / No Firebase</span>
+      </div>
+      <div class="card direct-p2p-card">
+    `;
+
+    if (isConnected) {
+      directCardHtml += `
+        <div class="row" style="padding:10px 0;">
+          <div class="ico-box" style="color:#22c55e;">${ICON.check}</div>
+          <div class="txt">
+            <div class="t" style="color:#22c55e;">Connected to ${escHtml(directState.peerName || 'Direct Partner')}</div>
+            <div class="d">P2P DataChannel open. You can drag and drop files onto Inex Island to send them directly.</div>
+          </div>
+          <div class="ctl">
+            <button class="btn btn-outline" id="btn-direct-disconnect" style="color:#f87171;border-color:rgba(239,68,68,0.4);">Disconnect</button>
+          </div>
+        </div>
+      `;
+    } else if (isConnecting) {
+      directCardHtml += `
+        <div class="row" style="padding:12px 0;">
+          <div class="ico-box">${ICON.spark}</div>
+          <div class="txt">
+            <div class="t">Connecting to Partner...</div>
+            <div class="d">Establishing WebRTC DataChannel via Google STUN. Please wait...</div>
+          </div>
+          <div class="ctl">
+            <button class="btn btn-outline" id="btn-direct-cancel">Cancel</button>
+          </div>
+        </div>
+      `;
+    } else if (isOffer) {
+      const flat = String(directState.code || '').replace(/-/g, '');
+      const preview = flat.length > 16 ? flat.slice(0, 10) + ' •••••• ' + flat.slice(-6) + ` · ${flat.length} chars` : flat;
+      directCardHtml += `
+        <div style="font-size:12px;font-weight:600;color:#f8fafc;margin-bottom:4px;">STEP 1 · SEND THIS CODE TO YOUR FRIEND</div>
+        <div class="code-preview-box">
+          <div class="code-preview-text">${escHtml(preview)}</div>
+          <button class="btn btn-sm btn-save-fb" id="btn-copy-offer" style="flex:none;">Copy Code</button>
+        </div>
+        <div class="code-meta" style="margin-bottom:12px;">
+          <span>⏱️ Expires in: <b id="direct-expiry-timer" class="expiry-tag">15:00</b></span>
+          <span>· Works exclusively in Inex Island</span>
+        </div>
+
+        <div style="font-size:12px;font-weight:600;color:#f8fafc;margin-top:10px;margin-bottom:4px;">STEP 2 · PASTE YOUR FRIEND'S REPLY CODE</div>
+        <div class="direct-paste-row">
+          <input type="text" id="inp-friend-reply" class="txtin" placeholder="Paste reply code from partner here..." />
+          <button class="btn btn-outline" id="btn-paste-reply">Paste</button>
+          <button class="btn btn-save-fb" id="btn-submit-reply">Connect</button>
+          <button class="btn btn-outline" id="btn-direct-cancel">Cancel</button>
+        </div>
+      `;
+    } else if (isReply) {
+      const flat = String(directState.replyCode || '').replace(/-/g, '');
+      const preview = flat.length > 16 ? flat.slice(0, 10) + ' •••••• ' + flat.slice(-6) + ` · ${flat.length} chars` : flat;
+      directCardHtml += `
+        <div style="font-size:12px;font-weight:600;color:#f8fafc;margin-bottom:4px;">REPLY CODE READY · SEND BACK TO HOST</div>
+        <div class="code-preview-box">
+          <div class="code-preview-text">${escHtml(preview)}</div>
+          <button class="btn btn-sm btn-save-fb" id="btn-copy-reply" style="flex:none;">Copy Reply</button>
+        </div>
+        <div class="code-meta" style="margin-bottom:10px;">
+          <span>Send this reply code back to the host. You will connect automatically once they accept.</span>
+        </div>
+        <button class="btn btn-outline" id="btn-direct-cancel">Cancel</button>
+      `;
+    } else {
+      // Standby
+      if (isError) {
+        directCardHtml += `
+          <div id="direct-err-banner" style="background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:8px 12px;color:#fca5a5;font-size:12px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;gap:8px;">
+            <div style="display:flex;align-items:center;gap:6px;">
+              <span>⚠️</span>
+              <span>${escHtml(directState.message || 'Connection failed')}</span>
+            </div>
+            <button id="btn-dismiss-direct-err" style="background:none;border:none;color:#fca5a5;font-size:16px;line-height:1;cursor:pointer;padding:0 4px;opacity:0.8;" title="Dismiss">&times;</button>
+          </div>
+        `;
+      }
+      directCardHtml += `
+        <div class="row" style="padding:8px 0 12px;border-bottom:1px solid rgba(255,255,255,0.06);">
+          <div class="ico-box">${ICON.spark}</div>
+          <div class="txt">
+            <div class="t">Host a Connection</div>
+            <div class="d">Generate a one-time Inex Island code to share with your friend</div>
+          </div>
+          <div class="ctl">
+            <button class="btn btn-save-fb" id="btn-direct-gen">⚡ Generate Code</button>
+          </div>
+        </div>
+
+        <div style="font-size:12px;font-weight:600;color:#f8fafc;margin-top:12px;margin-bottom:6px;">Or Join a Friend's Host Code</div>
+        <div class="direct-paste-row">
+          <input type="text" id="inp-direct-join" class="txtin" placeholder="Paste partner's host code (ISL-...)" />
+          <button class="btn btn-outline" id="btn-direct-paste-join">Paste</button>
+          <button class="btn btn-save-fb" id="btn-direct-submit-join">Continue</button>
+        </div>
+      `;
+    }
+    directCardHtml += `</div>`;
+
+    // 2. Firebase Database Card
+    const fbCardHtml = `
+      <div class="sec-title" style="display:flex;justify-content:space-between;align-items:center;margin-top:20px;">
+        <span>Firebase Signaling (Multi-PC Cloud)</span>
+        <span class="pill pill-purple" style="font-size:10px;">Cloud Database</span>
+      </div>
       <div class="card">
         <div class="row">
           <div class="ico-box">${ICON.pin}</div>
@@ -448,12 +669,6 @@ function renderPage(resetScroll) {
               Under the <b>Rules</b> tab, replace everything with the Security Rules below and click <b>Publish</b>.
             </div>
           </div>
-          <div class="guide-step">
-            <span class="step-num">4</span>
-            <div class="step-text">
-              Copy your database URL (e.g. <code>https://your-db.asia-southeast1.firebasedatabase.app</code>) and paste it into <b>Replace Database URL</b> above.
-            </div>
-          </div>
         </div>
       </div>
 
@@ -470,8 +685,108 @@ function renderPage(resetScroll) {
       </div>
     `;
 
+    fb.innerHTML = bannerHtml + directCardHtml + fbCardHtml;
     main.append(fb);
 
+    // Wire Direct Handshake Controls
+    if (isOffer && directState.expiresAt) {
+      const updateTimer = () => {
+        const el = fb.querySelector('#direct-expiry-timer');
+        if (!el) return;
+        const rem = Math.max(0, Math.floor((directState.expiresAt - Date.now()) / 1000));
+        const m = Math.floor(rem / 60);
+        const s = String(rem % 60).padStart(2, '0');
+        el.textContent = `${m}:${s}`;
+      };
+      updateTimer();
+      directTimerInterval = setInterval(updateTimer, 1000);
+    }
+
+    const clearDirectErr = () => {
+      if (directState && directState.phase === 'error') {
+        directState = { phase: 'standby' };
+        try { window.__TAURI__?.event?.emit('direct-p2p-cmd', { action: 'clear-error' }); } catch (_) {}
+        const b = fb.querySelector('#direct-err-banner');
+        if (b) b.remove();
+      }
+    };
+    fb.querySelector('#btn-dismiss-direct-err')?.addEventListener('click', clearDirectErr);
+    fb.querySelector('#inp-direct-join')?.addEventListener('input', clearDirectErr);
+    fb.querySelector('#inp-friend-reply')?.addEventListener('input', clearDirectErr);
+    if (isError) {
+      setTimeout(() => {
+        if (directState && directState.phase === 'error') {
+          clearDirectErr();
+        }
+      }, 7000);
+    }
+
+    fb.querySelector('#btn-direct-gen')?.addEventListener('click', () => {
+      clearDirectErr();
+      try { window.__TAURI__?.event?.emit('direct-p2p-cmd', { action: 'gen-offer' }); } catch (_) {}
+    });
+
+    fb.querySelector('#btn-copy-offer')?.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(directState.code || '');
+        const btn = fb.querySelector('#btn-copy-offer');
+        if (btn) btn.textContent = '✓ Copied!';
+        toast('Host code copied to clipboard!');
+        setTimeout(() => { if (btn) btn.textContent = 'Copy Code'; }, 2000);
+      } catch (_) { toast('Failed to copy to clipboard'); }
+    });
+
+    fb.querySelector('#btn-paste-reply')?.addEventListener('click', async () => {
+      try {
+        const txt = await navigator.clipboard.readText();
+        const inp = fb.querySelector('#inp-friend-reply');
+        if (inp && txt) inp.value = txt.trim();
+      } catch (_) { toast('Click box and press Ctrl+V'); }
+    });
+
+    fb.querySelector('#btn-submit-reply')?.addEventListener('click', () => {
+      const inp = fb.querySelector('#inp-friend-reply');
+      const val = (inp?.value || '').trim();
+      if (!val) { toast('Paste your friend\'s reply code first'); return; }
+      try { window.__TAURI__?.event?.emit('direct-p2p-cmd', { action: 'accept-reply', replyCode: val }); } catch (_) {}
+    });
+
+    fb.querySelector('#btn-copy-reply')?.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(directState.replyCode || '');
+        const btn = fb.querySelector('#btn-copy-reply');
+        if (btn) btn.textContent = '✓ Copied!';
+        toast('Reply code copied to clipboard!');
+        setTimeout(() => { if (btn) btn.textContent = 'Copy Reply'; }, 2000);
+      } catch (_) { toast('Failed to copy to clipboard'); }
+    });
+
+    fb.querySelector('#btn-direct-paste-join')?.addEventListener('click', async () => {
+      clearDirectErr();
+      try {
+        const txt = await navigator.clipboard.readText();
+        const inp = fb.querySelector('#inp-direct-join');
+        if (inp && txt) inp.value = txt.trim();
+      } catch (_) { toast('Click box and press Ctrl+V'); }
+    });
+
+    fb.querySelector('#btn-direct-submit-join')?.addEventListener('click', () => {
+      clearDirectErr();
+      const inp = fb.querySelector('#inp-direct-join');
+      const val = (inp?.value || '').trim();
+      if (!val) { toast('Paste your partner\'s host code first'); return; }
+      try { window.__TAURI__?.event?.emit('direct-p2p-cmd', { action: 'join-offer', hostCode: val }); } catch (_) {}
+    });
+
+    fb.querySelector('#btn-direct-cancel')?.addEventListener('click', () => {
+      try { window.__TAURI__?.event?.emit('direct-p2p-cmd', { action: 'disconnect' }); } catch (_) {}
+    });
+
+    fb.querySelector('#btn-direct-disconnect')?.addEventListener('click', () => {
+      try { window.__TAURI__?.event?.emit('direct-p2p-cmd', { action: 'disconnect' }); } catch (_) {}
+    });
+
+    // Wire Firebase Database Controls
     const saveBtn = fb.querySelector('#btn-save-custom-fb');
     const inp = fb.querySelector('#inp-custom-firebase');
     const saveUrl = () => {
@@ -550,6 +865,9 @@ function renderPage(resetScroll) {
     visible.forEach((r) => card.append(renderRow(r)));
     main.append(card);
   });
+  if (page.id === 'menu') {
+    renderQuickActionTilesEditor(main);
+  }
   main.scrollTop = resetScroll ? 0 : keep;
 }
 

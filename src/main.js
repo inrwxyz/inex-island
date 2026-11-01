@@ -218,10 +218,15 @@ function updateClocks() {
   }
 
   if (!appState.timerRunning && !appState.transferring && !appState.prompting && !appState.lockerPrompting) {
-    document.getElementById('c-clock').textContent = str;
+    const cClock = document.getElementById('c-clock');
+    if (cClock) cClock.textContent = str;
   }
-  document.getElementById('ctrl-clock-tab').textContent = `‹ ${str} ›`;
-  document.getElementById('cal-back-clock').textContent = `‹ ${str} ›`;
+  const ctrlClock = document.getElementById('ctrl-clock-tab');
+  if (ctrlClock) ctrlClock.textContent = str;
+  const calClock = document.getElementById('cal-top-clock');
+  if (calClock) calClock.textContent = str;
+  const timerClock = document.getElementById('timer-top-clock');
+  if (timerClock) timerClock.textContent = str;
 }
 
 let mediaBackendPos = 0;
@@ -516,6 +521,13 @@ async function refreshStats() {
   const stats = await invokeTauri('get_sys_stats');
   if (stats) {
     appState.stats = stats;
+    // network speed is only read while the Net Speed widget is selected
+    if (SET.widgets.left === 'net' || SET.widgets.right === 'net') {
+      try {
+        const n = await invokeTauri('get_net_speed');
+        if (Array.isArray(n)) appState.net = n;
+      } catch (_) {}
+    }
     renderWidgets();
     batteryOverlays(stats);
     if (slotRunning.has('wifi')) {
@@ -548,7 +560,7 @@ async function pollLight() {
 setInterval(pollLight, 3000);
 // safety nets only (the events below do the real work)
 setInterval(() => { if (!document.hidden) refreshRadios(); }, 30000);
-setInterval(() => { if (!document.hidden && appState.mediaPlaying) refreshMedia(); }, 2000);
+setInterval(() => { if (!document.hidden) refreshMedia(); }, 2500);
 function onTauriEvent(name, fn) {
   try {
     const r = window.__TAURI__.event.listen(name, fn);
@@ -631,13 +643,7 @@ island.addEventListener('mouseleave', () => {
 });
 
 // 4. Control Center Navigation & Sub-Menus
-document.getElementById('ctrl-clock-tab').addEventListener('click', () => {
-  if (!SET.notch.calendarTimer) return;
-  switchView('view-calendar', 'state-calendar', 346, 210);
-});
-document.getElementById('cal-back-clock').addEventListener('click', () => {
-  switchView('view-control', 'state-control', 316, 256);
-});
+// (Clock in main menu is display-only; subviews navigate back via their left back-arrow)
 
 const BARS = ['▁', '▂▃', '▂▄▅', '▂▄▆█', '▂▄▆█'];
 const ROW_ICON = {
@@ -1371,24 +1377,102 @@ document.getElementById('bt-master-toggle').addEventListener('change', async (e)
   if (appState.currentView === 'view-bt') setTimeout(loadBtList, e.target.checked ? 1500 : 0);
 });
 
-// 5. Quick Action Row
-document.getElementById('act-settings').addEventListener('click', () => invokeTauri('open_settings'));
-// Keep screen awake (replaces the old Do Not Disturb button). One parked thread in Rust, 0 % CPU.
-document.getElementById('act-awake').addEventListener('click', async () => {
-  const btn = document.getElementById('act-awake');
-  const want = !btn.classList.contains('active');
-  const on = await invokeTauri('set_keep_awake', { on: want });
-  btn.classList.toggle('active', on === true);
-  btn.title = on === true ? 'Keep screen awake: ON' : 'Keep screen awake: off';
-});
-document.getElementById('act-timer').addEventListener('click', () => {
-  switchView('view-calendar', 'state-calendar', 346, 210);
-});
-document.getElementById('act-snip').addEventListener('click', () => {
-  goCompact();
-  invokeTauri('take_snip');
-});
-document.getElementById('act-lock').addEventListener('click', () => invokeTauri('lock_screen'));
+// 5. Dynamic Quick Action Row
+const ACTION_TILE_ICONS = {
+  awake: '<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>',
+  snip: '<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/></svg>',
+  calendar: '<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>',
+  timer: '<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><circle cx="12" cy="13" r="8"/><polyline points="12 9 12 13 15 15"/><line x1="9" y1="2" x2="15" y2="2"/></svg>',
+  notepad: '<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>',
+  lock: '<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>',
+  settings: '<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1 2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83 2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',
+  calc: '<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" y1="6" x2="16" y2="6"/><line x1="16" y1="14" x2="16" y2="18"/><path d="M8 10h.01M12 10h.01M16 10h.01M8 14h.01M12 14h.01M8 18h.01M12 18h.01"/></svg>',
+  taskmgr: '<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>',
+  terminal: '<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>',
+  explorer: '<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>',
+  restart: '<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/></svg>'
+};
+
+const ACTION_TILE_TITLES = {
+  awake: 'Keep screen awake: off',
+  snip: 'Screenshot Snip',
+  calendar: 'Monthly Calendar',
+  timer: 'Focus Timer',
+  notepad: 'Quick Notes (Scratchpad)',
+  lock: 'Lock PC',
+  settings: 'Open Settings',
+  calc: 'Calculator',
+  taskmgr: 'Task Manager',
+  terminal: 'Terminal / Command Prompt',
+  explorer: 'File Explorer',
+  restart: 'Restart Inex Island'
+};
+
+let awakeState = false;
+
+function renderQuickActionTiles() {
+  const row = document.getElementById('quick-icons-row');
+  if (!row) return;
+  const list = (SET.menu && Array.isArray(SET.menu.actionTiles) && SET.menu.actionTiles.length)
+    ? SET.menu.actionTiles
+    : ['awake', 'snip', 'calendar', 'timer', 'notepad', 'lock', 'settings'];
+
+  row.innerHTML = '';
+  list.forEach((id) => {
+    const ico = ACTION_TILE_ICONS[id];
+    const title = ACTION_TILE_TITLES[id] || id;
+    if (!ico) return;
+
+    const btn = document.createElement('button');
+    btn.className = 'q-icon-btn';
+    btn.id = `act-${id}`;
+    btn.title = title;
+    btn.innerHTML = ico;
+
+    if (id === 'awake') {
+      btn.classList.toggle('active', awakeState);
+      btn.title = awakeState ? 'Keep screen awake: ON' : 'Keep screen awake: off';
+      btn.addEventListener('click', async () => {
+        const want = !awakeState;
+        const on = await invokeTauri('set_keep_awake', { on: want });
+        awakeState = on === true;
+        btn.classList.toggle('active', awakeState);
+        btn.title = awakeState ? 'Keep screen awake: ON' : 'Keep screen awake: off';
+      });
+    } else if (id === 'snip') {
+      btn.addEventListener('click', () => {
+        goCompact();
+        invokeTauri('take_snip');
+      });
+    } else if (id === 'calendar') {
+      btn.addEventListener('click', () => {
+        switchView('view-calendar', 'state-sub', 316, 225);
+        if (typeof renderCalendarGrid === 'function') renderCalendarGrid();
+      });
+    } else if (id === 'timer') {
+      btn.addEventListener('click', () => {
+        switchView('view-timer', 'state-sub', 316, 200);
+      });
+    } else if (id === 'notepad') {
+      btn.addEventListener('click', () => {
+        switchView('view-notepad', 'state-sub', 316, 240);
+        if (typeof focusNotepad === 'function') focusNotepad();
+      });
+    } else if (id === 'lock') {
+      btn.addEventListener('click', () => invokeTauri('lock_screen'));
+    } else if (id === 'settings') {
+      btn.addEventListener('click', () => invokeTauri('open_settings'));
+    } else if (id === 'restart') {
+      btn.addEventListener('click', () => invokeTauri('restart_app'));
+    } else {
+      btn.addEventListener('click', () => {
+        invokeTauri('launch_quick_action', { id });
+      });
+    }
+
+    row.appendChild(btn);
+  });
+}
 
 // 6. Volume & Brightness Sliders
 function setVolumeUI(level) {
@@ -1408,7 +1492,7 @@ document.getElementById('m-vol-toggle').addEventListener('click', () => {
   document.getElementById('m-vol-toggle').classList.toggle('muted-ico', !appState.volOpen);
   invokeTauri('resize_island', { width: 316, height: appState.volOpen ? MEDIA_H_VOL : MEDIA_H });
 });
-document.getElementById('m-bt-btn').addEventListener('click', () => openBtView());
+document.getElementById('m-bt-btn').addEventListener('click', () => openAudioView());
 invokeTauri('get_system_volume').then((v) => { if (typeof v === 'number') setVolumeUI(v); });
 
 document.getElementById('slider-vol').addEventListener('input', (e) => handleVolumeChange(e.target.value));
@@ -1435,6 +1519,92 @@ window.addEventListener('pointerup', () => { const s = document.getElementById('
 onTauriEvent('brightness-changed', (e) => setBrightUI(e && e.payload));
 invokeTauri('get_system_brightness').then(setBrightUI);
 setTimeout(() => invokeTauri('get_system_brightness').then(setBrightUI), 5000);
+
+// 7. Audio Output Switcher (Headphones / Speakers)
+let lastAudioOrigin = 'view-media';
+
+function openAudioView() {
+  lastAudioOrigin = (appState.currentView === 'view-media') ? 'view-media' : 'view-control';
+  switchView('view-audio', 'state-sub', 316, 215);
+  loadAudioDeviceList();
+}
+
+document.getElementById('audio-back-btn')?.addEventListener('click', () => {
+  if (lastAudioOrigin === 'view-media' && appState.mediaPlaying) {
+    openMedia();
+  } else {
+    switchView('view-control', 'state-control', 316, 256);
+  }
+});
+
+document.getElementById('btn-refresh-audio')?.addEventListener('click', () => loadAudioDeviceList(true));
+document.getElementById('btn-more-audio')?.addEventListener('click', () => invokeTauri('open_sound_settings'));
+
+async function loadAudioDeviceList(spin) {
+  const listEl = document.getElementById('audio-device-list');
+  const refBtn = document.getElementById('btn-refresh-audio');
+  if (!listEl) return;
+  if (spin && refBtn) refBtn.classList.add('spin');
+  listEl.innerHTML = '<div class="empty-hint">Scanning audio outputs…</div>';
+
+  try {
+    const devices = await invokeTauri('get_audio_devices');
+    if (spin && refBtn) setTimeout(() => refBtn.classList.remove('spin'), 400);
+
+    if (!Array.isArray(devices) || devices.length === 0) {
+      listEl.innerHTML = '<div class="empty-hint">No audio outputs detected</div>';
+      return;
+    }
+
+    listEl.innerHTML = '';
+    devices.forEach((d) => {
+      const row = document.createElement('div');
+      row.className = 'list-row-item' + (d.is_default ? ' on active-audio' : '');
+
+      const lower = d.name.toLowerCase();
+      let icoSvg = '<svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>';
+      if (lower.includes('headphone') || lower.includes('buds') || lower.includes('airpod') || lower.includes('headset') || lower.includes('earphone')) {
+        icoSvg = '<svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg>';
+      }
+
+      const ico = document.createElement('span');
+      ico.className = 'dev-ico';
+      ico.innerHTML = icoSvg;
+
+      const text = document.createElement('div');
+      text.className = 'row-text';
+      const name = document.createElement('span');
+      name.className = 'row-name';
+      name.textContent = d.name;
+      const sub = document.createElement('span');
+      sub.className = 'row-sub';
+      sub.textContent = d.is_default ? 'Active Output' : 'Tap to switch';
+      text.append(name, sub);
+
+      const statusBadge = document.createElement('div');
+      statusBadge.className = 'audio-check-badge';
+      statusBadge.innerHTML = d.is_default
+        ? '<svg viewBox="0 0 24 24" width="13" height="13" stroke="#22c55e" stroke-width="2.5" fill="none"><polyline points="20 6 9 17 4 12"/></svg>'
+        : '';
+
+      row.append(ico, text, statusBadge);
+
+      row.addEventListener('click', async () => {
+        if (d.is_default) return;
+        sub.textContent = 'Switching…';
+        await invokeTauri('set_default_audio_device', { id: d.id });
+        setTimeout(() => {
+          if (appState.currentView === 'view-audio') loadAudioDeviceList();
+        }, 200);
+      });
+
+      listEl.appendChild(row);
+    });
+  } catch (err) {
+    if (spin && refBtn) refBtn.classList.remove('spin');
+    listEl.innerHTML = '<div class="empty-hint">Failed to load audio devices</div>';
+  }
+}
 
 // 7. File Drag & Drop -> Tray (native Tauri drop: real file paths, no copy, no RAM use)
 let trayIdSeq = 1;
@@ -1810,30 +1980,48 @@ function updateP2PExpiryUI() {
   timerEl.classList.remove('hidden');
 }
 
-document.getElementById('btn-gen-code').addEventListener('click', async () => {
+document.getElementById('btn-open-p2p-settings')?.addEventListener('click', () => {
+  invokeTauri('open_settings');
+});
+
+document.getElementById('btn-gen-code')?.addEventListener('click', async () => {
   appState.isCodeHost = true;
   appState.manuallyDisconnected.clear();
   const code = String(Math.floor(100000 + Math.random() * 900000));
-  document.getElementById('btn-gen-code').classList.add('hidden');
+  document.getElementById('btn-gen-code')?.classList.add('hidden');
+  document.getElementById('p2p-join-box')?.classList.add('hidden');
   const badge = document.getElementById('code-display-box');
-  badge.classList.remove('hidden');
+  badge?.classList.remove('hidden');
   document.getElementById('my-p2p-code').textContent = code;
   document.getElementById('btn-exit-room')?.classList.remove('hidden');
   await startFirebaseSignalingRoom(code, true);
 });
 
-document.getElementById('code-display-box').addEventListener('click', () => {
-  const code = document.getElementById('my-p2p-code').textContent;
-  navigator.clipboard?.writeText(code);
+document.getElementById('code-display-box')?.addEventListener('click', () => {
+  const code = document.getElementById('my-p2p-code')?.textContent;
+  if (code && code !== '------') {
+    navigator.clipboard?.writeText(code);
+    showToast('unlock', 'Code copied to clipboard!', 1500);
+  }
 });
 
-document.getElementById('btn-join-code').addEventListener('click', async () => {
+const handleP2PJoin = async () => {
+  const code = document.getElementById('input-peer-code')?.value.trim();
+  if (!code || code.length < 4) {
+    showToast('lock', 'Enter valid 6-digit code', 1800);
+    return;
+  }
   appState.isCodeHost = false;
   appState.manuallyDisconnected.clear();
-  const code = document.getElementById('input-peer-code').value.trim();
-  if (code.length < 4) return;
+  document.getElementById('btn-gen-code')?.classList.add('hidden');
+  document.getElementById('p2p-join-box')?.classList.add('hidden');
   document.getElementById('btn-exit-room')?.classList.remove('hidden');
   await startFirebaseSignalingRoom(code, false);
+};
+
+document.getElementById('btn-join-code')?.addEventListener('click', handleP2PJoin);
+document.getElementById('input-peer-code')?.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') handleP2PJoin();
 });
 
 document.getElementById('btn-exit-room')?.addEventListener('click', () => {
@@ -1878,6 +2066,9 @@ async function exitP2PRoom(isManual = true) {
   for (const id of Array.from(rtcPeers.keys())) {
     cleanupPeer(id);
   }
+  if (typeof broadcastDirectState === 'function') {
+    broadcastDirectState({ phase: 'standby' });
+  }
 
   // 3. Clear timers
   if (appState.pollSignalTimer) {
@@ -1903,6 +2094,7 @@ async function exitP2PRoom(isManual = true) {
   // 5. Reset UI
   document.getElementById('code-display-box')?.classList.add('hidden');
   document.getElementById('btn-gen-code')?.classList.remove('hidden');
+  document.getElementById('p2p-join-box')?.classList.remove('hidden');
   document.getElementById('btn-exit-room')?.classList.add('hidden');
   const timerEl = document.getElementById('p2p-expiry-timer');
   if (timerEl) timerEl.classList.add('hidden');
@@ -2249,6 +2441,9 @@ function cleanupPeer(peerId) {
     try { if (entry.dc) { entry.dc.onclose = null; entry.dc.close(); } } catch (_) {}
     try { if (entry.pc) entry.pc.close(); } catch (_) {}
   }
+  if (peerId === 'direct-peer' && typeof broadcastDirectState === 'function') {
+    broadcastDirectState({ phase: 'standby' });
+  }
   syncConnectedPeersList();
   refreshTransferUI();
 }
@@ -2274,6 +2469,205 @@ window.addEventListener('beforeunload', () => {
   }
 });
 
+// ==================== 8b. DIRECT SERVERLESS P2P (ZERO-SERVER CODE HANDSHAKE) ====================
+// 1-on-1 direct link without Firebase. WebRTC handshake is done via compact copy-paste codes.
+
+let directHostSession = null;
+let directJoinSession = null;
+
+function waitCandidatesGathered(pc, maxWaitMs = 4500) {
+  return new Promise((resolve) => {
+    let resolved = false;
+    let softTimer = null;
+    const finish = () => {
+      if (resolved) return;
+      resolved = true;
+      if (softTimer) clearTimeout(softTimer);
+      resolve();
+    };
+    if (pc.iceGatheringState === 'complete') return resolve();
+
+    pc.onicecandidate = (e) => {
+      if (!e.candidate) {
+        finish();
+      } else {
+        // Once we get a public candidate, wait 600ms more for extra candidates
+        if (!softTimer) softTimer = setTimeout(finish, 600);
+      }
+    };
+    setTimeout(finish, maxWaitMs);
+  });
+}
+
+function broadcastDirectState(state) {
+  try {
+    if (window.__TAURI__?.event?.emit) {
+      window.__TAURI__.event.emit('direct-p2p-state', state);
+    }
+  } catch (_) {}
+}
+
+function getDirectP2PCurrentState() {
+  const directPeer = rtcPeers.get('direct-peer');
+  if (directPeer && directPeer.dc && directPeer.dc.readyState === 'open') {
+    return { phase: 'connected', peerName: directPeer.name || 'Direct Partner' };
+  }
+  if (directHostSession && directHostSession.code) {
+    return { phase: 'offer-ready', code: directHostSession.code, expiresAt: directHostSession.expiresAt };
+  }
+  if (directJoinSession && directJoinSession.replyCode) {
+    return { phase: 'reply-ready', replyCode: directJoinSession.replyCode };
+  }
+  return { phase: 'standby' };
+}
+
+async function handleDirectGenOffer() {
+  try {
+    const C = window.inexIslandCodec;
+    if (!C) throw new Error('P2P Codec module not loaded.');
+
+    if (directHostSession && directHostSession.pc) {
+      try { directHostSession.pc.close(); } catch (_) {}
+      directHostSession = null;
+    }
+
+    const pc = new RTCPeerConnection(RTC_CONFIG);
+    const dc = pc.createDataChannel('inex-p2p', { ordered: true });
+
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+
+    await waitCandidatesGathered(pc, 4500);
+
+    const sdp = pc.localDescription.sdp;
+    const info = C.parseSdp(sdp);
+    const code = C.randomCode ? C.randomCode() : 'ABCDEFGH';
+    const minutes = C.nowMinutes();
+    const offerCode = C.encode({ type: 'offer', code, minutes, info });
+
+    const expiresAt = Date.now() + 15 * 60 * 1000;
+    directHostSession = { pc, dc, code: offerCode, expiresAt };
+
+    broadcastDirectState({ phase: 'offer-ready', code: offerCode, expiresAt });
+  } catch (err) {
+    broadcastDirectState({ phase: 'error', message: err.message || 'Failed to create host code' });
+  }
+}
+
+async function handleDirectAcceptReply(replyCode) {
+  try {
+    const C = window.inexIslandCodec;
+    if (!C) throw new Error('P2P Codec module not loaded.');
+    if (!directHostSession || !directHostSession.pc) throw new Error('Host session not found. Generate a code first.');
+
+    const dec = C.decode(replyCode);
+    if (dec.type !== 'answer') throw new Error('This is not a valid reply code. Paste the reply code from your friend.');
+
+    const sdp = C.toSdp(dec.info, 'answer');
+    await directHostSession.pc.setRemoteDescription(new RTCSessionDescription({ type: 'answer', sdp }));
+
+    const entry = {
+      pc: directHostSession.pc,
+      dc: directHostSession.dc,
+      name: 'Direct Partner',
+      rx: Promise.resolve(),
+      lastSeen: Date.now(),
+      hb: null, graceTimer: null, connTimer: null, offerTimer: null,
+      pendingIce: [], send: null, recv: null,
+      isDirect: true
+    };
+    rtcPeers.set('direct-peer', entry);
+    setupDataChannel('direct-peer', directHostSession.dc);
+    directHostSession.dc.addEventListener('open', () => {
+      broadcastDirectState({ phase: 'connected', peerName: 'Direct Partner' });
+    });
+    directHostSession.dc.addEventListener('close', () => {
+      broadcastDirectState({ phase: 'standby' });
+    });
+
+    broadcastDirectState({ phase: 'connecting' });
+  } catch (err) {
+    broadcastDirectState({ phase: 'error', message: err.message || 'Failed to accept reply code' });
+  }
+}
+
+async function handleDirectJoinOffer(hostCode) {
+  try {
+    const C = window.inexIslandCodec;
+    if (!C) throw new Error('P2P Codec module not loaded.');
+
+    if (directJoinSession && directJoinSession.pc) {
+      try { directJoinSession.pc.close(); } catch (_) {}
+      directJoinSession = null;
+    }
+
+    const dec = C.decode(hostCode);
+    if (dec.type !== 'offer') throw new Error('This is not a host offer code.');
+
+    const sdp = C.toSdp(dec.info, 'offer');
+    const pc = new RTCPeerConnection(RTC_CONFIG);
+
+    pc.ondatachannel = (e) => {
+      const entry = {
+        pc,
+        dc: e.channel,
+        name: 'Direct Host',
+        rx: Promise.resolve(),
+        lastSeen: Date.now(),
+        hb: null, graceTimer: null, connTimer: null, offerTimer: null,
+        pendingIce: [], send: null, recv: null,
+        isDirect: true
+      };
+      rtcPeers.set('direct-peer', entry);
+      setupDataChannel('direct-peer', e.channel);
+      e.channel.addEventListener('open', () => {
+        broadcastDirectState({ phase: 'connected', peerName: 'Direct Host' });
+      });
+      e.channel.addEventListener('close', () => {
+        broadcastDirectState({ phase: 'standby' });
+      });
+    };
+
+    await pc.setRemoteDescription(new RTCSessionDescription({ type: 'offer', sdp }));
+    const answer = await pc.createAnswer();
+    await pc.setLocalDescription(answer);
+
+    await waitCandidatesGathered(pc, 4500);
+
+    const answerInfo = C.parseSdp(pc.localDescription.sdp);
+    const replyCode = C.encode({ type: 'answer', code: dec.code, info: answerInfo });
+
+    directJoinSession = { pc, replyCode };
+    broadcastDirectState({ phase: 'reply-ready', replyCode, hostCode });
+  } catch (err) {
+    broadcastDirectState({ phase: 'error', message: err.message || 'Failed to join host code' });
+  }
+}
+
+function handleDirectDisconnect() {
+  if (rtcPeers.has('direct-peer')) {
+    cleanupPeer('direct-peer');
+  }
+  if (directHostSession) {
+    try { directHostSession.pc?.close(); } catch (_) {}
+    directHostSession = null;
+  }
+  if (directJoinSession) {
+    try { directJoinSession.pc?.close(); } catch (_) {}
+    directJoinSession = null;
+  }
+  broadcastDirectState({ phase: 'standby' });
+}
+
+onTauriEvent('direct-p2p-cmd', (e) => {
+  const p = e.payload || {};
+  if (p.action === 'gen-offer') handleDirectGenOffer();
+  else if (p.action === 'accept-reply') handleDirectAcceptReply(p.replyCode);
+  else if (p.action === 'join-offer') handleDirectJoinOffer(p.hostCode);
+  else if (p.action === 'disconnect') handleDirectDisconnect();
+  else if (p.action === 'clear-error') broadcastDirectState({ phase: 'standby' });
+  else if (p.action === 'get-state') broadcastDirectState(getDirectP2PCurrentState());
+});
 // ==================== P2P FILE TRANSFER (offer lives in P2P list, streamed to disk, no RAM blow-up) ====================
 const CHUNK = 128 * 1024;           // one WebRTC message
 const READ_BLOCK = 4 * 1024 * 1024; // read from disk in big blocks
@@ -2653,16 +3047,25 @@ function renderPeersUI() {
   updateP2PExpiryUI();
   const exitBtn = document.getElementById('btn-exit-room');
   if (exitBtn) {
-    exitBtn.classList.toggle('hidden', !appState.roomCode);
+    exitBtn.classList.toggle('hidden', !appState.roomCode && appState.peers.length === 0);
   }
   const count = appState.peers.length;
+  const inRoomOrConnected = !!(appState.roomCode || count > 0);
+  document.getElementById('btn-gen-code')?.classList.toggle('hidden', inRoomOrConnected);
+  document.getElementById('p2p-join-box')?.classList.toggle('hidden', inRoomOrConnected);
+  if (appState.isCodeHost && appState.roomCode) {
+    document.getElementById('code-display-box')?.classList.remove('hidden');
+  } else if (!inRoomOrConnected) {
+    document.getElementById('code-display-box')?.classList.add('hidden');
+  }
+  document.getElementById('btn-open-p2p-settings')?.classList.toggle('hidden', count > 0);
   const listEl = document.getElementById('p2p-peers-list');
   const badge = document.getElementById('c-peer-badge');
   const countSpan = document.getElementById('c-peer-count');
   const tileP2P = document.getElementById('tile-p2p');
 
-  document.getElementById('tile-p2p-sub').textContent = `${count}/5 Peers`;
-  document.getElementById('p2p-cap').textContent = count > 0 ? `${count} peer${count > 1 ? 's' : ''}` : '';
+  document.getElementById('tile-p2p-sub').textContent = count > 0 ? (rtcPeers.has('direct-peer') ? 'Direct 1:1' : `${count}/5 Peers`) : 'P2P Link';
+  document.getElementById('p2p-cap').textContent = count > 0 ? (rtcPeers.has('direct-peer') ? '1 direct peer' : `${count} peer${count > 1 ? 's' : ''}`) : '';
   tileP2P.classList.toggle('active', count > 0);
 
   if (count > 0) {
@@ -2678,7 +3081,14 @@ function renderPeersUI() {
     const msg = appState.roomCode
       ? `Waiting for peers to join code ${appState.roomCode} (5m valid)...`
       : 'Generate a code or enter partner code (Max 5 PCs)';
-    listEl.innerHTML = `<div class="empty-hint">${msg}</div>`;
+    listEl.innerHTML = `
+      <div class="empty-hint">
+        <div>${msg}</div>
+        <button id="btn-open-p2p-settings" class="link-btn" style="margin-top:6px;font-size:10px;opacity:0.75;cursor:pointer;background:none;border:none;color:inherit;text-decoration:underline;">Or use Direct Offline P2P in Settings ↗</button>
+      </div>`;
+    document.getElementById('btn-open-p2p-settings')?.addEventListener('click', () => {
+      invokeTauri('open_settings');
+    });
     return;
   }
 
@@ -2773,6 +3183,8 @@ const TOAST_ICONS = {
   lock: SVG_A + '<rect x="4" y="11" width="16" height="10" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>',
   face: SVG_A + '<path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/><circle cx="9" cy="9" r="1.2" fill="currentColor"/><circle cx="15" cy="9" r="1.2" fill="currentColor"/><path d="M10 15c.8.7 1.8 1 2 1s1.2-.3 2-1"/></svg>',
   fingerprint: SVG_A + '<path d="M12 10a2 2 0 0 0-2 2c0 1.02-.1 2.51-.26 4"/><path d="M14 13.12c0 2.38 0 6.38-1 8.88"/><path d="M2 16h.01"/><path d="M21.8 16c.2-2 .13-5.35 0-6"/><path d="M5 19.5C5.5 18 6 15 6 12a6 6 0 0 1 .34-2"/><path d="M8.65 22c.21-.66.45-1.32.57-2"/><path d="M9 6.8a6 6 0 0 1 9 5.2v2"/><path d="M17 19a10 10 0 0 1-5 2"/><path d="M18.7 18.2a12 12 0 0 0 1.3-4.2"/></svg>',
+  phone: SVG_A + '<rect x="7" y="2" width="10" height="20" rx="2"/><line x1="11" y1="18" x2="13" y2="18"/></svg>',
+  unphone: SVG_A + '<rect x="7" y="2" width="10" height="20" rx="2"/><line x1="11" y1="18" x2="13" y2="18"/><line x1="3" y1="3" x2="21" y2="21"/></svg>',
   bolt: SVG_A + '<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>',
   battery: SVG_A + '<rect x="2" y="7" width="17" height="10" rx="2"/><line x1="22" y1="11" x2="22" y2="13"/></svg>',
   low: SVG_A + '<rect x="2" y="7" width="17" height="10" rx="2"/><line x1="22" y1="11" x2="22" y2="13"/><line x1="6" y1="10" x2="6" y2="14"/></svg>'
@@ -2800,6 +3212,23 @@ function showToast(kind, text, ms) {
 let lockerWrongTimer = null;
 let lockerGlowTimer = null;
 let lockerPromptSafetyTimer = null;
+let lastLockerTs = 0;
+let lastLockToast = { target: '', at: 0 };
+// The locker sends a `locker_prompt` heartbeat every ~3 s for as long as its popup is open.
+// The island keeps the lock status for exactly that long: every heartbeat renews this lease, and it
+// only runs out (8 s) if the locker disappeared without telling us (crash / killed process).
+const LOCKER_LEASE_MS = 8000;
+function armLockerLease() {
+  clearTimeout(lockerPromptSafetyTimer);
+  lockerPromptSafetyTimer = setTimeout(() => {
+    if (appState.lockerPrompting) {
+      appState.lockerPrompting = false;
+      renderCenter();
+      updateClocks();
+      refreshMedia();
+    }
+  }, LOCKER_LEASE_MS);
+}
 
 onTauriEvent('locker-unlock', (event) => {
   let payload = event.payload;
@@ -2808,9 +3237,20 @@ onTauriEvent('locker-unlock', (event) => {
   }
   if (!payload || typeof payload !== 'object') payload = {};
 
+  // Locker events carry a millisecond `ts`. Drop one that is older than an event we already handled
+  // (out-of-order delivery); a big backwards jump (clock change / locker restart) is treated as a new session.
+  const evTs = Number(payload.ts) || 0;
+  if (evTs) {
+    if (evTs < lastLockerTs && lastLockerTs - evTs < 60000) return;
+    lastLockerTs = evTs;
+  }
+
   const evName = payload.event || (payload.type ? 'locker_unlock' : '');
 
   if (evName === 'locker_prompt') {
+    // heartbeat while the prompt is already showing: just renew the lease, no re-render
+    // (a heartbeat that finds no open prompt is ignored, so a late keep-alive can never re-open the status)
+    if (payload.hb) { if (appState.lockerPrompting) armLockerLease(); return; }
     // 1. Password prompt appears -> Island shows Locked with lock icon
     appState.lockerPrompting = true;
     island.classList.remove('island-locker-glow', 'island-locker-wrong');
@@ -2822,13 +3262,7 @@ onTauriEvent('locker-unlock', (event) => {
     if (txtEl) txtEl.textContent = payload.target ? payload.target : 'Locked';
     renderCenter();
 
-    clearTimeout(lockerPromptSafetyTimer);
-    lockerPromptSafetyTimer = setTimeout(() => {
-      if (appState.lockerPrompting) {
-        appState.lockerPrompting = false;
-        renderCenter();
-      }
-    }, 12000);
+    armLockerLease();
   }
   else if (evName === 'locker_wrong') {
     // 2. Wrong password -> Red border on island, notch lock icon shakes
@@ -2848,6 +3282,7 @@ onTauriEvent('locker-unlock', (event) => {
     const txtEl = document.getElementById('c-prompt-text');
     if (txtEl) txtEl.textContent = 'Wrong Password';
     renderCenter();
+    armLockerLease();
 
     clearTimeout(lockerWrongTimer);
     lockerWrongTimer = setTimeout(() => {
@@ -2901,6 +3336,46 @@ onTauriEvent('locker-unlock', (event) => {
     lockerGlowTimer = setTimeout(() => {
       island.classList.remove('island-locker-glow');
     }, 1400);
+  }
+  else if (evName === 'locker_pair' || evName === 'locker_unpair' || evName === 'locker_remove') {
+    // Locker Pro status signals: phone paired / unpaired, folder or app removed from the locker.
+    // The on/off switch lives ONLY in Locker Pro: if it is off, the locker sends nothing, so the island just shows what it receives.
+    appState.lockerPrompting = false;
+    clearTimeout(lockerPromptSafetyTimer);
+    island.classList.remove('island-locker-wrong', 'island-locker-glow');
+    const tgt = payload.target ? String(payload.target) : '';
+    renderCenter();
+    if (evName === 'locker_pair') showToast('phone', tgt ? `${tgt} Paired` : 'Phone Paired', 1800);
+    else if (evName === 'locker_unpair') showToast('unphone', 'Phone Unpaired', 1800);
+    else showToast('unlock', tgt ? `${tgt} Removed` : 'Removed', 1600);
+  }
+  else if (evName === 'locker_lock') {
+    // Folder/app got locked (Add folder, tray "Lock Now", auto re-lock). There was NO handler for this
+    // event before: the "Master Password" status then hung around until the old 12 s timer, and
+    // "Lock Now" showed nothing at all.
+    appState.lockerPrompting = false;
+    clearTimeout(lockerPromptSafetyTimer);
+    clearTimeout(lockerWrongTimer);
+    island.classList.remove('island-locker-wrong', 'island-locker-glow');
+    const promptEl = document.getElementById('c-prompt-anim');
+    if (promptEl) promptEl.classList.remove('prompt-wrong');
+    const icoEl = document.getElementById('c-prompt-ico');
+    if (icoEl) icoEl.classList.remove('lock-shake');
+    const txtEl = document.getElementById('c-prompt-text');
+    if (txtEl) txtEl.textContent = 'Locked';
+
+    const tgt = payload.target ? String(payload.target) : '';
+    const nowMs = Date.now();
+    // "password accepted" and "lock finished" can both arrive for one folder: show one toast
+    if (lastLockToast.target === tgt && nowMs - lastLockToast.at < 3000) {
+      renderCenter();
+      updateClocks();
+      refreshMedia();
+      return;
+    }
+    lastLockToast = { target: tgt, at: nowMs };
+    renderCenter();
+    showToast('lock', tgt ? `${tgt} Locked` : 'Locked', 1400);
   }
 });
 
@@ -3073,6 +3548,123 @@ document.querySelectorAll('.timer-presets button[data-min]').forEach((btn) => {
     document.getElementById('focus-title-label').textContent = `FOCUS ${mins}M`;
     formatTimerDisplay();
   });
+});
+
+// ==================== 10b. CALENDAR GRID ====================
+let calCurrent = new Date();
+
+function renderCalendarGrid() {
+  const container = document.getElementById('cal-days-grid');
+  const title = document.getElementById('cal-month-title');
+  if (!container || !title) return;
+
+  const year = calCurrent.getFullYear();
+  const month = calCurrent.getMonth();
+
+  const monthNames = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ];
+  title.textContent = `${monthNames[month]} ${year}`;
+
+  const firstDayIndex = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const daysInPrevMonth = new Date(year, month, 0).getDate();
+
+  const today = new Date();
+  const isThisMonth = today.getFullYear() === year && today.getMonth() === month;
+  const todayDate = today.getDate();
+
+  container.innerHTML = '';
+
+  for (let i = firstDayIndex - 1; i >= 0; i--) {
+    const d = document.createElement('span');
+    d.className = 'cal-day muted';
+    d.textContent = daysInPrevMonth - i;
+    container.appendChild(d);
+  }
+
+  for (let i = 1; i <= daysInMonth; i++) {
+    const d = document.createElement('span');
+    d.className = 'cal-day';
+    if (isThisMonth && i === todayDate) {
+      d.classList.add('today');
+    }
+    d.textContent = i;
+    container.appendChild(d);
+  }
+
+  const totalCells = firstDayIndex + daysInMonth;
+  const nextDays = totalCells % 7 === 0 ? 0 : 7 - (totalCells % 7);
+  for (let i = 1; i <= nextDays; i++) {
+    const d = document.createElement('span');
+    d.className = 'cal-day muted';
+    d.textContent = i;
+    container.appendChild(d);
+  }
+}
+
+document.getElementById('btn-cal-prev')?.addEventListener('click', () => {
+  calCurrent.setMonth(calCurrent.getMonth() - 1);
+  renderCalendarGrid();
+});
+document.getElementById('btn-cal-next')?.addEventListener('click', () => {
+  calCurrent.setMonth(calCurrent.getMonth() + 1);
+  renderCalendarGrid();
+});
+document.getElementById('btn-cal-today')?.addEventListener('click', () => {
+  calCurrent = new Date();
+  renderCalendarGrid();
+});
+
+// ==================== 10c. QUICK NOTES (BUILT-IN SCRATCHPAD) ====================
+const noteArea = document.getElementById('notepad-textarea');
+const noteCharCount = document.getElementById('notepad-char-count');
+
+function updateNoteCount(len) {
+  if (noteCharCount) noteCharCount.textContent = `${len} character${len === 1 ? '' : 's'}`;
+}
+
+if (noteArea) {
+  const saved = localStorage.getItem('inex.island.notes') || '';
+  noteArea.value = saved;
+  updateNoteCount(saved.length);
+
+  noteArea.addEventListener('input', (e) => {
+    const val = e.target.value;
+    try { localStorage.setItem('inex.island.notes', val); } catch (_) {}
+    updateNoteCount(val.length);
+  });
+}
+
+function focusNotepad() {
+  if (noteArea) {
+    appState.keepOpen = true;
+    invokeTauri('focus_island');
+    setTimeout(() => { noteArea.focus(); appState.keepOpen = false; }, 80);
+  }
+}
+
+document.getElementById('btn-notepad-clear')?.addEventListener('click', () => {
+  if (noteArea) {
+    noteArea.value = '';
+    try { localStorage.setItem('inex.island.notes', ''); } catch (_) {}
+    updateNoteCount(0);
+    showToast('unlock', 'Notes cleared', 1200);
+  }
+});
+
+document.getElementById('btn-notepad-copy')?.addEventListener('click', async () => {
+  if (!noteArea || !noteArea.value) {
+    showToast('snip', 'Note is empty', 1200);
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(noteArea.value);
+    showToast('snip', 'Copied to clipboard', 1200);
+  } catch (_) {
+    showToast('snip', 'Select all & Ctrl+C', 1500);
+  }
 });
 
 // Real 5-Band Audio Visualizer (WASAPI Loopback + FFT ~32ms Event-Driven)
@@ -3348,6 +3940,15 @@ async function refreshWeather() {
   }
 }
 
+// bytes per second -> short text for the Net Speed widget: "512 K/s", "2.4 M/s", "12 M/s"
+function fmtNet(b) {
+  if (!(b > 0)) return '0 K/s';
+  const k = b / 1024;
+  if (k < 1000) return Math.round(k) + ' K/s';
+  const m = k / 1024;
+  return (m >= 10 ? Math.round(m) : m.toFixed(1)) + ' M/s';
+}
+
 function widgetHtml(kind) {
   const s = appState.stats;
   switch (kind) {
@@ -3356,6 +3957,7 @@ function widgetHtml(kind) {
     case 'cpu': return s ? `CPU ${s.cpu_pct}%` : '';
     case 'disk': return s ? `Disk ${s.disk_pct}%` : '';
     case 'battery': return s && s.battery_pct >= 0 ? `${s.battery_pct}%` : '';
+    case 'net': return appState.net ? `<span class="net2"><b>↓ ${fmtNet(appState.net[0])}</b><b>↑ ${fmtNet(appState.net[1])}</b></span>` : '';
     default: return '';
   }
 }
@@ -3413,7 +4015,41 @@ async function refreshBtCaption() {
   if (!appState.btRadio) { setBtCaption([]); return; }
   setBtCaption(await invokeTauri('get_bt_devices'));
 }
+// Mic in-use dot. Rust (privacy.rs) watches Windows Core Audio capture sessions and sends
+//   "privacy-changed" {kind: "mic", app: "<app name>" | null}
+// This part only draws the dot. Setting: overlays.privacyDot
+let privMic = null;                          // name of the app using it, or null
+let privLast = null;                         // last on/off value sent to Rust
 
+function renderPrivacyDot() {
+  const el = document.getElementById('c-priv');
+  if (!el) return;
+  const on = !!(SET.overlays && SET.overlays.privacyDot);
+  const mic = on ? privMic : null;
+  const micEl = el.querySelector('.mic');
+  if (micEl) micEl.classList.toggle('hidden', !mic);
+  el.classList.toggle('hidden', !mic);
+  el.title = mic ? `Microphone: ${mic}` : '';
+}
+
+onTauriEvent('privacy-changed', (event) => {
+  const p = event.payload || {};
+  if (p.kind === 'mic') privMic = p.app || null;
+  renderPrivacyDot();
+});
+
+// Tell Rust when the setting turns on or off (the first call also starts the watcher thread).
+async function applyPrivacy() {
+  const on = !!(SET.overlays && SET.overlays.privacyDot);
+  if (on !== privLast) {
+    privLast = on;
+    try {
+      const r = await invokeTauri('privacy_watch_start', { enabled: on });
+      privMic = typeof r === 'string' ? r : (Array.isArray(r) ? (r[0] || null) : null);
+    } catch (_) { privLast = null; }
+  }
+  renderPrivacyDot();
+}
 let resizeDebounce = null;
 
 function applySettings() {
@@ -3440,12 +4076,13 @@ function applySettings() {
       invokeTauri('resize_island', appState.lastWin);
     }, 35);
   }
-  document.getElementById('act-timer').classList.toggle('hidden', !SET.notch.calendarTimer);
+  renderQuickActionTiles();
   document.getElementById('view-media').classList.toggle('no-ambient', !SET.notch.ambientGlow);
   document.getElementById('c-media-btn').classList.toggle('glow', SET.notch.compactGlow);
   if (SET.share.deviceName) myDeviceName = SET.share.deviceName;
   updateClocks();
   renderWidgets();
+  applyPrivacy();
   refreshWeather();
   syncEq();
   refreshMedia();

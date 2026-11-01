@@ -143,9 +143,14 @@ function updateClocks() {
   }
 
   if (!appState.timerRunning && !appState.transferring && !appState.prompting && !appState.lockerPrompting) {
-    document.getElementById('c-clock').textContent = str;
+    const cClock = document.getElementById('c-clock');
+    if (cClock) cClock.textContent = str;
   }
-  document.getElementById('ctrl-clock-tab').textContent = `‹ ${str} ›`;
-  document.getElementById('cal-back-clock').textContent = `‹ ${str} ›`;
+  const ctrlClock = document.getElementById('ctrl-clock-tab');
+  if (ctrlClock) ctrlClock.textContent = str;
+  const calClock = document.getElementById('cal-top-clock');
+  if (calClock) calClock.textContent = str;
+  const timerClock = document.getElementById('timer-top-clock');
+  if (timerClock) timerClock.textContent = str;
 }
 

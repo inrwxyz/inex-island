@@ -593,11 +593,6 @@ body {
 }
 
 /* Subtle Icon Animations when Active */
-.ctrl-tile.active .ico-wifi .w1 { animation: arc 1.6s ease-in-out infinite 0s; }
-.ctrl-tile.active .ico-wifi .w2 { animation: arc 1.6s ease-in-out infinite 0.22s; }
-.ctrl-tile.active .ico-wifi .w3 { animation: arc 1.6s ease-in-out infinite 0.44s; }
-@keyframes arc { 0%, 100% { opacity: 0.3; } 40% { opacity: 1; } }
-
 .ico-p2p .flow { stroke-dasharray: 3 3; }
 .ctrl-tile.active .ico-p2p .f1 { animation: flow 0.9s linear infinite; }
 .ctrl-tile.active .ico-p2p .f2 { animation: flow 0.9s linear infinite reverse; }
@@ -1232,28 +1227,175 @@ body {
   cursor: pointer;
 }
 
-/* ==================== 9. CALENDAR & FOCUS TIMER ==================== */
-.cal-timer-split {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 10px;
-  padding: 4px 14px 14px;
-  flex: 1;
+/* ==================== 9. CALENDAR, TIMER & QUICK NOTES ==================== */
+.sub-top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 14px 4px;
 }
-.cal-month { font-size: 9.5px; font-weight: 700; margin-bottom: 5px; opacity: 0.7; }
-.cal-grid {
+.sub-back-btn {
+  background: transparent;
+  border: none;
+  color: inherit;
+  opacity: 0.75;
+  cursor: pointer;
+  padding: 3px 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  transition: all 0.15s ease;
+}
+.sub-back-btn:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* Calendar Styles */
+.cal-container {
+  padding: 4px 14px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.cal-nav-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 2px 0;
+}
+.cal-month-heading {
+  font-size: 11px;
+  font-weight: 700;
+  color: #f1f5f9;
+  letter-spacing: 0.02em;
+}
+.cal-nav-btn {
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  background: var(--color-tile-bg);
+  border: 1px solid rgba(150, 150, 160, 0.25);
+  color: inherit;
+  font-size: 13px;
+  font-weight: bold;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: all 0.14s ease;
+}
+.cal-nav-btn:hover {
+  background: rgba(150, 150, 160, 0.22);
+}
+.cal-today-btn {
+  font-size: 9px;
+  font-weight: 600;
+  background: transparent;
+  border: 1px solid rgba(150, 150, 160, 0.25);
+  border-radius: 6px;
+  padding: 2px 7px;
+  color: inherit;
+  opacity: 0.85;
+  cursor: pointer;
+}
+.cal-today-btn:hover {
+  opacity: 1;
+  background: rgba(150, 150, 160, 0.18);
+}
+.cal-weekdays {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  gap: 3px;
+  gap: 2px;
   font-size: 9px;
+  font-weight: 700;
+  opacity: 0.6;
+  text-align: center;
+  margin-top: 2px;
+}
+.cal-days-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+  font-size: 9.5px;
   text-align: center;
 }
-.cal-grid .muted { opacity: 0.35; }
-.cal-grid .today {
+.cal-day {
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  user-select: none;
+}
+.cal-day.muted {
+  opacity: 0.28;
+}
+.cal-day.today {
   background: var(--color-tile-on-bg);
   color: var(--color-tile-on-fg);
+  font-weight: bold;
   border-radius: 50%;
-  font-weight: 700;
+}
+
+/* Notepad Styles */
+.notepad-body {
+  padding: 4px 14px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+}
+.notepad-body textarea {
+  width: 100%;
+  height: 125px;
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 8px 10px;
+  color: #f1f5f9;
+  font-family: inherit;
+  font-size: 11px;
+  line-height: 1.45;
+  resize: none;
+  outline: none;
+  box-sizing: border-box;
+}
+.notepad-body textarea:focus {
+  border-color: rgba(255, 255, 255, 0.28);
+}
+.notepad-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 10px;
+  color: var(--muted);
+}
+.btn-note-copy {
+  background: var(--color-tile-bg);
+  border: 1px solid rgba(150, 150, 160, 0.25);
+  border-radius: 6px;
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 600;
+  color: inherit;
+  cursor: pointer;
+}
+.btn-note-copy:hover {
+  background: rgba(150, 150, 160, 0.2);
+}
+.top-tool-btn {
+  background: transparent;
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  color: #f87171;
+  font-size: 10px;
+  font-weight: 600;
+  border-radius: 6px;
+  padding: 2px 7px;
+  cursor: pointer;
+}
+.top-tool-btn:hover {
+  background: rgba(239, 68, 68, 0.15);
 }
 .timer-box {
   display: flex;
@@ -1391,6 +1533,8 @@ body {
 }
 
 .c-toast.t-lock .c-toast-ico { color: #f59e0b; }
+.c-toast.t-phone .c-toast-ico { color: #22c55e; }
+.c-toast.t-unphone .c-toast-ico { color: #94a3b8; }
 
 .island.island-locker-wrong {
   border-color: rgba(239, 68, 68, 0.55) !important;
@@ -1430,6 +1574,17 @@ body {
 .row-sub .batt.low { color: #ef4444; }
 .row-sub .batt.ok { color: #22c55e; }
 .list-row-item .sig-pct { font-size: 9.5px; opacity: 0.7; font-weight: 500; }
+.audio-check-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: auto;
+  flex: none;
+}
+.list-row-item.active-audio {
+  border-color: rgba(34, 197, 94, 0.45);
+  background: rgba(34, 197, 94, 0.08);
+}
 
 
 /* Wi-Fi: join panel (new network / hidden network) */
@@ -1505,3 +1660,27 @@ body {
   animation: none !important;
   transition-duration: 0.001s !important;
 }
+
+/* ---- Mic in-use dot: centered in the free space between the left side and the clock ---- */
+.priv-dot {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+}
+.priv-dot .pd {
+  display: block;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.35), 0 0 4px currentColor;
+}
+.priv-dot .mic { background: #30d158; color: #30d158; }
+
+/* ---- Net Speed hover widget: two stacked lines, like a phone status bar ---- */
+.net2 { display: inline-flex; flex-direction: column; gap: 1px; line-height: 1; font-size: 8.5px; font-variant-numeric: tabular-nums; }
+.net2 b { font-weight: 700; white-space: nowrap; }
+#c-temp .net2, #top-left-label .net2, #cal-left-label .net2 { align-items: flex-start; }
+#c-ram .net2, #top-ram-label .net2, #cal-ram-label .net2 { align-items: flex-end; }

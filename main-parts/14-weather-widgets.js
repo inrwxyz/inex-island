@@ -172,6 +172,15 @@ async function refreshWeather() {
   }
 }
 
+// bytes per second -> short text for the Net Speed widget: "512 K/s", "2.4 M/s", "12 M/s"
+function fmtNet(b) {
+  if (!(b > 0)) return '0 K/s';
+  const k = b / 1024;
+  if (k < 1000) return Math.round(k) + ' K/s';
+  const m = k / 1024;
+  return (m >= 10 ? Math.round(m) : m.toFixed(1)) + ' M/s';
+}
+
 function widgetHtml(kind) {
   const s = appState.stats;
   switch (kind) {
@@ -180,6 +189,7 @@ function widgetHtml(kind) {
     case 'cpu': return s ? `CPU ${s.cpu_pct}%` : '';
     case 'disk': return s ? `Disk ${s.disk_pct}%` : '';
     case 'battery': return s && s.battery_pct >= 0 ? `${s.battery_pct}%` : '';
+    case 'net': return appState.net ? `<span class="net2"><b>↓ ${fmtNet(appState.net[0])}</b><b>↑ ${fmtNet(appState.net[1])}</b></span>` : '';
     default: return '';
   }
 }
@@ -237,4 +247,3 @@ async function refreshBtCaption() {
   if (!appState.btRadio) { setBtCaption([]); return; }
   setBtCaption(await invokeTauri('get_bt_devices'));
 }
-

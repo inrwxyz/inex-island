@@ -137,7 +137,20 @@ fn attach_media(
     m: &windows::Media::Control::GlobalSystemMediaTransportControlsSessionManager,
 ) {
     use windows::Foundation::TypedEventHandler;
-    if let Ok(s) = m.GetCurrentSession() {
+    if let Ok(sessions) = m.GetSessions() {
+        for s in sessions {
+            let a = app.clone();
+            let _ = s.MediaPropertiesChanged(&TypedEventHandler::new(move |_, _| {
+                let _ = a.emit("media-changed", ());
+                Ok(())
+            }));
+            let b = app.clone();
+            let _ = s.PlaybackInfoChanged(&TypedEventHandler::new(move |_, _| {
+                let _ = b.emit("media-changed", ());
+                Ok(())
+            }));
+        }
+    } else if let Ok(s) = m.GetCurrentSession() {
         let a = app.clone();
         let _ = s.MediaPropertiesChanged(&TypedEventHandler::new(move |_, _| {
             let _ = a.emit("media-changed", ());

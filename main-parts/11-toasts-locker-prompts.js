@@ -5,6 +5,8 @@ const TOAST_ICONS = {
   lock: SVG_A + '<rect x="4" y="11" width="16" height="10" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>',
   face: SVG_A + '<path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/><circle cx="9" cy="9" r="1.2" fill="currentColor"/><circle cx="15" cy="9" r="1.2" fill="currentColor"/><path d="M10 15c.8.7 1.8 1 2 1s1.2-.3 2-1"/></svg>',
   fingerprint: SVG_A + '<path d="M12 10a2 2 0 0 0-2 2c0 1.02-.1 2.51-.26 4"/><path d="M14 13.12c0 2.38 0 6.38-1 8.88"/><path d="M2 16h.01"/><path d="M21.8 16c.2-2 .13-5.35 0-6"/><path d="M5 19.5C5.5 18 6 15 6 12a6 6 0 0 1 .34-2"/><path d="M8.65 22c.21-.66.45-1.32.57-2"/><path d="M9 6.8a6 6 0 0 1 9 5.2v2"/><path d="M17 19a10 10 0 0 1-5 2"/><path d="M18.7 18.2a12 12 0 0 0 1.3-4.2"/></svg>',
+  phone: SVG_A + '<rect x="7" y="2" width="10" height="20" rx="2"/><line x1="11" y1="18" x2="13" y2="18"/></svg>',
+  unphone: SVG_A + '<rect x="7" y="2" width="10" height="20" rx="2"/><line x1="11" y1="18" x2="13" y2="18"/><line x1="3" y1="3" x2="21" y2="21"/></svg>',
   bolt: SVG_A + '<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>',
   battery: SVG_A + '<rect x="2" y="7" width="17" height="10" rx="2"/><line x1="22" y1="11" x2="22" y2="13"/></svg>',
   low: SVG_A + '<rect x="2" y="7" width="17" height="10" rx="2"/><line x1="22" y1="11" x2="22" y2="13"/><line x1="6" y1="10" x2="6" y2="14"/></svg>'
@@ -32,6 +34,23 @@ function showToast(kind, text, ms) {
 let lockerWrongTimer = null;
 let lockerGlowTimer = null;
 let lockerPromptSafetyTimer = null;
+let lastLockerTs = 0;
+let lastLockToast = { target: '', at: 0 };
+// The locker sends a `locker_prompt` heartbeat every ~3 s for as long as its popup is open.
+// The island keeps the lock status for exactly that long: every heartbeat renews this lease, and it
+// only runs out (8 s) if the locker disappeared without telling us (crash / killed process).
+const LOCKER_LEASE_MS = 8000;
+function armLockerLease() {
+  clearTimeout(lockerPromptSafetyTimer);
+  lockerPromptSafetyTimer = setTimeout(() => {
+    if (appState.lockerPrompting) {
+      appState.lockerPrompting = false;
+      renderCenter();
+      updateClocks();
+      refreshMedia();
+    }
+  }, LOCKER_LEASE_MS);
+}
 
 onTauriEvent('locker-unlock', (event) => {
   let payload = event.payload;
@@ -40,9 +59,20 @@ onTauriEvent('locker-unlock', (event) => {
   }
   if (!payload || typeof payload !== 'object') payload = {};
 
+  // Locker events carry a millisecond `ts`. Drop one that is older than an event we already handled
+  // (out-of-order delivery); a big backwards jump (clock change / locker restart) is treated as a new session.
+  const evTs = Number(payload.ts) || 0;
+  if (evTs) {
+    if (evTs < lastLockerTs && lastLockerTs - evTs < 60000) return;
+    lastLockerTs = evTs;
+  }
+
   const evName = payload.event || (payload.type ? 'locker_unlock' : '');
 
   if (evName === 'locker_prompt') {
+    // heartbeat while the prompt is already showing: just renew the lease, no re-render
+    // (a heartbeat that finds no open prompt is ignored, so a late keep-alive can never re-open the status)
+    if (payload.hb) { if (appState.lockerPrompting) armLockerLease(); return; }
     // 1. Password prompt appears -> Island shows Locked with lock icon
     appState.lockerPrompting = true;
     island.classList.remove('island-locker-glow', 'island-locker-wrong');
@@ -54,13 +84,7 @@ onTauriEvent('locker-unlock', (event) => {
     if (txtEl) txtEl.textContent = payload.target ? payload.target : 'Locked';
     renderCenter();
 
-    clearTimeout(lockerPromptSafetyTimer);
-    lockerPromptSafetyTimer = setTimeout(() => {
-      if (appState.lockerPrompting) {
-        appState.lockerPrompting = false;
-        renderCenter();
-      }
-    }, 12000);
+    armLockerLease();
   }
   else if (evName === 'locker_wrong') {
     // 2. Wrong password -> Red border on island, notch lock icon shakes
@@ -80,6 +104,7 @@ onTauriEvent('locker-unlock', (event) => {
     const txtEl = document.getElementById('c-prompt-text');
     if (txtEl) txtEl.textContent = 'Wrong Password';
     renderCenter();
+    armLockerLease();
 
     clearTimeout(lockerWrongTimer);
     lockerWrongTimer = setTimeout(() => {
@@ -133,6 +158,46 @@ onTauriEvent('locker-unlock', (event) => {
     lockerGlowTimer = setTimeout(() => {
       island.classList.remove('island-locker-glow');
     }, 1400);
+  }
+  else if (evName === 'locker_pair' || evName === 'locker_unpair' || evName === 'locker_remove') {
+    // Locker Pro status signals: phone paired / unpaired, folder or app removed from the locker.
+    // The on/off switch lives ONLY in Locker Pro: if it is off, the locker sends nothing, so the island just shows what it receives.
+    appState.lockerPrompting = false;
+    clearTimeout(lockerPromptSafetyTimer);
+    island.classList.remove('island-locker-wrong', 'island-locker-glow');
+    const tgt = payload.target ? String(payload.target) : '';
+    renderCenter();
+    if (evName === 'locker_pair') showToast('phone', tgt ? `${tgt} Paired` : 'Phone Paired', 1800);
+    else if (evName === 'locker_unpair') showToast('unphone', 'Phone Unpaired', 1800);
+    else showToast('unlock', tgt ? `${tgt} Removed` : 'Removed', 1600);
+  }
+  else if (evName === 'locker_lock') {
+    // Folder/app got locked (Add folder, tray "Lock Now", auto re-lock). There was NO handler for this
+    // event before: the "Master Password" status then hung around until the old 12 s timer, and
+    // "Lock Now" showed nothing at all.
+    appState.lockerPrompting = false;
+    clearTimeout(lockerPromptSafetyTimer);
+    clearTimeout(lockerWrongTimer);
+    island.classList.remove('island-locker-wrong', 'island-locker-glow');
+    const promptEl = document.getElementById('c-prompt-anim');
+    if (promptEl) promptEl.classList.remove('prompt-wrong');
+    const icoEl = document.getElementById('c-prompt-ico');
+    if (icoEl) icoEl.classList.remove('lock-shake');
+    const txtEl = document.getElementById('c-prompt-text');
+    if (txtEl) txtEl.textContent = 'Locked';
+
+    const tgt = payload.target ? String(payload.target) : '';
+    const nowMs = Date.now();
+    // "password accepted" and "lock finished" can both arrive for one folder: show one toast
+    if (lastLockToast.target === tgt && nowMs - lastLockToast.at < 3000) {
+      renderCenter();
+      updateClocks();
+      refreshMedia();
+      return;
+    }
+    lastLockToast = { target: tgt, at: nowMs };
+    renderCenter();
+    showToast('lock', tgt ? `${tgt} Locked` : 'Locked', 1400);
   }
 });
 
