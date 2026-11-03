@@ -8,6 +8,7 @@ export const DEFAULTS = {
   appearance: {
     notchColor: '#030305', notchOpacity: 100, cornerRadius: 13,
     menuStyle: 'transparent', menuColor: '#0b0b10', menuOpacity: 92,
+    themeStyle: 'default',
     glowColor: '#ffffff', borderColor: '#ffffff', borderOpacity: 45,
     fontStyle: 'jakarta', scale: 100, animations: true
   },
@@ -62,7 +63,10 @@ const FONT_MAP = {
   syne: "'Syne', sans-serif",
   raleway: "'Raleway', sans-serif",
   system: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
-  mono: "'JetBrains Mono', 'Cascadia Code', Consolas, monospace"
+  mono: "'JetBrains Mono', 'Cascadia Code', Consolas, monospace",
+  matrix: "'Doto', 'Space Mono', monospace",
+  spacemono: "'Space Mono', monospace",
+  grotesk: "'Space Grotesk', sans-serif"
 };
 
 function isObj(v) { return v && typeof v === 'object' && !Array.isArray(v); }

@@ -4,8 +4,11 @@ function applySettings() {
   applyTheme(SET);
   applySlots();
   island.dataset.menu = SET.appearance.menuStyle;
+  const validTheme = ['default', 'matrix'].includes(SET.appearance.themeStyle) ? SET.appearance.themeStyle : 'default';
+  island.dataset.theme = validTheme;
   island.setAttribute('data-mode', SET.notch.mode);
   island.setAttribute('data-style', SET.notch.style || 'attached');
+  island.setAttribute('data-theme', validTheme);
   if (SET.notch.mode !== 'smart') island.classList.remove('smart-hidden');
   
   const targetZoom = (SET.appearance.scale || 100) / 100;
@@ -79,3 +82,14 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) refr
     play();                                     // never leave the island invisible
   })();
 })();
+
+// Background Auto-Update check (runs ~25s after boot if Auto Update is enabled)
+setTimeout(async () => {
+  if (!SET.general?.autoUpdate) return;
+  try {
+    const res = await invokeTauri('check_update');
+    if (res && res.available && res.latest_version) {
+      showToast('spark', `Update v${res.latest_version} available! Open Settings`, 6000);
+    }
+  } catch (_) {}
+}, 25000);

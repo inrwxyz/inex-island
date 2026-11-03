@@ -93,6 +93,7 @@ struct MediaInfo {
 struct SysStats {
     ram_pct: u32,
     cpu_pct: u32,
+    gpu_pct: u32,
     disk_pct: u32,
     battery_pct: i32,
     charging: bool,
@@ -588,6 +589,161 @@ fn cpu_percent() -> u32 {
 }
 
 #[cfg(target_os = "windows")]
+mod gpu {
+    use std::sync::Mutex;
+    use windows::core::w;
+
+    #[repr(C)]
+    struct PdhFmtCountervalue {
+        c_status: u32,
+        _pad: u32,
+        double_value: f64,
+    }
+
+    #[repr(C)]
+    struct PdhFmtCountervalueItemW {
+        sz_name: *mut u16,
+        fmt_value: PdhFmtCountervalue,
+    }
+
+    #[link(name = "pdh")]
+    extern "system" {
+        fn PdhOpenQueryW(
+            szDataSource: *const u16,
+            dwUserData: usize,
+            phQuery: *mut isize,
+        ) -> u32;
+        fn PdhAddEnglishCounterW(
+            hQuery: isize,
+            szFullCounterPath: *const u16,
+            dwUserData: usize,
+            phCounter: *mut isize,
+        ) -> u32;
+        fn PdhCollectQueryData(hQuery: isize) -> u32;
+        fn PdhGetFormattedCounterArrayW(
+            hCounter: isize,
+            dwFormat: u32,
+            lpdwBufferSize: *mut u32,
+            lpdwItemCount: *mut u32,
+            ItemBuffer: *mut u8,
+        ) -> u32;
+        fn PdhCloseQuery(hQuery: isize) -> u32;
+    }
+
+    struct GpuQuery {
+        query: isize,
+        counter: isize,
+        last_success: std::time::Instant,
+    }
+
+    static GPU_STATE: Mutex<Option<GpuQuery>> = Mutex::new(None);
+
+    const PDH_FMT_DOUBLE: u32 = 0x00000200;
+
+    pub fn percent() -> u32 {
+        let mut state = match GPU_STATE.lock() {
+            Ok(s) => s,
+            Err(_) => return 0,
+        };
+
+        let now = std::time::Instant::now();
+        let need_reopen = match &*state {
+            Some(q) => now.duration_since(q.last_success).as_secs() > 180,
+            None => true,
+        };
+
+        if need_reopen {
+            if let Some(old) = state.take() {
+                unsafe { PdhCloseQuery(old.query); }
+            }
+            let mut q: isize = 0;
+            let mut c: isize = 0;
+            unsafe {
+                if PdhOpenQueryW(std::ptr::null(), 0, &mut q) == 0 {
+                    let path = w!("\\GPU Engine(*)\\Utilization Percentage");
+                    if PdhAddEnglishCounterW(q, path.as_ptr(), 0, &mut c) == 0 {
+                        PdhCollectQueryData(q);
+                        *state = Some(GpuQuery {
+                            query: q,
+                            counter: c,
+                            last_success: now,
+                        });
+                        return 0; // Baseline initialized
+                    } else {
+                        PdhCloseQuery(q);
+                    }
+                }
+            }
+            return 0;
+        }
+
+        let q_ref = match state.as_mut() {
+            Some(q) => q,
+            None => return 0,
+        };
+
+        unsafe {
+            if PdhCollectQueryData(q_ref.query) != 0 {
+                let old = state.take().unwrap();
+                PdhCloseQuery(old.query);
+                return 0;
+            }
+
+            let mut buf_size: u32 = 0;
+            let mut item_count: u32 = 0;
+            let _ = PdhGetFormattedCounterArrayW(
+                q_ref.counter,
+                PDH_FMT_DOUBLE,
+                &mut buf_size,
+                &mut item_count,
+                std::ptr::null_mut(),
+            );
+
+            if buf_size == 0 || item_count == 0 {
+                return 0;
+            }
+
+            let mut buf: Vec<u8> = vec![0u8; buf_size as usize];
+            let status = PdhGetFormattedCounterArrayW(
+                q_ref.counter,
+                PDH_FMT_DOUBLE,
+                &mut buf_size,
+                &mut item_count,
+                buf.as_mut_ptr(),
+            );
+
+            if status != 0 {
+                return 0;
+            }
+
+            q_ref.last_success = now;
+
+            let item_size = std::mem::size_of::<PdhFmtCountervalueItemW>();
+            let mut total_pct = 0.0f64;
+
+            for i in 0..(item_count as usize) {
+                let offset = i * item_size;
+                if offset + item_size <= buf.len() {
+                    let item = &*(buf.as_ptr().add(offset) as *const PdhFmtCountervalueItemW);
+                    if item.fmt_value.c_status == 0 {
+                        total_pct += item.fmt_value.double_value;
+                    }
+                }
+            }
+
+            total_pct.round().clamp(0.0, 100.0) as u32
+        }
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+mod gpu {
+    pub fn percent() -> u32 {
+        0
+    }
+}
+
+#[cfg(target_os = "windows")]
 fn disk_percent() -> u32 {
     use windows::core::w;
     use windows::Win32::Storage::FileSystem::GetDiskFreeSpaceExW;
@@ -683,7 +839,7 @@ pub fn foreground_is_fullscreen() -> bool {
 #[tauri::command]
 async fn get_sys_stats() -> SysStats {
     let mut ram_pct = 0;
-    let (mut cpu_pct, mut disk_pct, mut battery_pct, mut charging) = (0, 0, -1, false);
+    let (mut cpu_pct, mut gpu_pct, mut disk_pct, mut battery_pct, mut charging) = (0, 0, 0, -1, false);
     let mut is_fullscreen = false;
     #[cfg(target_os = "windows")]
     unsafe {
@@ -696,6 +852,7 @@ async fn get_sys_stats() -> SysStats {
             ram_pct = mem.dwMemoryLoad;
         }
         cpu_pct = cpu_percent();
+        gpu_pct = gpu::percent();
         disk_pct = disk_percent();
         (battery_pct, charging) = battery_info();
         is_fullscreen = foreground_is_fullscreen();
@@ -715,6 +872,7 @@ async fn get_sys_stats() -> SysStats {
     SysStats {
         ram_pct,
         cpu_pct,
+        gpu_pct,
         disk_pct,
         battery_pct,
         charging,
@@ -1105,6 +1263,7 @@ fn setup_shelf_drop(app: AppHandle) {
 
 fn show_settings_window(app: &AppHandle) {
     if let Some(w) = app.get_webview_window("settings") {
+        let _ = w.emit("settings-opened", ());
         let _ = w.show();
         let _ = w.unminimize();
         let _ = w.set_focus();
@@ -1119,6 +1278,7 @@ fn open_settings(app: AppHandle) {
 #[tauri::command]
 fn close_settings(app: AppHandle) {
     if let Some(w) = app.get_webview_window("settings") {
+        let _ = w.emit("settings-closed", ());
         let _ = w.hide();
     }
 }
@@ -1246,6 +1406,56 @@ fn drop_stale_autostart() {
                 .output();
         }
     }
+}
+
+#[derive(Serialize)]
+struct UpdateCheck {
+    available: bool,
+    current_version: String,
+    latest_version: String,
+    error: Option<String>,
+}
+
+#[tauri::command]
+async fn check_update(app: tauri::AppHandle) -> UpdateCheck {
+    let current_version = app.package_info().version.to_string();
+    use tauri_plugin_updater::UpdaterExt;
+    let updater = match app.updater() {
+        Ok(u) => u,
+        Err(e) => {
+            return UpdateCheck {
+                available: false,
+                current_version,
+                latest_version: String::new(),
+                error: Some(e.to_string()),
+            }
+        }
+    };
+    match updater.check().await {
+        Ok(Some(update)) => UpdateCheck {
+            available: true,
+            current_version,
+            latest_version: update.version,
+            error: None,
+        },
+        Ok(None) => UpdateCheck {
+            available: false,
+            current_version,
+            latest_version: String::new(),
+            error: None,
+        },
+        Err(e) => UpdateCheck {
+            available: false,
+            current_version,
+            latest_version: String::new(),
+            error: Some(e.to_string()),
+        },
+    }
+}
+
+#[tauri::command]
+fn get_app_version(app: tauri::AppHandle) -> String {
+    app.package_info().version.to_string()
 }
 
 #[tauri::command]
@@ -1478,6 +1688,8 @@ fn main() {
             net::stage_begin,
             net::stage_end,
             setup_shelf_drop,
+            check_update,
+            get_app_version,
             apply_update
         ])
         .run(tauri::generate_context!())

@@ -7,7 +7,7 @@
   <title>Inex Island</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&family=Lexend:wght@400;500;600;700&family=Montserrat:wght@400;500;600;700&family=Outfit:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700&family=Poppins:wght@400;500;600;700&family=Raleway:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=Syne:wght@500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&family=Lexend:wght@400;500;600;700&family=Montserrat:wght@400;500;600;700&family=Outfit:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700&family=Poppins:wght@400;500;600;700&family=Raleway:wght@400;500;600;700&family=Doto:wght@400;800&family=Space+Mono:wght@400;700&family=Space+Grotesk:wght@500;600;700&family=Syne:wght@500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -98,13 +98,13 @@
     <div id="view-control" class="view">
       <div class="panel-top-bar">
         <span id="top-left-label"><svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:-1px;margin-right:2px;flex-shrink:0;"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32l1.41 1.41M2 12h2m16 0h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg><span>28°C</span></span>
-        <span id="ctrl-clock-tab" class="top-clock" title="Inex Island">11:19 pm</span>
+        <span id="ctrl-clock-tab" class="top-clock">11:19 pm</span>
         <span id="top-ram-label">RAM 56%</span>
       </div>
 
       <!-- 2x2 Grid Tiles: Wi-Fi, P2P, Bluetooth, File Tray -->
       <div class="ctrl-grid">
-        <div id="tile-wifi" class="ctrl-tile active" title="Wi-Fi">
+        <div id="tile-wifi" class="ctrl-tile active">
           <svg class="ico ico-wifi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path class="w3" d="M1.42 9a16 16 0 0 1 21.16 0"/><path class="w2" d="M5 12.55a11 11 0 0 1 14.08 0"/><path class="w1" d="M8.53 16.11a6 6 0 0 1 6.95 0"/><circle class="w0" cx="12" cy="20" r="0.8" fill="currentColor"/></svg>
           <small id="wifi-sub" class="sr">Connected</small>
           <em id="wifi-cap" class="cap"></em>
@@ -112,14 +112,14 @@
           <i class="ring"></i>
         </div>
 
-        <div id="tile-p2p" class="ctrl-tile" title="P2P Link">
+        <div id="tile-p2p" class="ctrl-tile">
           <svg class="ico ico-p2p" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="1.5" y="3" width="9" height="7" rx="1.5"/><path d="M4 13h4"/><rect x="13.5" y="12" width="9" height="7" rx="1.5"/><path d="M16 22h4"/><path class="flow f1" d="M12 6.5h4.5V10"/><path class="flow f2" d="M12 17.5H7.5V14"/></svg>
           <small id="tile-p2p-sub" class="sr">0 Peers</small><span id="tile-p2p-title" class="sr">P2P Link</span>
           <em id="p2p-cap" class="cap"></em>
           <i class="ring"></i>
         </div>
 
-        <div id="tile-bt" class="ctrl-tile active" title="Bluetooth">
+        <div id="tile-bt" class="ctrl-tile active">
           <svg class="ico ico-bt" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6.5 6.5 17.5 17.5 12 23 12 1 17.5 6.5 6.5 17.5"/></svg>
           <small id="bt-sub" class="sr">On</small>
           <em id="bt-cap" class="cap"></em>
@@ -127,21 +127,21 @@
           <i class="ring"></i>
         </div>
 
-        <div id="tile-tray" class="ctrl-tile" title="File Tray">
+        <div id="tile-tray" class="ctrl-tile">
           <svg class="ico ico-tray" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><path class="drop-arrow" d="M12 10v6M9.5 13.5 12 16l2.5-2.5"/></svg>
           <small id="tile-tray-sub" class="sr">0 Files</small>
           <em id="tray-cap" class="cap"></em>
           <i class="ring"></i>
         </div>
 
-        <div id="tile-mic" class="ctrl-tile hidden" title="Microphone (click to mute / unmute)">
+        <div id="tile-mic" class="ctrl-tile hidden">
           <svg class="ico ico-mic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/><line class="slash" x1="3" y1="3" x2="21" y2="21"/></svg>
           <small id="mic-sub" class="sr">On</small>
           <em id="mic-cap" class="cap"></em>
           <i class="ring"></i>
         </div>
 
-        <div id="tile-notepad" class="ctrl-tile hidden" title="Notepad">
+        <div id="tile-notepad" class="ctrl-tile hidden">
           <svg class="ico ico-notepad" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>
           <small class="sr">Notepad</small>
           <em class="cap"></em>

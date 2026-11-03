@@ -43,7 +43,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' ipc: http://ipc.localhost https://*.firebasedatabase.app https://*.firebaseio.com https://api.open-meteo.com https://ipwho.is https://ipapi.co http://ip-api.com https://wttr.in; object-src 'none'; base-uri 'self'; frame-src 'none'"
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' ipc: http://ipc.localhost https://*.firebasedatabase.app https://*.firebaseio.com https://api.open-meteo.com https://ipwho.is https://ipapi.co http://ip-api.com https://wttr.in https://api.github.com https://github.com; object-src 'none'; base-uri 'self'; frame-src 'none'"
     }
   },
   "bundle": {

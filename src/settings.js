@@ -52,9 +52,11 @@ const ICON = {
 };
 
 // ---------- settings schema ----------
-const WIDGET_OPTS = [['none', 'None'], ['weather', 'Weather'], ['ram', 'RAM'], ['cpu', 'CPU'], ['battery', 'Battery'], ['disk', 'Disk'], ['net', 'Net Speed']];
+const WIDGET_OPTS = [['none', 'None'], ['weather', 'Weather'], ['ram', 'RAM'], ['cpu', 'CPU'], ['gpu', 'GPU'], ['battery', 'Battery'], ['disk', 'Disk'], ['net', 'Net Speed']];
 const FONT_OPTS = [
   ['jakarta', 'Plus Jakarta Sans (Modern Clean)'],
+  ['matrix', 'Doto Matrix (Dot Matrix Display)'],
+  ['spacemono', 'Space Mono (Technical Monospace)'],
   ['inter', 'Inter (Crisp & Minimal)'],
   ['poppins', 'Poppins (Geometric & Vibrant)'],
   ['outfit', 'Outfit (Friendly & Rounded)'],
@@ -67,6 +69,10 @@ const FONT_OPTS = [
   ['mono', 'JetBrains Mono (Developer Code)']
 ];
 const GLOW_SWATCHES = ['#ffffff', '#dc143c', '#38bdf8', '#22c55e', '#a855f7', '#f59e0b'];
+const THEME_STYLE_OPTS = [
+  ['default', 'Modern Glass (Default Balanced)'],
+  ['matrix', 'Dot Matrix (Mono & Red Accent)']
+];
 
 const PAGES = [
   { id: 'notch', label: 'Notch', icon: 'notch', sections: [
@@ -101,7 +107,8 @@ const PAGES = [
   ] },
 
   { id: 'menu', label: 'Menu', icon: 'layers', sections: [
-    { title: 'Appearance', rows: [
+    { title: 'Theme & Aesthetics', rows: [
+      { path: 'appearance.themeStyle', type: 'select', icon: 'palette', t: 'Design Style', d: 'Visual design language applied to island, menu and widgets', options: THEME_STYLE_OPTS },
       { path: 'appearance.menuStyle', type: 'seg', icon: 'layers', t: 'Style', d: 'Transparent blurred glass or solid contrast color', options: [['transparent', 'Transparent Glass'], ['color', 'Solid Color']] },
       { path: 'appearance.menuColor', type: 'color', icon: 'palette', t: 'Background', d: 'Panel colour in solid mode', showIf: (s) => s.appearance.menuStyle === 'color' },
       { path: 'appearance.menuOpacity', type: 'range', icon: 'drop', t: 'Glass Transparency', d: 'Lower = more see-through blur', min: 20, max: 100, step: 5, unit: '%', showIf: (s) => s.appearance.menuStyle === 'color' },
@@ -321,47 +328,61 @@ try {
   window.__TAURI__?.event?.emit('direct-p2p-cmd', { action: 'get-state' });
 } catch (_) {}
 
-let updateStatusMsg = localStorage.getItem('inex.update.status') || 'Inex Island is up to date (v0.3.0)';
+let currentAppVer = '0.3.0';
+invoke('get_app_version').then((v) => {
+  if (v) {
+    currentAppVer = v;
+    const badge = document.querySelector('.about-title-wrap .pill');
+    if (badge) badge.textContent = `v${v} Stable`;
+  }
+});
+
+let updateStatusMsg = localStorage.getItem('inex.update.status') || `Inex Island is up to date (v${currentAppVer})`;
 let updateCheckTime = localStorage.getItem('inex.update.time') || 'Checked today';
 
 let isUpdating = false;
 async function checkUpdatesAction() {
   if (isUpdating) return;
   toast('Checking for updates...');
+  isUpdating = true;
   try {
-    const res = await fetch('https://api.github.com/repos/inrwxyz/inex-island/releases/latest', { cache: 'no-cache' });
-    if (res.ok) {
-      const data = await res.json();
-      const latestTag = data.tag_name || data.name || '';
-      if (latestTag && latestTag !== 'v0.2.0' && latestTag !== '0.2.0') {
-        updateStatusMsg = `Downloading & installing ${latestTag}...`;
-        toast(`Found ${latestTag}! Downloading update...`);
-        renderPage();
-        isUpdating = true;
-        try {
-          const installed = await invoke('apply_update');
-          if (installed) {
-            updateStatusMsg = `Update ${latestTag} installed! Restarting...`;
-            toast('Update complete! Restarting Inex Island...');
-            renderPage();
-            setTimeout(() => invoke('restart_app'), 1500);
-            return;
-          }
-        } catch (err) {
-          console.warn('Update failed:', err);
-        } finally {
-          isUpdating = false;
+    const res = await invoke('check_update');
+    if (res && res.available && res.latest_version) {
+      updateStatusMsg = `Downloading & installing v${res.latest_version}...`;
+      toast(`Found v${res.latest_version}! Downloading update...`);
+      renderPage();
+      try {
+        const installed = await invoke('apply_update');
+        if (installed) {
+          updateStatusMsg = `Update v${res.latest_version} installed! Restarting...`;
+          toast('Update complete! Restarting Inex Island...');
+          renderPage();
+          setTimeout(() => invoke('restart_app'), 1500);
+          return;
         }
+      } catch (err) {
+        console.warn('Update apply failed:', err);
+        toast('Update download failed. Please try again.');
       }
+    } else if (res && res.error) {
+      console.warn('Update check error:', res.error);
+      toast('Could not check updates. Check your connection.');
+    } else {
+      const ver = res?.current_version || currentAppVer;
+      updateStatusMsg = `Inex Island is up to date (v${ver})`;
+      toast('You are on the latest version!');
     }
-  } catch (_) {}
-  updateStatusMsg = 'Inex Island is up to date (v0.2.0)';
-  toast('You are on the latest version!');
-  const now = new Date();
-  updateCheckTime = `Checked ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
-  localStorage.setItem('inex.update.status', updateStatusMsg);
-  localStorage.setItem('inex.update.time', updateCheckTime);
-  renderPage();
+  } catch (e) {
+    console.warn('check_update failed:', e);
+    toast('You are on the latest version!');
+  } finally {
+    isUpdating = false;
+    const now = new Date();
+    updateCheckTime = `Checked ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+    localStorage.setItem('inex.update.status', updateStatusMsg);
+    localStorage.setItem('inex.update.time', updateCheckTime);
+    renderPage();
+  }
 }
 
 function openExternalUrl(url) {
@@ -374,6 +395,8 @@ function renderNav() {
     const b = el('button', p.id === current ? 'on' : '', ICON[p.icon] + `<span>${p.label}</span>`);
     b.addEventListener('click', () => {
       current = p.id;
+      openSecs.clear();
+      p2pFirebaseAccordionOpen = false;
       if (current === 'p2p') {
         try { window.__TAURI__?.event?.emit('direct-p2p-cmd', { action: 'get-state' }); } catch (_) {}
       }
@@ -385,6 +408,25 @@ function renderNav() {
 }
 const escHtml = (s) => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
+const openSecs = new Set(); // which settings sections are expanded (all closed by default)
+let quickTilesAccordionOpen = false;
+
+function getSectionIcon(pageId, title) {
+  const t = (title || '').toLowerCase();
+  if (t.includes('theme') || t.includes('aesthetic') || t.includes('color')) return ICON.palette;
+  if (t.includes('slot') || t.includes('tile')) return ICON.layers;
+  if (t.includes('motion') || t.includes('interaction')) return ICON.spark;
+  if (t.includes('design') || t.includes('shape') || t.includes('notch')) return ICON.notch;
+  if (t.includes('typography') || t.includes('font') || t.includes('scale')) return ICON.font;
+  if (t.includes('music') || t.includes('visualizer')) return ICON.music;
+  if (t.includes('widget') || t.includes('productivity')) return ICON.widgets;
+  if (t.includes('device') || t.includes('share') || t.includes('connect')) return ICON.p2p;
+  if (t.includes('system') || t.includes('startup') || t.includes('performance')) return ICON.activity;
+  if (t.includes('about') || t.includes('update')) return ICON.info;
+  return ICON.gear;
+}
+let p2pFirebaseAccordionOpen = false;
+
 function renderQuickActionTilesEditor(main) {
   if (!S.menu) S.menu = { actionTiles: [...DEFAULT_ACTION_TILES] };
   if (!Array.isArray(S.menu.actionTiles)) S.menu.actionTiles = [...DEFAULT_ACTION_TILES];
@@ -392,17 +434,42 @@ function renderQuickActionTilesEditor(main) {
   const addedIds = S.menu.actionTiles;
   const moreBuiltInIds = Object.keys(ALL_ACTION_TILES).filter((id) => !addedIds.includes(id));
 
-  const secTitle = el('div', 'sec-title');
-  secTitle.style.cssText = 'display:flex;justify-content:space-between;align-items:center;';
-  secTitle.innerHTML = `<span>Quick Action Tiles</span><span style="font-size:11px;color:var(--muted);font-weight:normal;">Tap – to remove, + to add</span>`;
-  main.append(secTitle);
+  const qaSecKey = 'menu:quick-action-bar';
+  const qaOpen = openSecs.has(qaSecKey);
+  const qaHead = el('div', 'sec-title sec-acc' + (qaOpen ? ' open' : ''));
+  qaHead.innerHTML = `
+    <div class="sec-left">
+      <div class="sec-ico-box">${ICON.widgets}</div>
+      <span class="sec-name">Quick Action Bar</span>
+    </div>
+    <div class="sec-meta">
+      <span class="sec-count" style="color:#22c55e;">${addedIds.length} / 7 Active</span>
+      <span class="sec-chev">&#9662;</span>
+    </div>
+  `;
 
-  const card = el('div', 'card tile-manager-card');
+  const qaCard = el('div', 'card tile-manager-card');
+  if (!qaOpen) qaCard.style.display = 'none';
+
+  qaHead.addEventListener('click', () => {
+    const nowOpen = qaCard.style.display !== 'none';
+    if (nowOpen) {
+      qaCard.style.display = 'none';
+      qaHead.classList.remove('open');
+      openSecs.delete(qaSecKey);
+      closedSecs.add(qaSecKey);
+    } else {
+      qaCard.style.display = '';
+      qaHead.classList.add('open');
+      openSecs.add(qaSecKey);
+      closedSecs.delete(qaSecKey);
+    }
+  });
 
   // 1. Added Tiles (Active Bar)
   const grp1 = el('div', 'tile-group-header');
   grp1.innerHTML = `<span class="grp-title">Added Tiles (${addedIds.length} / 7)</span><span class="grp-sub">Shown on island menu quick action bar</span>`;
-  card.append(grp1);
+  qaCard.append(grp1);
 
   const grid1 = el('div', 'tiles-grid');
   addedIds.forEach((id) => {
@@ -415,52 +482,58 @@ function renderQuickActionTilesEditor(main) {
       <div class="tile-icon-wrap">${ICON[tile.icon] || ICON.spark}</div>
       <div class="tile-label">${escHtml(tile.label)}</div>
     `;
-    it.addEventListener('click', () => {
+    it.addEventListener('click', (e) => {
+      e.stopPropagation();
       if (addedIds.length <= 1) {
         toast('At least 1 tile must remain active');
         return;
       }
-      S.menu.actionTiles = S.menu.actionTiles.filter((x) => x !== id);
+      S.menu.actionTiles = addedIds.filter((x) => x !== id);
       save(S);
+      toast(`Removed ${tile.label}`);
+      openSecs.add(qaSecKey);
       renderPage();
     });
     grid1.append(it);
   });
-  card.append(grid1);
+  qaCard.append(grid1);
 
-  // 2. More Tiles (Built-in)
+  // 2. More Tiles
   if (moreBuiltInIds.length > 0) {
     const grp2 = el('div', 'tile-group-header');
-    grp2.style.marginTop = '16px';
     grp2.innerHTML = `<span class="grp-title">More Tiles</span><span class="grp-sub">Available system tools</span>`;
-    card.append(grp2);
+    qaCard.append(grp2);
 
     const grid2 = el('div', 'tiles-grid');
     moreBuiltInIds.forEach((id) => {
       const tile = ALL_ACTION_TILES[id];
       if (!tile) return;
       const it = el('div', 'action-tile-item');
-      it.title = tile.desc;
+      it.title = tile.desc || tile.label;
       it.innerHTML = `
-        <div class="tile-badge badge-add" title="Add tile">${ICON.plus}</div>
+        <div class="tile-badge badge-add" title="Add to bar">${ICON.plus}</div>
         <div class="tile-icon-wrap">${ICON[tile.icon] || ICON.spark}</div>
         <div class="tile-label">${escHtml(tile.label)}</div>
       `;
-      it.addEventListener('click', () => {
+      it.addEventListener('click', (e) => {
+        e.stopPropagation();
         if (addedIds.length >= 7) {
-          toast('Maximum 7 tiles allowed in action bar');
+          toast('Maximum 7 action tiles allowed');
           return;
         }
-        S.menu.actionTiles.push(id);
+        S.menu.actionTiles = [...addedIds, id];
         save(S);
+        toast(`Added ${tile.label}`);
+        openSecs.add(qaSecKey);
         renderPage();
       });
       grid2.append(it);
     });
-    card.append(grid2);
+    qaCard.append(grid2);
   }
 
-  main.append(card);
+  main.append(qaHead);
+  main.append(qaCard);
 }
 
 function renderPage(resetScroll) {
@@ -600,90 +673,113 @@ function renderPage(resetScroll) {
     }
     directCardHtml += `</div>`;
 
-    // 2. Firebase Database Card
-    const fbCardHtml = `
-      <div class="sec-title" style="display:flex;justify-content:space-between;align-items:center;margin-top:20px;">
-        <span>Firebase Signaling (Multi-PC Cloud)</span>
-        <span class="pill pill-purple" style="font-size:10px;">Cloud Database</span>
-      </div>
-      <div class="card">
-        <div class="row">
-          <div class="ico-box">${ICON.pin}</div>
-          <div class="txt">
-            <div class="t">Active Database</div>
-            <div class="d">${isCustom ? 'Active private Firebase instance' : 'No Firebase URL set (configure below)'}</div>
-          </div>
-          <div class="ctl">
-            <div class="url-masked-pill" title="Protected & Hidden">
-              <span class="masked-dots">••••••••••••••••••••••••</span>
-              <span class="lock-tag">${isCustom ? 'Configured' : 'Not Set'}</span>
-            </div>
-          </div>
-        </div>
-
-        <div class="row">
-          <div class="ico-box">${ICON.spark}</div>
-          <div class="txt">
-            <div class="t">Database URL</div>
-            <div class="d">Paste your private Firebase Realtime Database URL</div>
-          </div>
-          <div class="ctl">
-            <div class="fb-input-wrap">
-              <input type="password" id="inp-custom-firebase" class="txtin" placeholder="https://your-db.asia-southeast1.firebasedatabase.app" />
-              <button id="btn-save-custom-fb" class="btn btn-save-fb">Save</button>
-            </div>
-          </div>
-        </div>
-
-        ${isCustom ? `
-        <div class="row click" id="row-reset-fb">
-          <div class="ico-box">${ICON.reset}</div>
-          <div class="txt">
-            <div class="t" style="color: #f4f4f6;">Clear Database URL</div>
-            <div class="d">Remove saved Firebase Realtime Database URL</div>
-          </div>
-          <div class="ctl">
-            <button class="btn btn-outline" id="btn-revert-fb">Clear URL</button>
-          </div>
-        </div>` : ''}
-      </div>
-
-      <div class="sec-title">Setup Instructions</div>
-      <div class="card fb-guide-card">
-        <div class="fb-guide-steps">
-          <div class="guide-step">
-            <span class="step-num">1</span>
-            <div class="step-text">
-              Go to <button class="link-btn" id="btn-fb-console-link">Firebase Console ↗</button> and click <b>Add project</b> (Free Spark plan).
-            </div>
-          </div>
-          <div class="guide-step">
-            <span class="step-num">2</span>
-            <div class="step-text">
-              In the sidebar, navigate to <b>Build &gt; Realtime Database</b> and click <b>Create Database</b>.
-            </div>
-          </div>
-          <div class="guide-step">
-            <span class="step-num">3</span>
-            <div class="step-text">
-              Under the <b>Rules</b> tab, replace everything with the Security Rules below and click <b>Publish</b>.
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="sec-title">Firebase Security Rules</div>
-      <div class="card fb-rules-card">
-        <div class="fb-rules-header">
-          <span class="rules-badge">Database Rules (JSON)</span>
-          <button id="btn-copy-rules" class="btn-copy-rules">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-            <span id="copy-rules-txt">Copy Rules</span>
-          </button>
-        </div>
-        <pre class="fb-rules-code"><code>{\n  "rules": {\n    "rooms": {\n      "$roomCode": {\n        ".read": true,\n        ".write": true\n      }\n    }\n  }\n}</code></pre>
+    // 2. Firebase Database Card (Collapsible Accordion)
+    let fbCardHtml = `
+      <div class="sec-title click" id="toggle-firebase-accordion" style="display:flex;justify-content:space-between;align-items:center;margin-top:20px;cursor:pointer;user-select:none;">
+        <span style="display:flex;align-items:center;gap:8px;">
+          <span>Cloud Relay (Private Database)</span>
+          <span class="pill ${isCustom ? 'pill-green' : 'pill-purple'}" style="font-size:10px;">${isCustom ? 'Configured' : 'Optional'}</span>
+        </span>
+        <span style="font-size:11px;color:var(--muted);font-weight:500;">
+          ${p2pFirebaseAccordionOpen ? '▲ Collapse' : (isCustom ? '▼ Manage' : '▼ Configure')}
+        </span>
       </div>
     `;
+
+    if (!p2pFirebaseAccordionOpen) {
+      fbCardHtml += `
+        <div class="card click" id="card-fb-preview" style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;cursor:pointer;">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <div class="ico-box" style="margin:0;">${ICON.spark}</div>
+            <div>
+              <div style="font-size:13px;font-weight:600;color:#f8fafc;">Firebase Cloud Relay</div>
+              <div style="font-size:11px;color:var(--muted);">${isCustom ? 'Active private Firebase instance configured' : 'Connect over the internet across different networks (optional)'}</div>
+            </div>
+          </div>
+          <button class="btn btn-sm btn-outline" style="flex:none;">${isCustom ? 'Manage ❯' : 'Setup ❯'}</button>
+        </div>
+      `;
+    } else {
+      fbCardHtml += `
+        <div class="card">
+          <div class="row">
+            <div class="ico-box">${ICON.pin}</div>
+            <div class="txt">
+              <div class="t">Active Database</div>
+              <div class="d">${isCustom ? 'Active private Firebase instance' : 'No Firebase URL set (configure below)'}</div>
+            </div>
+            <div class="ctl">
+              <div class="url-masked-pill" title="Protected & Hidden">
+                <span class="masked-dots">••••••••••••••••••••••••</span>
+                <span class="lock-tag">${isCustom ? 'Configured' : 'Not Set'}</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="ico-box">${ICON.spark}</div>
+            <div class="txt">
+              <div class="t">Database URL</div>
+              <div class="d">Paste your private Firebase Realtime Database URL</div>
+            </div>
+            <div class="ctl">
+              <div class="fb-input-wrap">
+                <input type="password" id="inp-custom-firebase" class="txtin" placeholder="https://your-db.asia-southeast1.firebasedatabase.app" />
+                <button id="btn-save-custom-fb" class="btn btn-save-fb">Save</button>
+              </div>
+            </div>
+          </div>
+
+          ${isCustom ? `
+          <div class="row click" id="row-reset-fb">
+            <div class="ico-box">${ICON.reset}</div>
+            <div class="txt">
+              <div class="t" style="color: #f4f4f6;">Clear Database URL</div>
+              <div class="d">Remove saved Firebase Realtime Database URL</div>
+            </div>
+            <div class="ctl">
+              <button class="btn btn-outline" id="btn-revert-fb">Clear URL</button>
+            </div>
+          </div>` : ''}
+        </div>
+
+        <div class="sec-title">Setup Instructions</div>
+        <div class="card fb-guide-card">
+          <div class="fb-guide-steps">
+            <div class="guide-step">
+              <span class="step-num">1</span>
+              <div class="step-text">
+                Go to <button class="link-btn" id="btn-fb-console-link">Firebase Console ↗</button> and click <b>Add project</b> (Free Spark plan).
+              </div>
+            </div>
+            <div class="guide-step">
+              <span class="step-num">2</span>
+              <div class="step-text">
+                In the sidebar, navigate to <b>Build &gt; Realtime Database</b> and click <b>Create Database</b>.
+              </div>
+            </div>
+            <div class="guide-step">
+              <span class="step-num">3</span>
+              <div class="step-text">
+                Under the <b>Rules</b> tab, replace everything with the Security Rules below and click <b>Publish</b>.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="sec-title">Firebase Security Rules</div>
+        <div class="card fb-rules-card">
+          <div class="fb-rules-header">
+            <span class="rules-badge">Database Rules (JSON)</span>
+            <button id="btn-copy-rules" class="btn-copy-rules">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              <span id="copy-rules-txt">Copy Rules</span>
+            </button>
+          </div>
+          <pre class="fb-rules-code"><code>{\n  "rules": {\n    "rooms": {\n      "$roomCode": {\n        ".read": true,\n        ".write": true\n      }\n    }\n  }\n}</code></pre>
+        </div>
+      `;
+    }
 
     fb.innerHTML = bannerHtml + directCardHtml + fbCardHtml;
     main.append(fb);
@@ -786,6 +882,15 @@ function renderPage(resetScroll) {
       try { window.__TAURI__?.event?.emit('direct-p2p-cmd', { action: 'disconnect' }); } catch (_) {}
     });
 
+    fb.querySelector('#toggle-firebase-accordion')?.addEventListener('click', () => {
+      p2pFirebaseAccordionOpen = !p2pFirebaseAccordionOpen;
+      renderPage();
+    });
+    fb.querySelector('#card-fb-preview')?.addEventListener('click', () => {
+      p2pFirebaseAccordionOpen = true;
+      renderPage();
+    });
+
     // Wire Firebase Database Controls
     const saveBtn = fb.querySelector('#btn-save-custom-fb');
     const inp = fb.querySelector('#inp-custom-firebase');
@@ -844,7 +949,7 @@ function renderPage(resetScroll) {
         <img src="logo.svg" alt="Inex Island" class="about-icon" />
         <div class="about-title-wrap">
           <span class="about-title">Inex Island</span>
-          <span class="pill pill-green">v0.2.0 Stable</span>
+          <span class="pill pill-green">v${currentAppVer} Stable</span>
         </div>
       </div>
       <div class="update-banner">
@@ -860,8 +965,22 @@ function renderPage(resetScroll) {
   page.sections.filter((sec) => !sec.showIf || sec.showIf(S)).forEach((sec) => {
     const visible = sec.rows.filter((r) => !r.showIf || r.showIf(S));
     if (!visible.length) return;
-    main.append(el('div', 'sec-title', sec.title));
-    const card = el('div', 'card');
+    const secKey = page.id + ':' + sec.title;
+    const secOpen = openSecs.has(secKey);
+    const head = el('div', 'sec-title sec-acc' + (secOpen ? ' open' : ''),
+      `<span class="sec-name">${sec.title}</span><span class="sec-meta"><span class="sec-count">${visible.length}</span><span class="sec-chev">&#9662;</span></span>`);
+    head.addEventListener('click', () => {
+      if (openSecs.has(secKey)) {
+        openSecs.delete(secKey);
+      } else {
+        openSecs.clear();
+        openSecs.add(secKey);
+      }
+      renderPage();
+    });
+    main.append(head);
+    if (!secOpen) return;
+    const card = el('div', 'card sec-body');
     visible.forEach((r) => card.append(renderRow(r)));
     main.append(card);
   });
@@ -901,7 +1020,29 @@ function importSettings() {
 }
 
 // ---------- window ----------
-document.getElementById('btn-close').addEventListener('click', () => invoke('close_settings'));
+function resetSettingsState() {
+  openSecs.clear();
+  p2pFirebaseAccordionOpen = false;
+  renderPage(true);
+}
+
+document.getElementById('btn-close')?.addEventListener('click', () => {
+  resetSettingsState();
+  invoke('close_settings');
+});
+
+window.addEventListener('blur', resetSettingsState);
+window.addEventListener('focus', resetSettingsState);
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' || document.visibilityState === 'hidden') {
+    resetSettingsState();
+  }
+});
+
+try {
+  window.__TAURI__?.event?.listen('settings-opened', resetSettingsState);
+  window.__TAURI__?.event?.listen('settings-closed', resetSettingsState);
+} catch (_) {}
 document.getElementById('btn-reset-header')?.addEventListener('click', resetAll);
 document.getElementById('titlebar').addEventListener('mousedown', (e) => { if (e.target.closest('button')) return; invoke('drag_settings'); });
 window.addEventListener('pointerup', () => { isDragging = false; });

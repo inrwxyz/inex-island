@@ -1684,3 +1684,213 @@ body {
 .net2 b { font-weight: 700; white-space: nowrap; }
 #c-temp .net2, #top-left-label .net2, #cal-left-label .net2 { align-items: flex-start; }
 #c-ram .net2, #top-ram-label .net2, #cal-ram-label .net2 { align-items: flex-end; }
+
+/* ==================== THEME STYLES (only opened menu changes, collapsed notch is 100% untouched) ==================== */
+
+/* ---------- DOT MATRIX (Authentic: pure black, dot grid, Doto dot font, grey bento cards, white active, red dot) ---------- */
+.island[data-theme="matrix"]:is(.state-control, .state-tray, .state-sub, .state-media, .state-calendar, .state-drop) {
+  background-color: #000000 !important;
+  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.48) 1px, transparent 1.4px) !important;
+  background-size: 10px 10px !important;
+  background-position: 5px 5px !important;
+  backdrop-filter: blur(28px) !important;
+  -webkit-backdrop-filter: blur(28px) !important;
+  color: #ffffff !important;
+  border: 1px solid rgba(255, 255, 255, 0.38) !important;
+  border-top: none !important;
+  border-radius: 0 0 30px 30px !important;
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.75) !important;
+}
+
+/* Body font = Space Mono, Numbers / Time / Stats = Doto variable dot font */
+.island[data-theme="matrix"]:not(.state-compact) * {
+  font-family: 'Space Mono', 'JetBrains Mono', monospace !important;
+}
+
+/* Hidden elements and Screen Reader text MUST ALWAYS REMAIN HIDDEN */
+.hidden,
+.ctrl-tile.hidden,
+.island[data-theme="matrix"] .hidden,
+.island[data-theme="matrix"] .ctrl-tile.hidden,
+.island[data-theme="matrix"]:not(.state-compact) .ctrl-tile.hidden,
+.island[data-theme="matrix"] .sr {
+  display: none !important;
+}
+
+/* Top Bar Stats: Clean mono text without boxy pill borders */
+.island[data-theme="matrix"]:not(.state-compact) :is(#top-left-label, #top-ram-label, #cal-left-label, #cal-ram-label, .s-val) {
+  font-family: 'Doto', 'Space Mono', monospace !important;
+  font-size: 12px !important;
+  font-weight: 800 !important;
+  letter-spacing: 0.05em !important;
+  color: #ffffff !important;
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+}
+
+.island[data-theme="matrix"]:not(.state-compact) :is(.timer-digits, .timer-edit, .cal-month-heading, .media-meta strong, .weather-text) {
+  font-family: 'Doto', 'Space Mono', monospace !important;
+  font-weight: 800 !important;
+  letter-spacing: 0.06em;
+  text-shadow: none !important;
+}
+.island[data-theme="matrix"]:not(.state-compact) .top-clock {
+  font-family: 'Doto', 'Space Mono', monospace !important;
+  font-size: 18px !important;
+  font-weight: 800 !important;
+  letter-spacing: 0.06em;
+  color: #ffffff !important;
+  text-shadow: none !important;
+}
+.island[data-theme="matrix"]:not(.state-compact) :is(.timer-digits, .timer-edit) { font-size: 42px !important; }
+.island[data-theme="matrix"]:not(.state-compact) .media-meta strong { font-size: 16px !important; }
+.island[data-theme="matrix"]:not(.state-compact) .panel-top-bar { opacity: 1; text-transform: uppercase; }
+
+/* 2x2 Slots (Exact 4 bento squircle cards) */
+.island[data-theme="matrix"]:not(.state-compact) .ctrl-grid {
+  display: grid !important;
+  grid-template-columns: 1fr 1fr !important;
+  gap: 8px !important;
+  padding: 4px 14px !important;
+}
+.island[data-theme="matrix"]:not(.state-compact) .ctrl-tile:not(.hidden) {
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border-radius: 24px !important;
+  background: #141416 !important;
+  box-shadow: none !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 3px !important;
+  padding: 0 10px !important;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+.island[data-theme="matrix"]:not(.state-compact) .ctrl-tile:not(.hidden):hover {
+  background: #202024 !important;
+  border-color: rgba(255, 255, 255, 0.2) !important;
+}
+.island[data-theme="matrix"]:not(.state-compact) .ctrl-tile .ico {
+  width: 22px !important;
+  height: 22px !important;
+  margin: 0 !important;
+}
+.island[data-theme="matrix"]:not(.state-compact) .ctrl-tile .cap {
+  font-family: 'Space Mono', monospace !important;
+  font-size: 8px !important;
+  font-weight: 700 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.12em !important;
+  color: rgba(255, 255, 255, 0.75) !important;
+}
+
+/* Active Tile Inversion (Solid white card with black icon & red recording dot) */
+.island[data-theme="matrix"]:not(.state-compact) .ctrl-tile.active:not(.hidden) {
+  background: #ffffff !important;
+  color: #000000 !important;
+  border: 1px solid #ffffff !important;
+  box-shadow: 0 4px 18px rgba(255, 255, 255, 0.2) !important;
+}
+.island[data-theme="matrix"]:not(.state-compact) .ctrl-tile.active:not(.hidden) :is(svg, .ico, .ico-box, .t, .d, .cap, small, .chev) {
+  color: #000000 !important;
+  stroke: #000000 !important;
+}
+.island[data-theme="matrix"]:not(.state-compact) .ctrl-tile.active:not(.hidden)::after {
+  content: '';
+  position: absolute;
+  top: 10px;
+  left: 14px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #d71921;
+  box-shadow: 0 0 8px #d71921;
+}
+
+/* Circular Quick Action Buttons */
+.island[data-theme="matrix"]:not(.state-compact) .quick-icons-row {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  padding: 4px 14px 2px !important;
+}
+.island[data-theme="matrix"]:not(.state-compact) :is(.q-icon-btn, .count-chip, .icon-ghost-btn.round, .timer-reset-btn, .cal-nav-btn, .cal-today-btn) {
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 9999px !important;
+  background: #141416 !important;
+  color: #ffffff !important;
+  box-shadow: none !important;
+  transition: all 0.15s ease !important;
+}
+.island[data-theme="matrix"]:not(.state-compact) :is(.q-icon-btn, .icon-ghost-btn.round):hover {
+  background: #242428 !important;
+}
+.island[data-theme="matrix"]:not(.state-compact) :is(.q-icon-btn, .timer-presets button).active {
+  background: #ffffff !important;
+  color: #000000 !important;
+  border-color: #ffffff !important;
+}
+.island[data-theme="matrix"]:not(.state-compact) .q-icon-btn.active svg {
+  color: #000000 !important;
+  stroke: #000000 !important;
+}
+
+/* Red Highlights for Calendar & Timer */
+.island[data-theme="matrix"]:not(.state-compact) .cal-day.today {
+  background: #d71921 !important;
+  color: #ffffff !important;
+  border-radius: 50% !important;
+}
+.island[data-theme="matrix"]:not(.state-compact) .timer-start-pill {
+  background: #ffffff !important;
+  color: #000000 !important;
+  font-weight: 700;
+  border-radius: 9999px !important;
+}
+.island[data-theme="matrix"]:not(.state-compact) .cal-weekdays {
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+/* Dotted Sliders */
+.island[data-theme="matrix"]:not(.state-compact) :is(.ctrl-slider-row, .media-vol-row) input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 12px;
+  background: rgba(255, 255, 255, 0.25);
+  border-radius: 0;
+  overflow: hidden;
+  -webkit-mask-image: radial-gradient(circle, #000000 2.3px, transparent 2.8px);
+  -webkit-mask-size: 8px 12px;
+  -webkit-mask-repeat: repeat-x;
+}
+.island[data-theme="matrix"]:not(.state-compact) :is(.ctrl-slider-row, .media-vol-row) input[type="range"]::-webkit-slider-runnable-track {
+  height: 12px;
+  background: transparent;
+}
+.island[data-theme="matrix"]:not(.state-compact) :is(.ctrl-slider-row, .media-vol-row) input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 0;
+  height: 12px;
+  box-shadow: -600px 0 0 600px #ffffff;
+}
+
+/* Media Player */
+.island[data-theme="matrix"] .media-ambient-card {
+  background: #121214 !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  border-radius: 20px !important;
+}
+.island[data-theme="matrix"] .media-ambient-wave { display: none; }
+.island[data-theme="matrix"] .media-cover {
+  border-radius: 50%;
+  border: 1px solid #ffffff;
+  box-shadow: none;
+  filter: grayscale(1) contrast(1.4);
+}
+.island[data-theme="matrix"] .media-meta small {
+  color: rgba(255, 255, 255, 0.7);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
