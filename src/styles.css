@@ -1515,6 +1515,19 @@ body {
   to   { transform: translateY(-2.5px) rotate(-14deg); }
 }
 .c-toast.t-bolt .c-toast-ico { color: #22c55e; }
+.c-toast.t-mic .c-toast-ico {
+  color: #00e5ff;
+  display: inline-flex;
+  align-items: center;
+}
+.c-toast.t-mic .c-toast-ico svg {
+  animation: micPulseGlow 1.2s ease-in-out infinite alternate;
+  filter: drop-shadow(0 0 6px rgba(0, 229, 255, 0.75));
+}
+@keyframes micPulseGlow {
+  0% { transform: scale(1) rotate(-4deg); filter: drop-shadow(0 0 4px rgba(0, 229, 255, 0.5)); }
+  100% { transform: scale(1.22) rotate(4deg); filter: drop-shadow(0 0 10px rgba(0, 229, 255, 0.95)); }
+}
 .c-toast.t-low .c-toast-ico { color: #ef4444; }
 .c-toast.t-unlock .c-toast-ico,
 .c-toast.t-face .c-toast-ico,
@@ -1530,6 +1543,48 @@ body {
   border-color: rgba(251, 191, 36, 0.45) !important;
   box-shadow: 0 0 8px rgba(251, 191, 36, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.10) !important;
   transition: border-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+/* Google AI Mode Flowing Border Glow (Active Voice Interaction) */
+@property --ai-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+
+@keyframes aiGlowRotate {
+  0% { --ai-angle: 0deg; }
+  100% { --ai-angle: 360deg; }
+}
+
+.island.island-voice-active {
+  border-color: transparent !important;
+  box-shadow: 0 0 16px rgba(66, 133, 244, 0.42), 0 0 6px rgba(52, 168, 83, 0.32) !important;
+  transition: box-shadow 0.3s ease, border-color 0.2s ease;
+}
+
+.island.island-voice-active::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1.5px;
+  background: conic-gradient(
+    from var(--ai-angle, 0deg),
+    #4285F4 0deg,
+    #9B51E0 70deg,
+    #EA4335 140deg,
+    #FBBC05 220deg,
+    #34A853 300deg,
+    #4285F4 360deg
+  );
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  animation: aiGlowRotate 2.4s linear infinite;
+  box-shadow: inset 0 0 6px rgba(66, 133, 244, 0.3);
+  z-index: 999;
 }
 
 .c-toast.t-lock .c-toast-ico { color: #f59e0b; }
@@ -1893,4 +1948,49 @@ body {
   color: rgba(255, 255, 255, 0.7);
   text-transform: uppercase;
   letter-spacing: 0.08em;
+}
+
+
+/* Voice Assistant Dynamic Robotic Eyes & Speech */
+.c-voice-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  color: #f4f4f6;
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.voice-eyes {
+  display: inline-flex;
+  align-items: center;
+  gap: 3.5px;
+  padding: 0 1px;
+}
+.voice-eye {
+  width: 5px;
+  height: 9px;
+  background: #22c55e;
+  border-radius: 4px;
+  box-shadow: 0 0 8px rgba(34, 197, 94, 0.7);
+  animation: voiceEyeBlink 3.2s infinite ease-in-out;
+  transform-origin: center;
+}
+.voice-eye.left-eye {
+  animation-delay: 0s;
+}
+.voice-eye.right-eye {
+  animation-delay: 0.05s;
+}
+@keyframes voiceEyeBlink {
+  0%, 88%, 100% { transform: scaleY(1); }
+  92% { transform: scaleY(0.12); }
+  96% { transform: scaleY(1); }
+}
+.island-voice-active {
+  box-shadow: 0 0 16px rgba(34, 197, 94, 0.4), inset 0 0 12px rgba(34, 197, 94, 0.15) !important;
+  border-color: rgba(34, 197, 94, 0.5) !important;
 }

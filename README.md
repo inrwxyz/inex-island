@@ -6,11 +6,16 @@
 [![Backend](https://img.shields.io/badge/Backend-Rust%202021-DEA584?style=flat-square&logo=rust)](https://github.com/inrwxyz/inex-island)
 [![Framework](https://img.shields.io/badge/Framework-Tauri%202-FFC131?style=flat-square&logo=tauri)](https://tauri.app/)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg?style=flat-square)](LICENSE)
-[![Release](https://img.shields.io/badge/Release-v0.3.0-brightgreen?style=flat-square)](https://github.com/inrwxyz/inex-island/releases)
+[![Release](https://img.shields.io/badge/Release-v0.3.1-brightgreen?style=flat-square)](https://github.com/inrwxyz/inex-island/releases)
 
 ---
 
 ## ✨ Highlights & Features
+
+- 🎙️ **Aura Voice Assistant Bridge & AI Mode Glow**:
+  - Native Named Pipe IPC bridge (`\\.\pipe\InexIslandVoice`) integrating seamlessly with Aura voice assistant.
+  - Real-time wake-word state synchronization, transcribed query display, and Google AI Mode rotating border glow animation.
+  - Priority wake reveals the notch/island smoothly even in fullscreen or auto-hide modes while interacting.
 
 - 🏝️ **Dual Island Modes**:
   - **Bezel Attached (Mac Notch)**: Sits flush with your screen's top bezel.

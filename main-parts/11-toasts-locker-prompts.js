@@ -9,7 +9,8 @@ const TOAST_ICONS = {
   unphone: SVG_A + '<rect x="7" y="2" width="10" height="20" rx="2"/><line x1="11" y1="18" x2="13" y2="18"/><line x1="3" y1="3" x2="21" y2="21"/></svg>',
   bolt: SVG_A + '<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>',
   battery: SVG_A + '<rect x="2" y="7" width="17" height="10" rx="2"/><line x1="22" y1="11" x2="22" y2="13"/></svg>',
-  low: SVG_A + '<rect x="2" y="7" width="17" height="10" rx="2"/><line x1="22" y1="11" x2="22" y2="13"/><line x1="6" y1="10" x2="6" y2="14"/></svg>'
+  low: SVG_A + '<rect x="2" y="7" width="17" height="10" rx="2"/><line x1="22" y1="11" x2="22" y2="13"/><line x1="6" y1="10" x2="6" y2="14"/></svg>',
+  mic: SVG_A + '<path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>'
 };
 function showToast(kind, text, ms) {
   const isXfer = appState.transferring;
@@ -198,6 +199,76 @@ onTauriEvent('locker-unlock', (event) => {
     lastLockToast = { target: tgt, at: nowMs };
     renderCenter();
     showToast('lock', tgt ? `${tgt} Locked` : 'Locked', 1400);
+  }
+});
+
+// Voice Assistant bridge listener (Aura -> Inex Island)
+let voiceEndTimeout = null;
+
+function finishVoiceAssistant() {
+  clearTimeout(voiceEndTimeout);
+  voiceEndTimeout = null;
+  appState.voiceActive = false;
+  const isl = document.getElementById('island') || document.querySelector('.island');
+  if (isl) {
+    isl.classList.remove('island-voice-active');
+    if (appState.unhidForVoice) {
+      appState.unhidForVoice = false;
+      if (SET.notch.mode === 'smart' && appState.isFs) {
+        isl.classList.add('smart-hidden');
+      }
+    }
+  }
+  if (appState.toast) {
+    appState.toast = false;
+    renderCenter();
+    updateClocks();
+    refreshMedia();
+  }
+}
+
+onTauriEvent('voice-assistant', (event) => {
+  let payload = event.payload;
+  if (typeof payload === 'string') {
+    try { payload = JSON.parse(payload); } catch (_) {}
+  }
+  if (!payload || typeof payload !== 'object') payload = {};
+  const ev = payload.event;
+  const text = payload.text || '';
+  const action = payload.action || '';
+
+  clearTimeout(voiceEndTimeout);
+
+  const isl = document.getElementById('island') || document.querySelector('.island');
+
+  if (ev === 'wake') {
+    appState.voiceActive = true;
+    if (isl) {
+      isl.classList.add('island-voice-active');
+      if (isl.classList.contains('smart-hidden')) {
+        isl.classList.remove('smart-hidden');
+        appState.unhidForVoice = true;
+      }
+    }
+    showToast('mic', 'Listening...', 4500);
+    voiceEndTimeout = setTimeout(finishVoiceAssistant, 12000);
+  } else if (ev === 'speech') {
+    appState.voiceActive = true;
+    if (isl) {
+      isl.classList.add('island-voice-active');
+      if (isl.classList.contains('smart-hidden')) {
+        isl.classList.remove('smart-hidden');
+        appState.unhidForVoice = true;
+      }
+    }
+    showToast('mic', text ? `"${text}"` : 'Processing...', 3500);
+    voiceEndTimeout = setTimeout(finishVoiceAssistant, 10000);
+  } else if (ev === 'action') {
+    if (isl) isl.classList.add('island-voice-active');
+    showToast('bolt', text + (action ? ` • ${action}` : ''), 2500);
+    voiceEndTimeout = setTimeout(finishVoiceAssistant, 2800);
+  } else if (ev === 'end') {
+    finishVoiceAssistant();
   }
 });
 

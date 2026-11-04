@@ -5,6 +5,7 @@ mod audio;
 mod brightness;
 mod live;
 mod locker_bridge;
+mod voice_bridge;
 mod net;
 mod privacy;
 mod shelf;
@@ -1531,6 +1532,7 @@ fn main() {
             shelf::setup_shelf_drop(app.handle().clone());
             visualizer::setup_audio_visualization(app.handle().clone());
             locker_bridge::start(app.handle().clone());
+            voice_bridge::start(app.handle().clone());
 
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.set_always_on_top(true);

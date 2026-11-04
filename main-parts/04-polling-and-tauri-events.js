@@ -28,9 +28,9 @@ async function refreshStats() {
     }
 
     const currentMode = SET.notch.mode;
-    if (currentMode === 'smart' && stats.is_fullscreen && appState.currentView === 'view-compact') {
+    if (currentMode === 'smart' && stats.is_fullscreen && appState.currentView === 'view-compact' && !appState.voiceActive) {
       island.classList.add('smart-hidden');
-    } else {
+    } else if (!appState.voiceActive) {
       island.classList.remove('smart-hidden');
     }
   }
@@ -73,9 +73,9 @@ onTauriEvent('radio-changed', () => { clearTimeout(radioEvT); radioEvT = setTime
 onTauriEvent('fullscreen-changed', (e) => {
   const isFs = !!(e && e.payload && e.payload.is_fullscreen);
   appState.isFs = isFs;
-  if (SET.notch.mode === 'smart' && appState.currentView === 'view-compact') {
+  if (SET.notch.mode === 'smart' && appState.currentView === 'view-compact' && !appState.voiceActive) {
     island.classList.toggle('smart-hidden', isFs);
-  } else {
+  } else if (!appState.voiceActive) {
     island.classList.remove('smart-hidden');
   }
 });

@@ -1052,67 +1052,11 @@ main {
   font-family: 'JetBrains Mono', Consolas, monospace;
   font-size: 12px;
 }
-/* ---- Collapsible sections (INEX CLIENT layout, original island colours) ---- */
-.sec-acc {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  cursor: pointer;
-  user-select: none;
-  margin: 10px 0 0;
-  padding: 13px 16px 13px 18px;
-  background: var(--card);
-  border: 1px solid var(--card-line);
-  border-radius: 12px;
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--text);
-  transition: border-color 0.15s ease, background 0.15s ease;
-}
-.sec-acc:first-child { margin-top: 2px; }
-.sec-acc::before,
-.card.sec-body .row::before {
-  content: "";
-  position: absolute;
-  top: -1px;
-  left: -1px;
-  width: 9px;
-  height: 9px;
-  border-top: 1.5px solid rgba(255, 255, 255, 0.28);
-  border-left: 1.5px solid rgba(255, 255, 255, 0.28);
-  border-top-left-radius: 7px;
-  pointer-events: none;
-}
-.sec-acc:hover { border-color: rgba(255, 255, 255, 0.16); background: rgba(255, 255, 255, 0.04); }
-.sec-acc.open { border-color: rgba(255, 255, 255, 0.16); }
-.sec-acc .sec-meta { display: flex; align-items: center; gap: 10px; color: var(--dim); }
-.sec-acc .sec-count { font-size: 10px; font-weight: 700; letter-spacing: 0; }
-.sec-acc .sec-chev { display: inline-block; font-size: 12px; transition: transform 0.18s ease; transform: rotate(-90deg); }
-.sec-acc.open .sec-chev { transform: rotate(0deg); }
-
-/* opened section: every option is its own rounded card */
-.card.sec-body {
-  background: none;
-  border: none;
-  border-radius: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin: 6px 0 4px;
-  overflow: visible;
-}
-.card.sec-body::before,
-.card.sec-body::after { display: none; }
-.card.sec-body .row,
-.card.sec-body .row:first-child {
-  background: var(--card);
-  border: 1px solid var(--card-line);
-  border-radius: 12px;
-  padding: 11px 15px 11px 16px;
-  transition: border-color 0.15s ease;
-}
-.card.sec-body .row:hover { border-color: rgba(255, 255, 255, 0.14); }
-.card.sec-body .row .ico-box { border-radius: 10px; }
+/* Quick Action Tiles: collapsed summary + customize */
+.qa-head { display: flex; justify-content: space-between; align-items: center; }
+.qa-head .qa-hint { font-size: 10px; letter-spacing: 0.4px; text-transform: uppercase; color: var(--dim); font-weight: 600; }
+.qa-summary { cursor: pointer; transition: border-color 0.15s ease; }
+.qa-summary:hover { border-color: rgba(255, 255, 255, 0.18); }
+.qa-customize, .qa-done { flex: none; }
+.qa-done { margin-top: 12px; }
+.tile-manager-card .tiles-grid + .tile-group-header { margin-top: 16px; }

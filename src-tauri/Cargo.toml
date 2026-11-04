@@ -1,6 +1,6 @@
 [package]
 name = "inex-island"
-version = "0.3.0"
+version = "0.3.1"
 description = "Inex Island - Dynamic Notch & Island for Windows"
 authors = ["Inex"]
 license = "GPL-3.0-or-later"

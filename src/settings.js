@@ -69,10 +69,6 @@ const FONT_OPTS = [
   ['mono', 'JetBrains Mono (Developer Code)']
 ];
 const GLOW_SWATCHES = ['#ffffff', '#dc143c', '#38bdf8', '#22c55e', '#a855f7', '#f59e0b'];
-const THEME_STYLE_OPTS = [
-  ['default', 'Modern Glass (Default Balanced)'],
-  ['matrix', 'Dot Matrix (Mono & Red Accent)']
-];
 
 const PAGES = [
   { id: 'notch', label: 'Notch', icon: 'notch', sections: [
@@ -107,8 +103,7 @@ const PAGES = [
   ] },
 
   { id: 'menu', label: 'Menu', icon: 'layers', sections: [
-    { title: 'Theme & Aesthetics', rows: [
-      { path: 'appearance.themeStyle', type: 'select', icon: 'palette', t: 'Design Style', d: 'Visual design language applied to island, menu and widgets', options: THEME_STYLE_OPTS },
+    { title: 'Appearance', rows: [
       { path: 'appearance.menuStyle', type: 'seg', icon: 'layers', t: 'Style', d: 'Transparent blurred glass or solid contrast color', options: [['transparent', 'Transparent Glass'], ['color', 'Solid Color']] },
       { path: 'appearance.menuColor', type: 'color', icon: 'palette', t: 'Background', d: 'Panel colour in solid mode', showIf: (s) => s.appearance.menuStyle === 'color' },
       { path: 'appearance.menuOpacity', type: 'range', icon: 'drop', t: 'Glass Transparency', d: 'Lower = more see-through blur', min: 20, max: 100, step: 5, unit: '%', showIf: (s) => s.appearance.menuStyle === 'color' },
@@ -395,8 +390,7 @@ function renderNav() {
     const b = el('button', p.id === current ? 'on' : '', ICON[p.icon] + `<span>${p.label}</span>`);
     b.addEventListener('click', () => {
       current = p.id;
-      openSecs.clear();
-      p2pFirebaseAccordionOpen = false;
+      quickTilesAccordionOpen = false;
       if (current === 'p2p') {
         try { window.__TAURI__?.event?.emit('direct-p2p-cmd', { action: 'get-state' }); } catch (_) {}
       }
@@ -408,24 +402,7 @@ function renderNav() {
 }
 const escHtml = (s) => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
-const openSecs = new Set(); // which settings sections are expanded (all closed by default)
-let quickTilesAccordionOpen = false;
-
-function getSectionIcon(pageId, title) {
-  const t = (title || '').toLowerCase();
-  if (t.includes('theme') || t.includes('aesthetic') || t.includes('color')) return ICON.palette;
-  if (t.includes('slot') || t.includes('tile')) return ICON.layers;
-  if (t.includes('motion') || t.includes('interaction')) return ICON.spark;
-  if (t.includes('design') || t.includes('shape') || t.includes('notch')) return ICON.notch;
-  if (t.includes('typography') || t.includes('font') || t.includes('scale')) return ICON.font;
-  if (t.includes('music') || t.includes('visualizer')) return ICON.music;
-  if (t.includes('widget') || t.includes('productivity')) return ICON.widgets;
-  if (t.includes('device') || t.includes('share') || t.includes('connect')) return ICON.p2p;
-  if (t.includes('system') || t.includes('startup') || t.includes('performance')) return ICON.activity;
-  if (t.includes('about') || t.includes('update')) return ICON.info;
-  return ICON.gear;
-}
-let p2pFirebaseAccordionOpen = false;
+let quickTilesAccordionOpen = false; // Quick Action Tiles editor: collapsed until "Customize" is clicked
 
 function renderQuickActionTilesEditor(main) {
   if (!S.menu) S.menu = { actionTiles: [...DEFAULT_ACTION_TILES] };
@@ -434,37 +411,26 @@ function renderQuickActionTilesEditor(main) {
   const addedIds = S.menu.actionTiles;
   const moreBuiltInIds = Object.keys(ALL_ACTION_TILES).filter((id) => !addedIds.includes(id));
 
-  const qaSecKey = 'menu:quick-action-bar';
-  const qaOpen = openSecs.has(qaSecKey);
-  const qaHead = el('div', 'sec-title sec-acc' + (qaOpen ? ' open' : ''));
-  qaHead.innerHTML = `
-    <div class="sec-left">
-      <div class="sec-ico-box">${ICON.widgets}</div>
-      <span class="sec-name">Quick Action Bar</span>
-    </div>
-    <div class="sec-meta">
-      <span class="sec-count" style="color:#22c55e;">${addedIds.length} / 7 Active</span>
-      <span class="sec-chev">&#9662;</span>
-    </div>
-  `;
+  const qaHead = el('div', 'sec-title qa-head');
+  qaHead.innerHTML = `<span>Quick Action Tiles</span><span class="qa-hint">${quickTilesAccordionOpen ? 'Tap − to remove, + to add' : ''}</span>`;
+  main.append(qaHead);
+
+  if (!quickTilesAccordionOpen) {
+    const sum = el('div', 'card qa-summary');
+    sum.innerHTML = `
+      <div class="row">
+        <div class="ico-box">${ICON.widgets}</div>
+        <div class="txt"><div class="t">Quick Action Bar</div><div class="d">${addedIds.length} / 7 tiles active on the island menu</div></div>
+        <div class="ctl"><button class="btn btn-sm btn-outline qa-customize">Customize ❯</button></div>
+      </div>`;
+    sum.addEventListener('click', () => { quickTilesAccordionOpen = true; renderPage(); });
+    main.append(sum);
+    return;
+  }
 
   const qaCard = el('div', 'card tile-manager-card');
-  if (!qaOpen) qaCard.style.display = 'none';
-
-  qaHead.addEventListener('click', () => {
-    const nowOpen = qaCard.style.display !== 'none';
-    if (nowOpen) {
-      qaCard.style.display = 'none';
-      qaHead.classList.remove('open');
-      openSecs.delete(qaSecKey);
-      closedSecs.add(qaSecKey);
-    } else {
-      qaCard.style.display = '';
-      qaHead.classList.add('open');
-      openSecs.add(qaSecKey);
-      closedSecs.delete(qaSecKey);
-    }
-  });
+  const closeBtn = el('button', 'btn btn-sm btn-outline qa-done', 'Done');
+  closeBtn.addEventListener('click', (e) => { e.stopPropagation(); quickTilesAccordionOpen = false; renderPage(); });
 
   // 1. Added Tiles (Active Bar)
   const grp1 = el('div', 'tile-group-header');
@@ -491,7 +457,6 @@ function renderQuickActionTilesEditor(main) {
       S.menu.actionTiles = addedIds.filter((x) => x !== id);
       save(S);
       toast(`Removed ${tile.label}`);
-      openSecs.add(qaSecKey);
       renderPage();
     });
     grid1.append(it);
@@ -524,7 +489,6 @@ function renderQuickActionTilesEditor(main) {
         S.menu.actionTiles = [...addedIds, id];
         save(S);
         toast(`Added ${tile.label}`);
-        openSecs.add(qaSecKey);
         renderPage();
       });
       grid2.append(it);
@@ -532,7 +496,7 @@ function renderQuickActionTilesEditor(main) {
     qaCard.append(grid2);
   }
 
-  main.append(qaHead);
+  qaCard.append(closeBtn);
   main.append(qaCard);
 }
 
@@ -673,113 +637,84 @@ function renderPage(resetScroll) {
     }
     directCardHtml += `</div>`;
 
-    // 2. Firebase Database Card (Collapsible Accordion)
+    // 2. Firebase Signaling (always visible)
     let fbCardHtml = `
-      <div class="sec-title click" id="toggle-firebase-accordion" style="display:flex;justify-content:space-between;align-items:center;margin-top:20px;cursor:pointer;user-select:none;">
-        <span style="display:flex;align-items:center;gap:8px;">
-          <span>Cloud Relay (Private Database)</span>
-          <span class="pill ${isCustom ? 'pill-green' : 'pill-purple'}" style="font-size:10px;">${isCustom ? 'Configured' : 'Optional'}</span>
-        </span>
-        <span style="font-size:11px;color:var(--muted);font-weight:500;">
-          ${p2pFirebaseAccordionOpen ? '▲ Collapse' : (isCustom ? '▼ Manage' : '▼ Configure')}
-        </span>
+      <div class="sec-title" style="display:flex;justify-content:space-between;align-items:center;margin-top:20px;">
+        <span>Firebase Signaling (Multi-PC Cloud)</span>
+        <span class="pill ${isCustom ? 'pill-green' : 'pill-purple'}" style="font-size:10px;">${isCustom ? 'Configured' : 'Cloud Database'}</span>
+      </div>
+      <div class="card">
+        <div class="row">
+          <div class="ico-box">${ICON.pin}</div>
+          <div class="txt">
+            <div class="t">Active Database</div>
+            <div class="d">${isCustom ? 'Active private Firebase instance' : 'No Firebase URL set (configure below)'}</div>
+          </div>
+          <div class="ctl">
+            <div class="url-masked-pill" title="Protected & Hidden">
+              <span class="masked-dots">••••••••••••••••••••••••</span>
+              <span class="lock-tag">${isCustom ? 'Configured' : 'Not Set'}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="ico-box">${ICON.spark}</div>
+          <div class="txt">
+            <div class="t">Database URL</div>
+            <div class="d">Paste your private Firebase Realtime Database URL</div>
+          </div>
+          <div class="ctl">
+            <div class="fb-input-wrap">
+              <input type="password" id="inp-custom-firebase" class="txtin" placeholder="https://your-db.asia-southeast1.firebasedatabase.app" />
+              <button id="btn-save-custom-fb" class="btn btn-save-fb">Save</button>
+            </div>
+          </div>
+        </div>
+
+        ${isCustom ? `
+        <div class="row click" id="row-reset-fb">
+          <div class="ico-box">${ICON.reset}</div>
+          <div class="txt">
+            <div class="t" style="color: #f4f4f6;">Clear Database URL</div>
+            <div class="d">Remove saved Firebase Realtime Database URL</div>
+          </div>
+          <div class="ctl">
+            <button class="btn btn-outline" id="btn-revert-fb">Clear URL</button>
+          </div>
+        </div>` : ''}
+      </div>
+
+      <div class="sec-title">Setup Instructions</div>
+      <div class="card fb-guide-card">
+        <div class="fb-guide-steps">
+          <div class="guide-step">
+            <span class="step-num">1</span>
+            <div class="step-text">Go to <button class="link-btn" id="btn-fb-console-link">Firebase Console ↗</button> and click <b>Add project</b> (Free Spark plan).</div>
+          </div>
+          <div class="guide-step">
+            <span class="step-num">2</span>
+            <div class="step-text">In the sidebar, navigate to <b>Build &gt; Realtime Database</b> and click <b>Create Database</b>.</div>
+          </div>
+          <div class="guide-step">
+            <span class="step-num">3</span>
+            <div class="step-text">Under the <b>Rules</b> tab, replace everything with the Security Rules below and click <b>Publish</b>.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="sec-title">Firebase Security Rules</div>
+      <div class="card fb-rules-card">
+        <div class="fb-rules-header">
+          <span class="rules-badge">Database Rules (JSON)</span>
+          <button id="btn-copy-rules" class="btn-copy-rules">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            <span id="copy-rules-txt">Copy Rules</span>
+          </button>
+        </div>
+        <pre class="fb-rules-code"><code>{\n  "rules": {\n    "rooms": {\n      "$roomCode": {\n        ".read": true,\n        ".write": true\n      }\n    }\n  }\n}</code></pre>
       </div>
     `;
-
-    if (!p2pFirebaseAccordionOpen) {
-      fbCardHtml += `
-        <div class="card click" id="card-fb-preview" style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;cursor:pointer;">
-          <div style="display:flex;align-items:center;gap:10px;">
-            <div class="ico-box" style="margin:0;">${ICON.spark}</div>
-            <div>
-              <div style="font-size:13px;font-weight:600;color:#f8fafc;">Firebase Cloud Relay</div>
-              <div style="font-size:11px;color:var(--muted);">${isCustom ? 'Active private Firebase instance configured' : 'Connect over the internet across different networks (optional)'}</div>
-            </div>
-          </div>
-          <button class="btn btn-sm btn-outline" style="flex:none;">${isCustom ? 'Manage ❯' : 'Setup ❯'}</button>
-        </div>
-      `;
-    } else {
-      fbCardHtml += `
-        <div class="card">
-          <div class="row">
-            <div class="ico-box">${ICON.pin}</div>
-            <div class="txt">
-              <div class="t">Active Database</div>
-              <div class="d">${isCustom ? 'Active private Firebase instance' : 'No Firebase URL set (configure below)'}</div>
-            </div>
-            <div class="ctl">
-              <div class="url-masked-pill" title="Protected & Hidden">
-                <span class="masked-dots">••••••••••••••••••••••••</span>
-                <span class="lock-tag">${isCustom ? 'Configured' : 'Not Set'}</span>
-              </div>
-            </div>
-          </div>
-
-          <div class="row">
-            <div class="ico-box">${ICON.spark}</div>
-            <div class="txt">
-              <div class="t">Database URL</div>
-              <div class="d">Paste your private Firebase Realtime Database URL</div>
-            </div>
-            <div class="ctl">
-              <div class="fb-input-wrap">
-                <input type="password" id="inp-custom-firebase" class="txtin" placeholder="https://your-db.asia-southeast1.firebasedatabase.app" />
-                <button id="btn-save-custom-fb" class="btn btn-save-fb">Save</button>
-              </div>
-            </div>
-          </div>
-
-          ${isCustom ? `
-          <div class="row click" id="row-reset-fb">
-            <div class="ico-box">${ICON.reset}</div>
-            <div class="txt">
-              <div class="t" style="color: #f4f4f6;">Clear Database URL</div>
-              <div class="d">Remove saved Firebase Realtime Database URL</div>
-            </div>
-            <div class="ctl">
-              <button class="btn btn-outline" id="btn-revert-fb">Clear URL</button>
-            </div>
-          </div>` : ''}
-        </div>
-
-        <div class="sec-title">Setup Instructions</div>
-        <div class="card fb-guide-card">
-          <div class="fb-guide-steps">
-            <div class="guide-step">
-              <span class="step-num">1</span>
-              <div class="step-text">
-                Go to <button class="link-btn" id="btn-fb-console-link">Firebase Console ↗</button> and click <b>Add project</b> (Free Spark plan).
-              </div>
-            </div>
-            <div class="guide-step">
-              <span class="step-num">2</span>
-              <div class="step-text">
-                In the sidebar, navigate to <b>Build &gt; Realtime Database</b> and click <b>Create Database</b>.
-              </div>
-            </div>
-            <div class="guide-step">
-              <span class="step-num">3</span>
-              <div class="step-text">
-                Under the <b>Rules</b> tab, replace everything with the Security Rules below and click <b>Publish</b>.
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="sec-title">Firebase Security Rules</div>
-        <div class="card fb-rules-card">
-          <div class="fb-rules-header">
-            <span class="rules-badge">Database Rules (JSON)</span>
-            <button id="btn-copy-rules" class="btn-copy-rules">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-              <span id="copy-rules-txt">Copy Rules</span>
-            </button>
-          </div>
-          <pre class="fb-rules-code"><code>{\n  "rules": {\n    "rooms": {\n      "$roomCode": {\n        ".read": true,\n        ".write": true\n      }\n    }\n  }\n}</code></pre>
-        </div>
-      `;
-    }
 
     fb.innerHTML = bannerHtml + directCardHtml + fbCardHtml;
     main.append(fb);
@@ -882,15 +817,6 @@ function renderPage(resetScroll) {
       try { window.__TAURI__?.event?.emit('direct-p2p-cmd', { action: 'disconnect' }); } catch (_) {}
     });
 
-    fb.querySelector('#toggle-firebase-accordion')?.addEventListener('click', () => {
-      p2pFirebaseAccordionOpen = !p2pFirebaseAccordionOpen;
-      renderPage();
-    });
-    fb.querySelector('#card-fb-preview')?.addEventListener('click', () => {
-      p2pFirebaseAccordionOpen = true;
-      renderPage();
-    });
-
     // Wire Firebase Database Controls
     const saveBtn = fb.querySelector('#btn-save-custom-fb');
     const inp = fb.querySelector('#inp-custom-firebase');
@@ -965,22 +891,8 @@ function renderPage(resetScroll) {
   page.sections.filter((sec) => !sec.showIf || sec.showIf(S)).forEach((sec) => {
     const visible = sec.rows.filter((r) => !r.showIf || r.showIf(S));
     if (!visible.length) return;
-    const secKey = page.id + ':' + sec.title;
-    const secOpen = openSecs.has(secKey);
-    const head = el('div', 'sec-title sec-acc' + (secOpen ? ' open' : ''),
-      `<span class="sec-name">${sec.title}</span><span class="sec-meta"><span class="sec-count">${visible.length}</span><span class="sec-chev">&#9662;</span></span>`);
-    head.addEventListener('click', () => {
-      if (openSecs.has(secKey)) {
-        openSecs.delete(secKey);
-      } else {
-        openSecs.clear();
-        openSecs.add(secKey);
-      }
-      renderPage();
-    });
-    main.append(head);
-    if (!secOpen) return;
-    const card = el('div', 'card sec-body');
+    main.append(el('div', 'sec-title', sec.title));
+    const card = el('div', 'card');
     visible.forEach((r) => card.append(renderRow(r)));
     main.append(card);
   });
@@ -1021,8 +933,7 @@ function importSettings() {
 
 // ---------- window ----------
 function resetSettingsState() {
-  openSecs.clear();
-  p2pFirebaseAccordionOpen = false;
+  quickTilesAccordionOpen = false;
   renderPage(true);
 }
 
