@@ -12,9 +12,9 @@
 
 ## ✨ Highlights & Features
 
-- 🎙️ **Aura Voice Assistant Bridge & AI Mode Glow**:
+- 🎙️ **Aura Voice Assistant Bridge & Ambient Glow**:
   - Native Named Pipe IPC bridge (`\\.\pipe\InexIslandVoice`) integrating seamlessly with Aura voice assistant.
-  - Real-time wake-word state synchronization, transcribed query display, and Google AI Mode rotating border glow animation.
+  - Real-time wake-word state synchronization, transcribed query display, and dynamic flowing border glow animation.
   - Priority wake reveals the notch/island smoothly even in fullscreen or auto-hide modes while interacting.
 
 - 🏝️ **Dual Island Modes**:
