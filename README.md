@@ -6,19 +6,14 @@
 [![Backend](https://img.shields.io/badge/Backend-Rust%202021-DEA584?style=flat-square&logo=rust)](https://github.com/inrwxyz/inex-island)
 [![Framework](https://img.shields.io/badge/Framework-Tauri%202-FFC131?style=flat-square&logo=tauri)](https://tauri.app/)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg?style=flat-square)](LICENSE)
-[![Release](https://img.shields.io/badge/Release-v0.3.1-brightgreen?style=flat-square)](https://github.com/inrwxyz/inex-island/releases)
+[![Release](https://img.shields.io/badge/Release-v0.3.4-brightgreen?style=flat-square)](https://github.com/inrwxyz/inex-island/releases)
 
 ---
 
 ## ✨ Highlights & Features
 
-- 🎙️ **Aura Voice Assistant Bridge & Ambient Glow**:
-  - Native Named Pipe IPC bridge (`\\.\pipe\InexIslandVoice`) integrating seamlessly with Aura voice assistant.
-  - Real-time wake-word state synchronization, transcribed query display, and dynamic flowing border glow animation.
-  - Priority wake reveals the notch/island smoothly even in fullscreen or auto-hide modes while interacting.
-
 - 🏝️ **Dual Island Modes**:
-  - **Bezel Attached (Mac Notch)**: Sits flush with your screen's top bezel.
+  - **Bezel Notch**: Sits flush with your screen's top bezel.
   - **Floating Island**: Clean, rounded pill floating beneath the top edge.
   - **Fullscreen Awareness**: Automatically hides when gaming or running fullscreen apps.
 
@@ -60,14 +55,27 @@
   - Native integration with Inex App Locker / Folder Locker.
   - Dynamic unlocking animations (Face, Fingerprint, Password) with automatic priority restoration for running file transfers.
 
+- ⏰ **Clock Alarms & Focus Timer**:
+  - Standalone daily and one-time clock alarms with snooze and wake-from-sleep missed alarm detection.
+  - Pomodoro Focus countdown timer with acoustic chimes.
+
+- 📥 **Download & System HUD Alerts**:
+  - Real-time browser download tracking and finished notification with click-to-open.
+  - Caps Lock and Num Lock keyboard toggle HUDs.
+  - MagSafe style charging indicator and low-battery warning alerts.
+  - Clipboard copy preview HUD.
+
+- ⚡ **P2P File Transfer (AirDrop Style)**:
+  - Fast peer-to-peer file transfer with live circular progress rings and delivery toasts.
+
 - 🎛️ **Modular Control Center & Quick Tools**:
   - Wi-Fi network scanner and connection manager.
   - Windows Bluetooth device list and battery telemetry.
   - Quick volume slider with smooth mouse-wheel support.
-  - Calendar tab with Pomodoro Focus Timer and acoustic chime.
+  - Calendar tab, Quick Notes, and Clipboard history tools.
 
 - 🎨 **Deep Customization**:
-  - 11 curated typefaces (*Plus Jakarta Sans, Inter, Poppins, Outfit, Space Grotesk, JetBrains Mono, etc.*).
+  - 14 curated typefaces (*Plus Jakarta Sans, Inter, Poppins, Outfit, Space Grotesk, JetBrains Mono, Doto, Syne, etc.*).
   - Dynamic UI scaling (80% to 140%), notch radius, glass blur, and custom accent colors.
   - Hardened Content Security Policy (CSP).
 

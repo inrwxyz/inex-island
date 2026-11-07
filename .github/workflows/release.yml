@@ -26,6 +26,9 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Rust Check
+        run: cargo check --manifest-path src-tauri/Cargo.toml
+
       - name: Build Tauri Application
         uses: tauri-apps/tauri-action@v0
         env:
@@ -39,9 +42,6 @@ jobs:
             ## Inex Island v__VERSION__
 
             ### ✨ What's New in v__VERSION__
-            - 🎙️ **Aura Voice Assistant Bridge**: Native Named Pipe IPC (`\\.\pipe\InexIslandVoice`) integrating seamlessly with Aura voice assistant.
-            - 🌈 **Ambient Rotating Border Glow**: Dynamic flowing multi-color border glow animation during active voice interactions.
-            - ⚡ **Priority Wake & Fullscreen Awareness**: Smoothly unhides notch/island when speaking, even in fullscreen or auto-hide modes.
             - 🎨 **Settings & UI Optimizations**: Streamlined settings layout, quick action tiles, and enhanced system responsiveness.
 
             ### 📦 Installation

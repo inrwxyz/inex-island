@@ -1,6 +1,6 @@
 [package]
 name = "inex-island"
-version = "0.3.1"
+version = "0.3.4"
 description = "Inex Island - Dynamic Notch & Island for Windows"
 authors = ["Inex"]
 license = "GPL-3.0-or-later"
@@ -58,7 +58,8 @@ windows = { version = "0.58", features = [
     "Win32_Media_KernelStreaming",
     "Win32_System_Pipes",
     "Win32_System_IO",
-    "Win32_Security"
+    "Win32_Security",
+    "Win32_System_DataExchange"
 ] }
 
 [target.'cfg(windows)'.dependencies.wmi]

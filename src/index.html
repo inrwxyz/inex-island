@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&family=Lexend:wght@400;500;600;700&family=Montserrat:wght@400;500;600;700&family=Outfit:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700&family=Poppins:wght@400;500;600;700&family=Raleway:wght@400;500;600;700&family=Doto:wght@400;800&family=Space+Mono:wght@400;700&family=Space+Grotesk:wght@500;600;700&family=Syne:wght@500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="styles.css?v=0.3.5" />
 </head>
 <body>
   <div id="island" class="island state-compact intro-pre" data-mode="smart" data-menu="transparent">
@@ -35,11 +35,18 @@
         <div class="c-center" id="c-center-trigger">
           <span id="c-clock">11:19 pm</span>
           <!-- Compact PC-to-PC File Transfer Animation (Hides Clock & Side Icons) -->
-          <div id="c-transfer-anim" class="c-transfer-inline hidden">
-            <svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" stroke-width="2" fill="none"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-            <div class="transfer-dots"><span></span><span></span><span></span></div>
-            <svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" stroke-width="2" fill="none"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-            <span id="c-transfer-pct">0%</span>
+          <div id="c-transfer-anim" class="c-transfer-inline c-xfer hidden">
+            <span class="xfer-ring-wrap">
+              <svg class="xfer-ring" viewBox="0 0 26 26" width="22" height="22">
+                <circle class="xfer-ring-bg" cx="13" cy="13" r="10.5"/>
+                <circle id="c-xfer-ring-fg" class="xfer-ring-fg" cx="13" cy="13" r="10.5" transform="rotate(-90 13 13)"/>
+              </svg>
+              <svg id="c-xfer-glyph" class="xfer-glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+            </span>
+            <span class="xfer-text">
+              <span id="c-xfer-label" class="xfer-label">Sending</span>
+              <span id="c-transfer-pct" class="xfer-pct">0%</span>
+            </span>
             <button id="c-transfer-cancel-btn" class="c-transfer-cancel-btn" title="Cancel Transfer">
               <svg viewBox="0 0 24 24" width="8" height="8" stroke="currentColor" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
             </button>
@@ -50,15 +57,6 @@
             <svg id="c-prompt-ico" viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path class="lock-shackle" d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
             <div class="transfer-dots"><span></span><span></span><span></span></div>
             <span id="c-prompt-text">Locked</span>
-          </div>
-
-          <!-- Voice Assistant (Dynamic robot eyes + speech status) -->
-          <div id="c-voice-anim" class="c-transfer-inline c-voice-inline hidden">
-            <div class="voice-eyes" id="c-voice-eyes">
-              <span class="voice-eye left-eye"></span>
-              <span class="voice-eye right-eye"></span>
-            </div>
-            <span id="c-voice-text">Listening...</span>
           </div>
 
           <!-- Short status popup: charger, low battery, unlock -->
@@ -80,6 +78,12 @@
           </div>
         </div>
 
+        <!-- Timer chip: shows the running timer next to a transfer / popup (like a second Live Activity) -->
+        <span id="c-timer-chip" class="c-timer-chip" title="Focus timer">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13.5" r="7.5"/><path d="M12 9.5v4l2.5 2"/><path d="M9.5 2.5h5"/></svg>
+          <span id="c-timer-chip-text">00:00</span>
+        </span>
+
         <!-- Right: Hover Widget + Subtle Peer Count + Media Album Disc -->
         <div class="c-right" id="c-right-box">
           <span class="c-hover-info" id="c-ram">RAM 56%</span>
@@ -91,6 +95,46 @@
             <img id="c-art" class="art-img hidden" alt="" />
             <svg id="c-art-fallback" viewBox="0 0 24 24" width="11" height="11" stroke="currentColor" stroke-width="2.2" fill="none"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
           </button>
+        </div>
+
+        <!-- Biometric morph (Face ID / Touch ID style). Sits OUTSIDE .c-center on purpose. -->
+        <div id="c-biometric-box" class="c-biometric-hud hidden">
+          <div class="bio-glyph-wrap" id="bio-glyph-wrap"></div>
+          <span id="bio-label" class="bio-label">Unlocked</span>
+        </div>
+
+        <!-- Device HUD (Bluetooth connect + charger). Also OUTSIDE .c-center. -->
+        <div id="c-bt-hud" class="c-bt-hud hidden">
+          <span id="bt-hud-icon" class="bt-hud-icon"></span>
+          <span class="bt-hud-text">
+            <span id="bt-hud-name" class="bt-hud-name">Device</span>
+            <span id="bt-hud-tag" class="bt-hud-tag">Connected</span>
+          </span>
+          <span id="bt-hud-batt-box" class="bt-hud-batt-box">
+            <span id="bt-hud-batt-pct" class="bt-hud-batt-pct">--%</span>
+            <span id="bt-batt-glyph" class="bt-batt">
+              <span class="bt-batt-body"><span id="bt-batt-fill" class="bt-batt-fill"></span><span class="bt-batt-bolt"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M13.2 2 5 13.4h5.6L9.8 22 19 10.2h-5.7z"/></svg></span></span>
+              <span class="bt-batt-cap"></span>
+            </span>
+            <svg class="bt-ring" viewBox="0 0 26 26" width="26" height="26">
+              <circle class="bt-ring-bg" cx="13" cy="13" r="10.5"/>
+              <circle id="bt-hud-ring" class="bt-ring-fg" cx="13" cy="13" r="10.5" transform="rotate(-90 13 13)"/>
+            </svg>
+          </span>
+        </div>
+
+        <!-- Timer Alarm Finished HUD (Apple Dynamic Island Alarm Card) -->
+        <div id="c-alarm-box" class="c-alarm-hud hidden" title="Click to dismiss">
+          <div class="alarm-icon-wrap" id="alarm-bell-wrap">
+            <span class="alarm-pulse"></span><span class="alarm-pulse p2"></span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13.5" r="7.5"/><path d="M12 9.5v4l2.5 2"/><path d="M9.5 2.5h5"/></svg>
+          </div>
+          <div class="alarm-text-wrap">
+            <span id="alarm-title" class="alarm-title">Time's Up</span>
+            <span id="alarm-sub" class="alarm-sub">Timer</span>
+          </div>
+          <button id="btn-alarm-snooze" class="alarm-stop-btn alarm-snooze-btn hidden" title="Snooze 9 minutes">Snooze</button>
+          <button id="btn-alarm-dismiss" class="alarm-stop-btn" title="Stop">Stop</button>
         </div>
       </div>
     </div>
@@ -150,9 +194,9 @@
           <i class="ring"></i>
         </div>
 
-        <div id="tile-notepad" class="ctrl-tile hidden">
-          <svg class="ico ico-notepad" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>
-          <small class="sr">Notepad</small>
+        <div id="tile-notepad" class="ctrl-tile hidden" title="Quick Notes">
+          <svg class="ico ico-notepad" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8z"/><path d="M15 3v5h5"/><path d="M8 13h8M8 17h5"/></svg>
+          <small class="sr">Quick Notes</small>
           <em class="cap"></em>
           <i class="ring"></i>
         </div>
@@ -374,6 +418,28 @@
       </div>
     </div>
 
+    <!-- ==================== 9b. ALARM VIEW (clock-time alarms) ==================== -->
+    <div id="view-alarm" class="view">
+      <div class="panel-top-bar sub-top-bar">
+        <button class="back-btn sub-back-btn" title="Back to menu"><svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2.5" fill="none"><polyline points="15 18 9 12 15 6"/></svg></button>
+        <span class="top-clock" style="font-weight:700;">Alarm</span>
+        <span id="alarm-next-label" class="alarm-next-label"></span>
+      </div>
+      <div class="alarm-box">
+        <div class="alarm-picker">
+          <div class="alarm-col"><button class="alarm-step" data-step="h+" aria-label="Hour up">&#9650;</button><div id="alarm-pick-h" class="alarm-num">07</div><button class="alarm-step" data-step="h-" aria-label="Hour down">&#9660;</button></div>
+          <div class="alarm-colon">:</div>
+          <div class="alarm-col"><button class="alarm-step" data-step="m+" aria-label="Minute up">&#9650;</button><div id="alarm-pick-m" class="alarm-num">30</div><button class="alarm-step" data-step="m-" aria-label="Minute down">&#9660;</button></div>
+          <button id="alarm-pick-ampm" class="alarm-ampm" title="AM / PM">AM</button>
+          <div class="alarm-side">
+            <button id="alarm-pick-daily" class="alarm-chip" title="Repeat every day">Daily</button>
+            <button id="alarm-add" class="timer-start-pill">+ Add</button>
+          </div>
+        </div>
+        <div id="alarm-list" class="alarm-list"></div>
+      </div>
+    </div>
+
     <!-- ==================== 10. QUICK NOTES VIEW ==================== -->
     <div id="view-notepad" class="view">
       <div class="panel-top-bar sub-top-bar">
@@ -390,9 +456,26 @@
       </div>
     </div>
 
+    <!-- ==================== 10b. CLIPBOARD HISTORY VIEW ==================== -->
+    <div id="view-clipboard" class="view">
+      <div class="panel-top-bar sub-top-bar">
+        <button class="back-btn sub-back-btn" title="Back to menu"><svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2.5" fill="none"><polyline points="15 18 9 12 15 6"/></svg></button>
+        <span class="top-clock" style="font-weight:700;">Clipboard</span>
+        <button id="btn-clipboard-clear" class="top-tool-btn" title="Clear history">Clear</button>
+      </div>
+      <div class="clipboard-body">
+        <div id="clipboard-list" class="clipboard-list">
+          <div class="clipboard-empty">
+            <svg viewBox="0 0 24 24" width="22" height="22" stroke="currentColor" stroke-width="1.8" fill="none" opacity="0.4"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>
+            <span>No copied text yet</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
   </div>
 
   <script src="p2p-codec.js"></script>
-  <script type="module" src="main.js"></script>
+  <script type="module" src="main.js?v=0.3.5"></script>
 </body>
 </html>

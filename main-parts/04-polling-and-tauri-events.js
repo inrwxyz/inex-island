@@ -28,9 +28,9 @@ async function refreshStats() {
     }
 
     const currentMode = SET.notch.mode;
-    if (currentMode === 'smart' && stats.is_fullscreen && appState.currentView === 'view-compact' && !appState.voiceActive) {
+    if (currentMode === 'smart' && stats.is_fullscreen && appState.currentView === 'view-compact') {
       island.classList.add('smart-hidden');
-    } else if (!appState.voiceActive) {
+    } else {
       island.classList.remove('smart-hidden');
     }
   }
@@ -73,9 +73,9 @@ onTauriEvent('radio-changed', () => { clearTimeout(radioEvT); radioEvT = setTime
 onTauriEvent('fullscreen-changed', (e) => {
   const isFs = !!(e && e.payload && e.payload.is_fullscreen);
   appState.isFs = isFs;
-  if (SET.notch.mode === 'smart' && appState.currentView === 'view-compact' && !appState.voiceActive) {
+  if (SET.notch.mode === 'smart' && appState.currentView === 'view-compact') {
     island.classList.toggle('smart-hidden', isFs);
-  } else if (!appState.voiceActive) {
+  } else {
     island.classList.remove('smart-hidden');
   }
 });
@@ -105,9 +105,26 @@ pollSystemAndMedia();
 // 3. Compact Bar Clicks
 document.getElementById('c-center-trigger').addEventListener('click', (e) => {
   if (e.target.closest('#c-incoming-alert')) return;
+  if (island.classList.contains('alarm-active')) {
+    if (typeof dismissTimerAlarm === 'function') dismissTimerAlarm();
+    return;
+  }
   switchView('view-control', 'state-control', 316, 256);
   refreshBtCaption();
   if (slotRunning.has('mic')) refreshMic();
+});
+document.getElementById('c-alarm-box')?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (typeof dismissTimerAlarm === 'function') dismissTimerAlarm();
+});
+document.getElementById('btn-alarm-snooze')?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (typeof snoozeClockAlarm === 'function') snoozeClockAlarm();
+  if (typeof dismissTimerAlarm === 'function') dismissTimerAlarm();
+});
+document.getElementById('btn-alarm-dismiss')?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (typeof dismissTimerAlarm === 'function') dismissTimerAlarm();
 });
 document.getElementById('c-media-btn').addEventListener('click', (e) => {
   e.stopPropagation();

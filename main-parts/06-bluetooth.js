@@ -305,10 +305,159 @@ function openBtView() {
 
 // Windows tells us when a device connects / disconnects / is added / removed (no polling)
 let btEvT = null, btNearT = null;
+let btHudTimer = null;
+let btHudStartT = null;
+let btHudBackT = null;
+let prevConnectedBtDevs = null;
+
+// ---- Dynamic-Island style HUD shared by Bluetooth connect and the charger ----
+const BUDS_SVG = `<svg viewBox="0 0 40 40" fill="none">
+  <defs><linearGradient id="budg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#aeb4be"/></linearGradient></defs>
+  <g fill="url(#budg)">
+    <rect x="13.4" y="14" width="4.8" height="21" rx="2.4"/><circle cx="12.5" cy="13" r="7.5"/>
+    <rect x="21.8" y="14" width="4.8" height="21" rx="2.4"/><circle cx="27.5" cy="13" r="7.5"/>
+  </g>
+  <circle cx="11.2" cy="13" r="2.1" fill="#7c828c" opacity="0.55"/><circle cx="28.8" cy="13" r="2.1" fill="#7c828c" opacity="0.55"/>
+</svg>`;
+const BOLT_SVG = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M13.2 2 5 13.4h5.6L9.8 22 19 10.2h-5.7z"/></svg>`;
+const LOW_BATT_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="16" height="10" rx="2"/><line x1="22" y1="11" x2="22" y2="13"/><line x1="6" y1="10" x2="6" y2="14" stroke="#ff453a" stroke-width="2.5"/></svg>`;
+const BATT_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="16" height="10" rx="2"/><line x1="22" y1="11" x2="22" y2="13"/><line x1="6" y1="11" x2="12" y2="11"/></svg>`;
+
+function hudIsFloating() { return !!(SET.notch && SET.notch.style === 'floating'); }
+function hudCanShow() { return appState.currentView === 'view-compact'; }   // never fight an open menu
+function hudRestoreWindow() {
+  if (!hudCanShow() || appState.alarmActive) return;   // the timer-end card keeps its own window size
+  tryInvoke('resize_island', { width: 265, height: hudIsFloating() ? 48 : 36 });
+}
+
+function showDeviceHud(o) {
+  if (!hudCanShow() || appState.alarmActive) return;   // timer-end card has priority
+  const hud = document.getElementById('c-bt-hud');
+  const ico = document.getElementById('bt-hud-icon');
+  const nameEl = document.getElementById('bt-hud-name');
+  const tagEl = document.getElementById('bt-hud-tag');
+  const battBox = document.getElementById('bt-hud-batt-box');
+  const ring = document.getElementById('bt-hud-ring');
+  const battTxt = document.getElementById('bt-hud-batt-pct');
+  if (!hud || !ico || !nameEl) return;
+
+  clearTimeout(btHudTimer); clearTimeout(btHudStartT); clearTimeout(btHudBackT);
+  // another HUD may be open: close it instantly
+  clearTimeout(bioTimer); clearTimeout(bioAnimPhaseTimer); clearTimeout(bioStartTimer); clearTimeout(bioEndTimer);
+  island.classList.remove('biometric-active', 'hud-out', 'hud-back', 'bio-hud');
+  document.getElementById('c-biometric-box').classList.add('hidden');
+
+  ico.className = 'bt-hud-icon' + (o.plain ? ' plain' : '') + (o.accent ? ' ' + o.accent : '');
+  ico.innerHTML = o.iconHTML;
+  nameEl.textContent = o.name || 'Device';
+  tagEl.textContent = o.tag || 'Connected';
+
+  const pct = o.pct;
+  const hasBatt = pct != null && pct >= 0 && pct <= 100;
+  battBox.classList.toggle('hidden', !hasBatt);
+  // battery HUDs (charging / low / on battery) show a real battery glyph that fills up; Bluetooth keeps the ring
+  const battFill = document.getElementById('bt-batt-fill');
+  const battGlyph = document.getElementById('bt-batt-glyph');
+  const asBatt = !!o.battery && hasBatt && !!battFill && !!battGlyph;
+  battBox.classList.toggle('as-batt', asBatt);
+  if (asBatt) {
+    const charging = o.accent === 'green';
+    const lowB = o.accent === 'red' || (pct <= 10 && !charging);
+    const amberB = !lowB && (o.accent === 'amber' || (pct <= 20 && !charging));
+    battGlyph.classList.toggle('charging', charging);
+    battGlyph.classList.toggle('low', lowB);
+    battFill.className = 'bt-batt-fill' + (lowB ? ' low' : amberB ? ' amber' : '');
+    battFill.style.transition = 'none';
+    battFill.style.width = '0%';
+    void battFill.getBoundingClientRect();
+    battFill.style.transition = '';
+    setTimeout(() => { battFill.style.width = Math.max(pct, 6) + '%'; }, 60);
+  }
+  if (hasBatt) {
+    ring.classList.remove('low', 'amber');
+    if (o.accent === 'red' || (pct <= 10 && o.accent !== 'green')) {
+      ring.classList.add('low');
+    } else if (o.accent === 'amber' || (pct <= 20 && o.accent !== 'green')) {
+      ring.classList.add('amber');
+    }
+    ring.style.transition = 'none';
+    ring.style.strokeDashoffset = '66';
+    void ring.getBoundingClientRect();
+    ring.style.transition = '';
+    battTxt.textContent = '0%';
+    // ring fills + the number counts up once the island has opened
+    setTimeout(() => { ring.style.strokeDashoffset = String(66 * (1 - pct / 100)); }, 60);
+    const t0 = performance.now() + 380;
+    const tick = (t) => {
+      const k = Math.min(1, Math.max(0, (t - t0) / 900));
+      battTxt.textContent = Math.round(pct * (1 - Math.pow(1 - k, 3))) + '%';
+      if (k < 1) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  }
+
+  hud.classList.remove('hidden');
+  // 1) window big enough, 2) old content blurs away, 3) island springs open
+  tryInvoke('resize_island', { width: 256, height: 56 });  // a bit wider than the 220px HUD so the spring overshoot is never clipped
+  island.classList.add('hud-pre');
+  btHudStartT = setTimeout(() => {
+    island.classList.remove('hud-pre');
+    island.classList.add('bt-hud-active');
+  }, 110);
+
+  btHudTimer = setTimeout(() => {
+    island.classList.add('hud-out');
+    btHudBackT = setTimeout(() => {
+      island.classList.remove('bt-hud-active', 'hud-out');
+      island.classList.add('hud-back');
+      setTimeout(() => {
+        hud.classList.add('hidden');
+        island.classList.remove('hud-back');
+        hudRestoreWindow();
+        renderCenter(); updateClocks(); refreshMedia();
+      }, 560);
+    }, 170);
+  }, o.ms || 3200);
+}
+
+function showBtConnectHud(name, kind, battPct) {
+  const isBuds = kind === 'headphones' && /airpod|buds|earbud|earphone|airdope|tws|pods|wf-/i.test(name || '');
+  showDeviceHud({
+    iconHTML: isBuds ? BUDS_SVG : (DEV_ICONS[kind] || DEV_ICONS.bt),
+    plain: !isBuds,
+    name: name || 'Device',
+    tag: 'Connected',
+    pct: battPct,
+  });
+}
+
+async function checkNewBtConnections() {
+  try {
+    const devs = await invokeTauri('get_bt_devices');
+    if (!Array.isArray(devs)) return;
+    const connected = devs.filter((d) => d && d.connected);
+    if (prevConnectedBtDevs === null) {
+      prevConnectedBtDevs = new Set(connected.map((d) => d.name));
+      return;
+    }
+    const newly = connected.find((d) => !prevConnectedBtDevs.has(d.name));
+    prevConnectedBtDevs = new Set(connected.map((d) => d.name));
+    if (newly) {
+      let pct = btBatteryFor(newly.name);
+      if (pct == null) {
+        try { pct = await invokeTauri('get_bt_battery', { name: newly.name }); } catch (_) {}
+      }
+      showBtConnectHud(newly.name, newly.kind, pct);
+    }
+  } catch (_) {}
+}
+setTimeout(checkNewBtConnections, 2000);
+
 onTauriEvent('bluetooth-changed', () => {
   clearTimeout(btEvT);
   btEvT = setTimeout(() => {
     refreshBtCaption();
+    checkNewBtConnections();
     if (appState.currentView === 'view-bt') loadBtList(true);
   }, 400);
 });

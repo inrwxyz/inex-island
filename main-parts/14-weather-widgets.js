@@ -113,10 +113,10 @@ async function detectLocation() {
       return null;
     },
     async () => {
-      const res = await fetch('http://ip-api.com/json/?fields=status,lat,lon,city,country');
+      const res = await fetch('https://freeipapi.com/api/json');
       if (res.ok) {
         const d = await res.json();
-        if (d && d.lat && d.lon) return { lat: +d.lat, lon: +d.lon, city: d.city || '' };
+        if (d && d.latitude && d.longitude) return { lat: +d.latitude, lon: +d.longitude, city: d.cityName || '' };
       }
       return null;
     }
@@ -249,14 +249,53 @@ function batteryOverlays(stats) {
   const g = SET.general;
   // charger plugged in / removed
   if (appState.prevCharging !== undefined && stats.charging !== appState.prevCharging && g.chargeToast) {
-    if (stats.charging) showToast('bolt', `Charging ${stats.battery_pct}%`, 2400);
-    else showToast('battery', `On battery ${stats.battery_pct}%`, 2400);
+    if (stats.charging && hudCanShow()) {
+      showDeviceHud({
+        iconHTML: BOLT_SVG,
+        battery: true,
+        plain: true,
+        accent: 'green',
+        name: 'Charging',
+        tag: `${stats.battery_pct}% • MagSafe Power`,
+        pct: stats.battery_pct,
+        ms: 3200
+      });
+    } else if (stats.charging) {
+      showToast('bolt', `Charging ${stats.battery_pct}%`, 2400);
+    } else if (hudCanShow()) {
+      showDeviceHud({
+        iconHTML: BATT_SVG,
+        battery: true,
+        plain: true,
+        name: 'On Battery',
+        tag: `${stats.battery_pct}% Remaining`,
+        pct: stats.battery_pct,
+        ms: 2800
+      });
+    } else {
+      showToast('battery', `On battery ${stats.battery_pct}%`, 2400);
+    }
   }
   appState.prevCharging = stats.charging;
-  // low battery
+
+  // low battery alert HUD
   const low = g.lowBatteryAlert && !stats.charging && stats.battery_pct <= g.lowBattery;
   if (low && !appState.lowShown) {
-    if (showToast('low', `Low battery ${stats.battery_pct}%`, 4500)) appState.lowShown = true;
+    if (hudCanShow()) {
+      showDeviceHud({
+        iconHTML: LOW_BATT_SVG,
+        battery: true,
+        plain: true,
+        accent: stats.battery_pct <= 10 ? 'red' : 'amber',
+        name: 'Low Battery',
+        tag: `${stats.battery_pct}% • Connect to Power`,
+        pct: stats.battery_pct,
+        ms: 4000
+      });
+      appState.lowShown = true;
+    } else if (showToast('low', `Low battery ${stats.battery_pct}%`, 4500)) {
+      appState.lowShown = true;
+    }
   }
   if (!low && (stats.charging || stats.battery_pct > g.lowBattery + 3)) appState.lowShown = false;
 }

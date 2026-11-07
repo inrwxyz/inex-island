@@ -109,7 +109,10 @@ const SLOT_DEFS = {
     el: 'tile-notepad',
     start: () => {},
     stop: () => {},
-    click: () => invokeTauri('launch_notepad')
+    click: () => {
+      switchView('view-notepad', 'state-sub', 316, 240);
+      if (typeof focusNotepad === 'function') focusNotepad();
+    }
   }
 };
 
@@ -189,6 +192,11 @@ function switchView(viewId, stateClass, winWidth, winHeight) {
   }
 
   invokeTauri('resize_island', { width: winWidth, height: effH });
+
+  if (viewId === 'view-compact' && appState.timerStartPending) {
+    appState.timerStartPending = false;
+    setTimeout(() => { if (appState.timerRunning && typeof showTimerStartHud === 'function') showTimerStartHud(); }, 450);
+  }
 }
 
 function openMedia() {
@@ -537,9 +545,9 @@ async function refreshStats() {
     }
 
     const currentMode = SET.notch.mode;
-    if (currentMode === 'smart' && stats.is_fullscreen && appState.currentView === 'view-compact' && !appState.voiceActive) {
+    if (currentMode === 'smart' && stats.is_fullscreen && appState.currentView === 'view-compact') {
       island.classList.add('smart-hidden');
-    } else if (!appState.voiceActive) {
+    } else {
       island.classList.remove('smart-hidden');
     }
   }
@@ -582,9 +590,9 @@ onTauriEvent('radio-changed', () => { clearTimeout(radioEvT); radioEvT = setTime
 onTauriEvent('fullscreen-changed', (e) => {
   const isFs = !!(e && e.payload && e.payload.is_fullscreen);
   appState.isFs = isFs;
-  if (SET.notch.mode === 'smart' && appState.currentView === 'view-compact' && !appState.voiceActive) {
+  if (SET.notch.mode === 'smart' && appState.currentView === 'view-compact') {
     island.classList.toggle('smart-hidden', isFs);
-  } else if (!appState.voiceActive) {
+  } else {
     island.classList.remove('smart-hidden');
   }
 });
@@ -614,9 +622,26 @@ pollSystemAndMedia();
 // 3. Compact Bar Clicks
 document.getElementById('c-center-trigger').addEventListener('click', (e) => {
   if (e.target.closest('#c-incoming-alert')) return;
+  if (island.classList.contains('alarm-active')) {
+    if (typeof dismissTimerAlarm === 'function') dismissTimerAlarm();
+    return;
+  }
   switchView('view-control', 'state-control', 316, 256);
   refreshBtCaption();
   if (slotRunning.has('mic')) refreshMic();
+});
+document.getElementById('c-alarm-box')?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (typeof dismissTimerAlarm === 'function') dismissTimerAlarm();
+});
+document.getElementById('btn-alarm-snooze')?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (typeof snoozeClockAlarm === 'function') snoozeClockAlarm();
+  if (typeof dismissTimerAlarm === 'function') dismissTimerAlarm();
+});
+document.getElementById('btn-alarm-dismiss')?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (typeof dismissTimerAlarm === 'function') dismissTimerAlarm();
 });
 document.getElementById('c-media-btn').addEventListener('click', (e) => {
   e.stopPropagation();
@@ -1313,10 +1338,159 @@ function openBtView() {
 
 // Windows tells us when a device connects / disconnects / is added / removed (no polling)
 let btEvT = null, btNearT = null;
+let btHudTimer = null;
+let btHudStartT = null;
+let btHudBackT = null;
+let prevConnectedBtDevs = null;
+
+// ---- Dynamic-Island style HUD shared by Bluetooth connect and the charger ----
+const BUDS_SVG = `<svg viewBox="0 0 40 40" fill="none">
+  <defs><linearGradient id="budg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#aeb4be"/></linearGradient></defs>
+  <g fill="url(#budg)">
+    <rect x="13.4" y="14" width="4.8" height="21" rx="2.4"/><circle cx="12.5" cy="13" r="7.5"/>
+    <rect x="21.8" y="14" width="4.8" height="21" rx="2.4"/><circle cx="27.5" cy="13" r="7.5"/>
+  </g>
+  <circle cx="11.2" cy="13" r="2.1" fill="#7c828c" opacity="0.55"/><circle cx="28.8" cy="13" r="2.1" fill="#7c828c" opacity="0.55"/>
+</svg>`;
+const BOLT_SVG = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M13.2 2 5 13.4h5.6L9.8 22 19 10.2h-5.7z"/></svg>`;
+const LOW_BATT_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="16" height="10" rx="2"/><line x1="22" y1="11" x2="22" y2="13"/><line x1="6" y1="10" x2="6" y2="14" stroke="#ff453a" stroke-width="2.5"/></svg>`;
+const BATT_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="16" height="10" rx="2"/><line x1="22" y1="11" x2="22" y2="13"/><line x1="6" y1="11" x2="12" y2="11"/></svg>`;
+
+function hudIsFloating() { return !!(SET.notch && SET.notch.style === 'floating'); }
+function hudCanShow() { return appState.currentView === 'view-compact'; }   // never fight an open menu
+function hudRestoreWindow() {
+  if (!hudCanShow() || appState.alarmActive) return;   // the timer-end card keeps its own window size
+  tryInvoke('resize_island', { width: 265, height: hudIsFloating() ? 48 : 36 });
+}
+
+function showDeviceHud(o) {
+  if (!hudCanShow() || appState.alarmActive) return;   // timer-end card has priority
+  const hud = document.getElementById('c-bt-hud');
+  const ico = document.getElementById('bt-hud-icon');
+  const nameEl = document.getElementById('bt-hud-name');
+  const tagEl = document.getElementById('bt-hud-tag');
+  const battBox = document.getElementById('bt-hud-batt-box');
+  const ring = document.getElementById('bt-hud-ring');
+  const battTxt = document.getElementById('bt-hud-batt-pct');
+  if (!hud || !ico || !nameEl) return;
+
+  clearTimeout(btHudTimer); clearTimeout(btHudStartT); clearTimeout(btHudBackT);
+  // another HUD may be open: close it instantly
+  clearTimeout(bioTimer); clearTimeout(bioAnimPhaseTimer); clearTimeout(bioStartTimer); clearTimeout(bioEndTimer);
+  island.classList.remove('biometric-active', 'hud-out', 'hud-back', 'bio-hud');
+  document.getElementById('c-biometric-box').classList.add('hidden');
+
+  ico.className = 'bt-hud-icon' + (o.plain ? ' plain' : '') + (o.accent ? ' ' + o.accent : '');
+  ico.innerHTML = o.iconHTML;
+  nameEl.textContent = o.name || 'Device';
+  tagEl.textContent = o.tag || 'Connected';
+
+  const pct = o.pct;
+  const hasBatt = pct != null && pct >= 0 && pct <= 100;
+  battBox.classList.toggle('hidden', !hasBatt);
+  // battery HUDs (charging / low / on battery) show a real battery glyph that fills up; Bluetooth keeps the ring
+  const battFill = document.getElementById('bt-batt-fill');
+  const battGlyph = document.getElementById('bt-batt-glyph');
+  const asBatt = !!o.battery && hasBatt && !!battFill && !!battGlyph;
+  battBox.classList.toggle('as-batt', asBatt);
+  if (asBatt) {
+    const charging = o.accent === 'green';
+    const lowB = o.accent === 'red' || (pct <= 10 && !charging);
+    const amberB = !lowB && (o.accent === 'amber' || (pct <= 20 && !charging));
+    battGlyph.classList.toggle('charging', charging);
+    battGlyph.classList.toggle('low', lowB);
+    battFill.className = 'bt-batt-fill' + (lowB ? ' low' : amberB ? ' amber' : '');
+    battFill.style.transition = 'none';
+    battFill.style.width = '0%';
+    void battFill.getBoundingClientRect();
+    battFill.style.transition = '';
+    setTimeout(() => { battFill.style.width = Math.max(pct, 6) + '%'; }, 60);
+  }
+  if (hasBatt) {
+    ring.classList.remove('low', 'amber');
+    if (o.accent === 'red' || (pct <= 10 && o.accent !== 'green')) {
+      ring.classList.add('low');
+    } else if (o.accent === 'amber' || (pct <= 20 && o.accent !== 'green')) {
+      ring.classList.add('amber');
+    }
+    ring.style.transition = 'none';
+    ring.style.strokeDashoffset = '66';
+    void ring.getBoundingClientRect();
+    ring.style.transition = '';
+    battTxt.textContent = '0%';
+    // ring fills + the number counts up once the island has opened
+    setTimeout(() => { ring.style.strokeDashoffset = String(66 * (1 - pct / 100)); }, 60);
+    const t0 = performance.now() + 380;
+    const tick = (t) => {
+      const k = Math.min(1, Math.max(0, (t - t0) / 900));
+      battTxt.textContent = Math.round(pct * (1 - Math.pow(1 - k, 3))) + '%';
+      if (k < 1) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  }
+
+  hud.classList.remove('hidden');
+  // 1) window big enough, 2) old content blurs away, 3) island springs open
+  tryInvoke('resize_island', { width: 256, height: 56 });  // a bit wider than the 220px HUD so the spring overshoot is never clipped
+  island.classList.add('hud-pre');
+  btHudStartT = setTimeout(() => {
+    island.classList.remove('hud-pre');
+    island.classList.add('bt-hud-active');
+  }, 110);
+
+  btHudTimer = setTimeout(() => {
+    island.classList.add('hud-out');
+    btHudBackT = setTimeout(() => {
+      island.classList.remove('bt-hud-active', 'hud-out');
+      island.classList.add('hud-back');
+      setTimeout(() => {
+        hud.classList.add('hidden');
+        island.classList.remove('hud-back');
+        hudRestoreWindow();
+        renderCenter(); updateClocks(); refreshMedia();
+      }, 560);
+    }, 170);
+  }, o.ms || 3200);
+}
+
+function showBtConnectHud(name, kind, battPct) {
+  const isBuds = kind === 'headphones' && /airpod|buds|earbud|earphone|airdope|tws|pods|wf-/i.test(name || '');
+  showDeviceHud({
+    iconHTML: isBuds ? BUDS_SVG : (DEV_ICONS[kind] || DEV_ICONS.bt),
+    plain: !isBuds,
+    name: name || 'Device',
+    tag: 'Connected',
+    pct: battPct,
+  });
+}
+
+async function checkNewBtConnections() {
+  try {
+    const devs = await invokeTauri('get_bt_devices');
+    if (!Array.isArray(devs)) return;
+    const connected = devs.filter((d) => d && d.connected);
+    if (prevConnectedBtDevs === null) {
+      prevConnectedBtDevs = new Set(connected.map((d) => d.name));
+      return;
+    }
+    const newly = connected.find((d) => !prevConnectedBtDevs.has(d.name));
+    prevConnectedBtDevs = new Set(connected.map((d) => d.name));
+    if (newly) {
+      let pct = btBatteryFor(newly.name);
+      if (pct == null) {
+        try { pct = await invokeTauri('get_bt_battery', { name: newly.name }); } catch (_) {}
+      }
+      showBtConnectHud(newly.name, newly.kind, pct);
+    }
+  } catch (_) {}
+}
+setTimeout(checkNewBtConnections, 2000);
+
 onTauriEvent('bluetooth-changed', () => {
   clearTimeout(btEvT);
   btEvT = setTimeout(() => {
     refreshBtCaption();
+    checkNewBtConnections();
     if (appState.currentView === 'view-bt') loadBtList(true);
   }, 400);
 });
@@ -1383,9 +1557,10 @@ const ACTION_TILE_ICONS = {
   snip: '<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/></svg>',
   calendar: '<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>',
   timer: '<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><circle cx="12" cy="13" r="8"/><polyline points="12 9 12 13 15 15"/><line x1="9" y1="2" x2="15" y2="2"/></svg>',
-  notepad: '<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>',
+  clipboard: '<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/><line x1="8" y1="11" x2="16" y2="11"/><line x1="8" y1="15" x2="13" y2="15"/></svg>',
   lock: '<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>',
   settings: '<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1 2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83 2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',
+  alarm: '<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>',
   calc: '<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" y1="6" x2="16" y2="6"/><line x1="16" y1="14" x2="16" y2="18"/><path d="M8 10h.01M12 10h.01M16 10h.01M8 14h.01M12 14h.01M8 18h.01M12 18h.01"/></svg>',
   taskmgr: '<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>',
   terminal: '<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>',
@@ -1398,9 +1573,10 @@ const ACTION_TILE_TITLES = {
   snip: 'Screenshot Snip',
   calendar: 'Monthly Calendar',
   timer: 'Focus Timer',
-  notepad: 'Quick Notes (Scratchpad)',
+  clipboard: 'Clipboard History',
   lock: 'Lock PC',
   settings: 'Open Settings',
+  alarm: 'Alarm',
   calc: 'Calculator',
   taskmgr: 'Task Manager',
   terminal: 'Terminal / Command Prompt',
@@ -1415,7 +1591,7 @@ function renderQuickActionTiles() {
   if (!row) return;
   const list = (SET.menu && Array.isArray(SET.menu.actionTiles) && SET.menu.actionTiles.length)
     ? SET.menu.actionTiles
-    : ['awake', 'snip', 'calendar', 'timer', 'notepad', 'lock', 'settings'];
+    : ['awake', 'snip', 'calendar', 'timer', 'clipboard', 'lock', 'settings'];
 
   row.innerHTML = '';
   list.forEach((id) => {
@@ -1453,10 +1629,15 @@ function renderQuickActionTiles() {
       btn.addEventListener('click', () => {
         switchView('view-timer', 'state-sub', 316, 200);
       });
-    } else if (id === 'notepad') {
+    } else if (id === 'alarm') {
       btn.addEventListener('click', () => {
-        switchView('view-notepad', 'state-sub', 316, 240);
-        if (typeof focusNotepad === 'function') focusNotepad();
+        switchView('view-alarm', 'state-sub', 316, 238);
+        if (typeof openAlarmView === 'function') openAlarmView();
+      });
+    } else if (id === 'clipboard') {
+      btn.addEventListener('click', () => {
+        switchView('view-clipboard', 'state-sub', 320, 260);
+        if (typeof openClipboardView === 'function') openClipboardView();
       });
     } else if (id === 'lock') {
       btn.addEventListener('click', () => invokeTauri('lock_screen'));
@@ -2934,6 +3115,7 @@ async function streamFiles(peerId) {
       if (!s.cancelled && dc.readyState === 'open') {
         dc.send('{"type":"all-done"}');
         s.completed = true;
+        noteProgress(s.total, s.total);   // ring reaches 100% so the notch can show "Sent"
       }
     }
   } catch (e) {
@@ -3168,12 +3350,15 @@ function renderCenter() {
   const toast = !!appState.toast;
   const isPrompt = !!(appState.prompting || appState.lockerPrompting);
   const busy = appState.transferring || isPrompt || toast;
+  const xferLive = !!(appState.transferring && !isPrompt && !toast);
   island.classList.toggle('transferring', busy);
+  island.classList.toggle('xfer-live', xferLive);
   document.getElementById('c-clock').classList.toggle('hidden', busy);
-  document.getElementById('c-transfer-anim').classList.toggle('hidden', !(appState.transferring && !isPrompt && !toast));
+  document.getElementById('c-transfer-anim').classList.toggle('hidden', !xferLive);
   document.getElementById('c-prompt-anim').classList.toggle('hidden', !(isPrompt && !toast));
   document.getElementById('c-toast').classList.toggle('hidden', !toast);
   updateCompactStateClasses();
+  if (typeof updateTimerChip === 'function') updateTimerChip();   // running timer stays visible next to a transfer / popup
 }
 
 // ---- Short status popups: charger, low battery, unlock ----
@@ -3188,6 +3373,7 @@ const TOAST_ICONS = {
   bolt: SVG_A + '<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>',
   battery: SVG_A + '<rect x="2" y="7" width="17" height="10" rx="2"/><line x1="22" y1="11" x2="22" y2="13"/></svg>',
   low: SVG_A + '<rect x="2" y="7" width="17" height="10" rx="2"/><line x1="22" y1="11" x2="22" y2="13"/><line x1="6" y1="10" x2="6" y2="14"/></svg>',
+  done: SVG_A + '<circle cx="12" cy="12" r="9"/><polyline points="8 12.5 11 15.5 16 9"/></svg>',
   mic: SVG_A + '<path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>'
 };
 function showToast(kind, text, ms) {
@@ -3209,10 +3395,108 @@ function showToast(kind, text, ms) {
   return true;
 }
 
+// ---- Biometric morph (Face ID / Touch ID style) ----
+// pill -> drops down into a rounded square -> scan -> green tick -> back to pill
+let bioTimer = null;
+let bioAnimPhaseTimer = null;
+let bioStartTimer = null;
+let bioEndTimer = null;
+
+const BIO_SVGS = {
+  // generic scan (Windows unlock, password unlock in Locker Pro): viewfinder corners + sweeping line, no face features
+  scan: `<svg class="bio-scan-svg" viewBox="0 0 44 44" width="44" height="44" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+    <path class="bio-br" d="M5 15v-4a6 6 0 0 1 6-6h4"/>
+    <path class="bio-br" d="M39 15v-4a6 6 0 0 0-6-6h-4"/>
+    <path class="bio-br" d="M5 29v4a6 6 0 0 0 6 6h4"/>
+    <path class="bio-br" d="M39 29v4a6 6 0 0 1-6 6h-4"/>
+    <rect class="bio-core" x="14" y="14" width="16" height="16" rx="5"/>
+    <rect class="bio-scan" x="9" y="9" width="26" height="2.2" rx="1.1" stroke="none"/>
+  </svg>`,
+  face: `<svg class="bio-face-svg" viewBox="0 0 44 44" width="44" height="44" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+    <path class="bio-br" d="M5 15v-4a6 6 0 0 1 6-6h4"/>
+    <path class="bio-br" d="M39 15v-4a6 6 0 0 0-6-6h-4"/>
+    <path class="bio-br" d="M5 29v4a6 6 0 0 0 6 6h4"/>
+    <path class="bio-br" d="M39 29v4a6 6 0 0 1-6 6h-4"/>
+    <path class="bio-ft" d="M16 17v3.5"/>
+    <path class="bio-ft" d="M28 17v3.5"/>
+    <path class="bio-ft" d="M22 17v6.5a1.5 1.5 0 0 1-1.5 1.5H19"/>
+    <path class="bio-ft" d="M16 29.5c3.5 3 8.5 3 12 0"/>
+    <rect class="bio-scan" x="9" y="9" width="26" height="2.2" rx="1.1" stroke="none"/>
+  </svg>`,
+  fingerprint: `<svg class="bio-finger-svg" viewBox="0 0 38 38" width="42" height="42" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path class="fp-ridge" d="M19 9a10 10 0 0 0-7 2.9"/>
+    <path class="fp-ridge" d="M19 6a13 13 0 0 0-11 5.9"/>
+    <path class="fp-ridge" d="M19 13a6 6 0 0 0-5.8 4.5"/>
+    <path class="fp-ridge" d="M19 16a3 3 0 0 0-3 3c0 3.5-.8 5-1.5 6.5"/>
+    <path class="fp-ridge" d="M22 17.5a3 3 0 0 1 0 3c-.5 2-.5 4.5-.5 6.5"/>
+    <path class="fp-ridge" d="M25 13a7 7 0 0 1 0 7.5c-1 3-1 6-1 8.5"/>
+    <path class="fp-ridge" d="M19 3a16 16 0 0 1 12 5.5c3 3.5 3 8 3 12"/>
+    <path class="fp-ridge" d="M11 23.5c.5 3.5 2 6.5 4 8.5"/>
+    <path class="fp-ridge" d="M6 20c0 5 2 9 5 12"/>
+  </svg>`,
+  check: `<svg class="bio-check-svg" viewBox="0 0 44 44" width="44" height="44" fill="none">
+    <circle class="fillc" cx="22" cy="22" r="17" fill="rgba(48,209,88,0.16)"/>
+    <circle class="ring" cx="22" cy="22" r="17" stroke="#30d158" stroke-width="2.4" stroke-linecap="round" transform="rotate(-90 22 22)"/>
+    <path class="tick" d="M14 22.5l6 6 11-12.5" stroke="#30d158" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>`
+};
+
+function triggerBiometricMorph(type, label) {
+  if (appState.currentView !== 'view-compact' || appState.alarmActive) return;     // never fight an open menu
+  const kind = (type === 'fingerprint') ? 'fingerprint' : 'scan';   // face is gone: everything except a real fingerprint is a plain scan
+  const box = document.getElementById('c-biometric-box');
+  const glyph = document.getElementById('bio-glyph-wrap');
+  const txt = document.getElementById('bio-label');
+  if (!box || !glyph || !txt) return;
+
+  clearTimeout(bioTimer); clearTimeout(bioAnimPhaseTimer); clearTimeout(bioStartTimer); clearTimeout(bioEndTimer);
+  // a device HUD may be open: close it instantly
+  clearTimeout(btHudTimer); clearTimeout(btHudStartT); clearTimeout(btHudBackT);
+  island.classList.remove('bt-hud-active', 'hud-out', 'hud-back');
+  island.classList.add('bio-hud');   // biometric flow keeps its original animation timings (see styles.css)
+  document.getElementById('c-bt-hud').classList.add('hidden');
+
+  txt.textContent = label ? String(label) : 'Unlocked';
+  glyph.innerHTML = BIO_SVGS[kind];
+  box.classList.remove('hidden');
+
+  // 1) window big enough, 2) old content blurs away, 3) island springs into the rounded square
+  tryInvoke('resize_island', { width: 265, height: 112 });
+  island.classList.add('hud-pre');
+  bioStartTimer = setTimeout(() => {
+    island.classList.remove('hud-pre');
+    island.classList.add('biometric-active');
+  }, 130);
+
+  // scan, then the glyph blurs out and the tick springs in
+  bioAnimPhaseTimer = setTimeout(() => {
+    const cur = glyph.firstElementChild;
+    if (cur) cur.classList.add('bio-leave');
+    setTimeout(() => { glyph.innerHTML = BIO_SVGS.check; }, 150);
+  }, 1150);
+
+  // fade content, shrink back to the pill, restore the normal window
+  bioTimer = setTimeout(() => {
+    island.classList.add('hud-out');
+    bioEndTimer = setTimeout(() => {
+      island.classList.remove('biometric-active', 'hud-out');
+      island.classList.add('hud-back');
+      setTimeout(() => {
+        box.classList.add('hidden');
+        glyph.innerHTML = '';
+        island.classList.remove('hud-back', 'bio-hud');
+        hudRestoreWindow();
+        renderCenter(); updateClocks(); refreshMedia();
+      }, 560);
+    }, 170);
+  }, 2350);
+}
+
 // Inex App Locker / Biometric Unlock Pipe Listener
 let lockerWrongTimer = null;
 let lockerGlowTimer = null;
 let lockerPromptSafetyTimer = null;
+let testTransferTimer = null;
 let lastLockerTs = 0;
 let lastLockToast = { target: '', at: 0 };
 // The locker sends a `locker_prompt` heartbeat every ~3 s for as long as its popup is open.
@@ -3327,11 +3611,56 @@ onTauriEvent('locker-unlock', (event) => {
     island.classList.add('island-locker-glow');
 
     // Kind: face / fingerprint / unlock
-    const kind = payload.type === 'face' ? 'face' : payload.type === 'fingerprint' ? 'fingerprint' : 'unlock';
-    const targetName = payload.target ? `${payload.target} Unlocked` : 'Unlocked';
+    const kind = payload.type === 'fingerprint' ? 'fingerprint' : payload.type === 'charging' ? 'charging' : payload.type === 'low_battery' ? 'low_battery' : payload.type === 'alarm' ? 'alarm' : payload.type === 'transfer' ? 'transfer' : payload.type === 'bluetooth' ? 'bluetooth' : payload.type === 'caps' ? 'caps' : payload.type === 'num' ? 'num' : payload.type === 'download' ? 'download' : payload.type === 'download_done' ? 'download_done' : 'scan';
+    const targetName = payload.target ? `${payload.target}` : 'Unlocked';
 
     renderCenter();
-    showToast(kind, targetName, 1400);
+    if (kind === 'alarm') {
+      if (typeof triggerTimerAlarm === 'function') triggerTimerAlarm();
+    } else if (kind === 'scan' || kind === 'fingerprint') {
+      triggerBiometricMorph(kind, targetName);
+    } else if (kind === 'charging') {
+      showDeviceHud({ iconHTML: BOLT_SVG, battery: true, plain: true, accent: 'green', name: 'Charging', tag: `${payload.target || '85%'} • MagSafe Power`, pct: parseInt(payload.target, 10) || 85, ms: 3200 });
+    } else if (kind === 'low_battery') {
+      showDeviceHud({ iconHTML: LOW_BATT_SVG, battery: true, plain: true, accent: 'amber', name: 'Low Battery', tag: `${payload.target || '18%'} • Connect Power`, pct: parseInt(payload.target, 10) || 18, ms: 3800 });
+    } else if (kind === 'bluetooth') {
+      if (typeof showBtConnectHud === 'function') {
+        showBtConnectHud(payload.target || 'AirPods Pro', payload.kind || 'headphones', parseInt(payload.pct, 10) || 90);
+      }
+    } else if (kind === 'caps') {
+      const capsSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4 5 12h4v4h6v-4h4z"/><line x1="9" y1="20" x2="15" y2="20"/></svg>';
+      showDeviceHud({ iconHTML: capsSvg, plain: false, accent: 'blue', name: 'Caps Lock', tag: 'On', ms: 2200 });
+    } else if (kind === 'num') {
+      const numSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="3"/><path d="M9 8v4M9 8l-1 1M14.5 8h1.5v8"/><path d="M8 16h2"/></svg>';
+      showDeviceHud({ iconHTML: numSvg, plain: false, accent: 'blue', name: 'Num Lock', tag: 'On', ms: 2200 });
+    } else if (kind === 'download') {
+      const dlSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 11l5 5 5-5"/><path d="M5 20h14"/></svg>';
+      showDeviceHud({ iconHTML: dlSvg, plain: true, accent: 'blue', name: payload.target || 'Inex-Island-Setup.exe', tag: 'Downloading • 3.5 MB', ms: 2500 });
+    } else if (kind === 'download_done') {
+      const dlDoneSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline class="clip-tick" points="5 12.5 10 17.5 19 7"/></svg>';
+      showDeviceHud({ iconHTML: dlDoneSvg, plain: true, accent: 'ok', name: payload.target || 'Inex-Island-Setup.exe', tag: 'Download Complete • 3.5 MB', ms: 4000 });
+    } else if (kind === 'transfer') {
+      clearInterval(testTransferTimer);
+      appState.xferDir = payload.dir === 'recv' ? 'recv' : 'send';
+      startCompactTransferUI();
+      let p = 0;
+      testTransferTimer = setInterval(() => {
+        p += 10;
+        if (p >= 100) {
+          p = 100;
+          clearInterval(testTransferTimer);
+          updateCompactTransferPct(100);
+          lastReportedPct = 100;
+          setTimeout(() => {
+            finishCompactTransferUI();
+          }, 600);
+        } else {
+          updateCompactTransferPct(p);
+        }
+      }, 200);
+    } else {
+      showToast(kind, `${targetName} Unlocked`, 1400);
+    }
 
     clearTimeout(lockerGlowTimer);
     lockerGlowTimer = setTimeout(() => {
@@ -3380,92 +3709,67 @@ onTauriEvent('locker-unlock', (event) => {
   }
 });
 
-// Voice Assistant bridge listener (Aura -> Inex Island)
-let voiceEndTimeout = null;
+// ---- File transfer in the notch (same animation for the P2P link and for direct sharing) ----
+const XFER_UP = '<line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/>';
+const XFER_DOWN = '<line x1="12" y1="5" x2="12" y2="19"/><polyline points="5 12 12 19 19 12"/>';
 
-function finishVoiceAssistant() {
-  clearTimeout(voiceEndTimeout);
-  voiceEndTimeout = null;
-  appState.voiceActive = false;
-  const isl = document.getElementById('island') || document.querySelector('.island');
-  if (isl) {
-    isl.classList.remove('island-voice-active');
-    if (appState.unhidForVoice) {
-      appState.unhidForVoice = false;
-      if (SET.notch.mode === 'smart' && appState.isFs) {
-        isl.classList.add('smart-hidden');
-      }
-    }
+function xferDirection() {
+  let send = false, recv = false;
+  for (const e of rtcPeers.values()) {
+    if (e.send && e.send.active) send = true;
+    if (e.recv && e.recv.active) recv = true;
   }
-  if (appState.toast) {
-    appState.toast = false;
-    renderCenter();
-    updateClocks();
-    refreshMedia();
-  }
+  return send && recv ? 'both' : recv ? 'recv' : 'send';
 }
 
-onTauriEvent('voice-assistant', (event) => {
-  let payload = event.payload;
-  if (typeof payload === 'string') {
-    try { payload = JSON.parse(payload); } catch (_) {}
-  }
-  if (!payload || typeof payload !== 'object') payload = {};
-  const ev = payload.event;
-  const text = payload.text || '';
-  const action = payload.action || '';
+function setXferDirectionUI() {
+  const box = document.getElementById('c-transfer-anim');
+  if (!box) return;
+  const dir = appState.xferDir || xferDirection();
+  if (box.dataset.dir === dir) return;
+  box.dataset.dir = dir;
+  appState.xferDir = dir;
+  box.classList.toggle('recv', dir === 'recv');
+  const label = document.getElementById('c-xfer-label');
+  if (label) label.textContent = dir === 'recv' ? 'Receiving' : dir === 'both' ? 'Transferring' : 'Sending';
+  const glyph = document.getElementById('c-xfer-glyph');
+  if (glyph) glyph.innerHTML = dir === 'recv' ? XFER_DOWN : XFER_UP;
+}
 
-  clearTimeout(voiceEndTimeout);
-
-  const isl = document.getElementById('island') || document.querySelector('.island');
-
-  if (ev === 'wake') {
-    appState.voiceActive = true;
-    if (isl) {
-      isl.classList.add('island-voice-active');
-      if (isl.classList.contains('smart-hidden')) {
-        isl.classList.remove('smart-hidden');
-        appState.unhidForVoice = true;
-      }
-    }
-    showToast('mic', 'Listening...', 4500);
-    voiceEndTimeout = setTimeout(finishVoiceAssistant, 12000);
-  } else if (ev === 'speech') {
-    appState.voiceActive = true;
-    if (isl) {
-      isl.classList.add('island-voice-active');
-      if (isl.classList.contains('smart-hidden')) {
-        isl.classList.remove('smart-hidden');
-        appState.unhidForVoice = true;
-      }
-    }
-    showToast('mic', text ? `"${text}"` : 'Processing...', 3500);
-    voiceEndTimeout = setTimeout(finishVoiceAssistant, 10000);
-  } else if (ev === 'action') {
-    if (isl) isl.classList.add('island-voice-active');
-    showToast('bolt', text + (action ? ` • ${action}` : ''), 2500);
-    voiceEndTimeout = setTimeout(finishVoiceAssistant, 2800);
-  } else if (ev === 'end') {
-    finishVoiceAssistant();
-  }
-});
+function setXferRing(pct) {
+  const ring = document.getElementById('c-xfer-ring-fg');
+  if (ring) ring.style.strokeDashoffset = String(66 * (1 - Math.max(0, Math.min(100, pct)) / 100));
+}
 
 function startCompactTransferUI() {
   appState.transferring = true;
+  lastReportedPct = -1;
+  const box = document.getElementById('c-transfer-anim');
+  if (box) { box.dataset.dir = ''; box.classList.add('indeterminate'); }
+  setXferDirectionUI();
+  setXferRing(0);
   document.getElementById('c-transfer-pct').textContent = '0%';
   renderCenter();
 }
 
 function updateCompactTransferPct(pct) {
   document.getElementById('c-transfer-pct').textContent = `${pct}%`;
+  const box = document.getElementById('c-transfer-anim');
+  if (box && pct > 0) box.classList.remove('indeterminate');
+  setXferDirectionUI();
+  setXferRing(pct);
 }
 
 function finishCompactTransferUI() {
+  const completed = lastReportedPct >= 100;     // 100% reached = really finished (a cancel never gets there)
+  const dir = appState.xferDir;
   appState.transferring = false;
+  lastReportedPct = -1;
   endTransferStats();
   renderCenter();
   updateClocks();
   refreshMedia();
+  if (completed) showToast('done', dir === 'recv' ? 'Received' : 'Sent', 1500);
 }
 
 // Windows password / PIN / credential prompts -> lock animation in the notch
@@ -3484,15 +3788,22 @@ async function pollNativePrompt() {
 }
 setInterval(pollNativePrompt, 400);
 
-// Windows lock screen (Win+L, Dynamic Lock, idle lock): when the PC is unlocked, play the unlock animation
+// Windows lock screen (Win+L, Dynamic Lock, idle lock): when the PC is unlocked (password, PIN, fingerprint, face,
+// phone proximity: Windows does not tell us which), play the plain scan unlock animation.
+// (is_session_locked in main.rs reads SessionFlags at offset 16; it used to read offset 12 and always said "locked".)
 let lockPrev = null;
+let lockUnlockT = null;
 async function pollLock() {
   const r = await tryInvoke('is_session_locked', {});
   if (typeof r !== 'boolean') return;
-  if (lockPrev === true && r === false && SET.general.lockToast) showToast('unlock', 'Unlocked', 1900);
+  if (lockPrev === true && r === false && SET.general.lockToast) {
+    // let the desktop finish appearing before the island starts to move
+    clearTimeout(lockUnlockT);
+    lockUnlockT = setTimeout(() => triggerBiometricMorph('scan', 'Unlocked'), 450);
+  }
   lockPrev = r;
 }
-setInterval(pollLock, 1200);
+setInterval(pollLock, 800);
 
 
 // 9. Media Transport Controls
@@ -3509,22 +3820,201 @@ document.getElementById('m-prev').addEventListener('click', async () => {
   setTimeout(pollSystemAndMedia, 250);
 });
 
-// 10. Focus Timer + Reset Button
+// 10. Focus Timer + Apple Crystal Alarm
+let alarmChimeInterval = null;
+let alarmAutoDismissTimeout = null;
+
+function playAlarmChime() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const chord = [
+      { f: 523.25, d: 0.00, v: 0.28 }, // C5
+      { f: 659.25, d: 0.08, v: 0.26 }, // E5
+      { f: 783.99, d: 0.16, v: 0.24 }, // G5
+      { f: 1046.50, d: 0.24, v: 0.22 } // C6
+    ];
+    chord.forEach((n) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(n.f, ctx.currentTime);
+      const t0 = ctx.currentTime + n.d;
+      gain.gain.setValueAtTime(0.0001, t0);
+      gain.gain.exponentialRampToValueAtTime(n.v, t0 + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.7);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(t0);
+      osc.stop(t0 + 0.75);
+    });
+  } catch (_) {}
+}
+
+let alarmStartT = null;
+let alarmBackT = null;
+let alarmCleanT = null;
+
+// Closes any other island popup (device HUD, Face ID) at once: the timer-end card has priority.
+function alarmClearOtherHuds() {
+  clearTimeout(btHudTimer); clearTimeout(btHudStartT); clearTimeout(btHudBackT);
+  clearTimeout(bioTimer); clearTimeout(bioAnimPhaseTimer); clearTimeout(bioStartTimer); clearTimeout(bioEndTimer);
+  island.classList.remove('bt-hud-active', 'biometric-active', 'bio-hud', 'hud-pre', 'hud-back', 'hud-out');
+  const btHud = document.getElementById('c-bt-hud');
+  if (btHud) btHud.classList.add('hidden');
+  const bioBox = document.getElementById('c-biometric-box');
+  if (bioBox) bioBox.classList.add('hidden');
+}
+
+function alarmLabel() {
+  const secs = Math.round((appState.timerPresetMins || 0) * 60);
+  if (secs >= 60 && secs % 60 === 0) return `Timer \u2022 ${secs / 60} min`;
+  if (secs >= 60) return `Timer \u2022 ${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`;
+  return `Timer \u2022 ${secs} sec`;
+}
+
+// opts (clock alarm): { title, sub, snooze: true, ms }.  No opts = the focus-timer card.
+function triggerTimerAlarm(opts) {
+  opts = opts || {};
+  if (appState.currentView !== 'view-compact') {
+    goCompact();
+  }
+
+  const alarmBox = document.getElementById('c-alarm-box');
+  if (!alarmBox) return;
+
+  clearInterval(alarmChimeInterval);
+  clearTimeout(alarmAutoDismissTimeout);
+  clearTimeout(alarmStartT); clearTimeout(alarmBackT); clearTimeout(alarmCleanT);
+  appState.alarmClosing = false;
+
+  // nothing else running -> the full Mac-style show; with a transfer / media / popup running the card still comes on top
+  const idle = !(appState.transferring || appState.prompting || appState.lockerPrompting || appState.toast || appState.mediaPlaying);
+
+  alarmClearOtherHuds();
+  appState.alarmActive = true;
+  updateTimerChip();
+
+  const sub = document.getElementById('alarm-sub');
+  if (sub) sub.textContent = opts.sub || alarmLabel();
+  const ttl = document.getElementById('alarm-title');
+  if (ttl) ttl.textContent = opts.title || "Time's Up";
+  const snz = document.getElementById('btn-alarm-snooze');
+  if (snz) snz.classList.toggle('hidden', !opts.snooze);
+  appState.alarmSnoozable = !!opts.snooze;
+  appState.alarmOpts = opts;
+  alarmBox.classList.remove('hidden');
+  island.classList.remove('alarm-active', 'hud-out');
+  island.classList.toggle('alarm-full', idle);
+
+  // 1) window big enough, 2) old content blurs away, 3) island springs open
+  tryInvoke('resize_island', { width: 256, height: 56 });  // same window as the device HUD
+  island.classList.add('hud-pre');
+  alarmStartT = setTimeout(() => {
+    island.classList.remove('hud-pre');
+    island.classList.add('alarm-active');
+  }, 110);
+
+  if (SET.notch && SET.notch.timerSound !== false) {
+    playAlarmChime();
+    alarmChimeInterval = setInterval(() => {
+      if (appState.alarmActive && !appState.alarmClosing) {
+        playAlarmChime();
+      } else {
+        clearInterval(alarmChimeInterval);
+      }
+    }, 2400);
+  }
+
+  alarmAutoDismissTimeout = setTimeout(() => {
+    dismissTimerAlarm();
+  }, opts.ms || 14000);
+}
+
+function dismissTimerAlarm() {
+  clearInterval(alarmChimeInterval);
+  clearTimeout(alarmAutoDismissTimeout);
+  clearTimeout(alarmStartT);
+
+  const alarmBox = document.getElementById('c-alarm-box');
+  if (!alarmBox || !appState.alarmActive || appState.alarmClosing) return;
+  appState.alarmClosing = true;
+
+  // content fades, island shrinks back to the pill (no bounce), the old status comes back
+  island.classList.remove('hud-pre');
+  island.classList.add('alarm-active', 'hud-out');
+  alarmBackT = setTimeout(() => {
+    island.classList.remove('alarm-active', 'alarm-full', 'hud-out');
+    island.classList.add('hud-back');
+    alarmCleanT = setTimeout(() => {
+      alarmBox.classList.add('hidden');
+      island.classList.remove('hud-back');
+      appState.alarmActive = false;
+      appState.alarmClosing = false;
+      hudRestoreWindow();
+      renderCenter();
+      updateClocks();
+      refreshMedia();
+    }, 560);
+  }, 170);
+}
+
+// Timer started: the island pops open for a moment (Mac / iPhone style), then settles into icon + countdown.
+const TIMER_HUD_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13.5" r="7.5"/><path d="M12 9.5v4l2.5 2"/><path d="M9.5 2.5h5"/></svg>';
+function showTimerStartHud() {
+  const secs = Math.round((appState.timerPresetMins || 0) * 60);
+  const total = secs >= 60 && secs % 60 === 0 ? `${secs / 60} min` : secs >= 60 ? `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}` : `${secs} sec`;
+  showDeviceHud({ iconHTML: TIMER_HUD_SVG, plain: true, accent: 'amber', name: 'Timer', tag: `Started \u2022 ${total}`, ms: 2000 });
+}
+function announceTimerStart() {
+  if (hudCanShow()) showTimerStartHud();
+  else appState.timerStartPending = true;   // timer menu is open: play it when the island goes back to the pill (see switchView)
+}
+
+// The running timer is shown as a small chip while a transfer / popup owns the middle of the pill
+// (when nothing else is busy the timer simply replaces the clock, also while media plays).
+function updateTimerChip() {
+  const busy = !!(appState.transferring || appState.prompting || appState.lockerPrompting || appState.toast);
+  const on = !!appState.timerRunning && busy && !appState.alarmActive && appState.currentView === 'view-compact';
+  island.classList.toggle('timer-chip-on', on);
+  island.classList.toggle('timer-live', !!appState.timerRunning && !busy && !appState.alarmActive);
+  if (on) {
+    const t = document.getElementById('c-timer-chip-text');
+    if (t) {
+      const m = String(Math.floor(appState.timerSeconds / 60)).padStart(2, '0');
+      const sec = String(appState.timerSeconds % 60).padStart(2, '0');
+      t.textContent = `${m}:${sec}`;
+    }
+  }
+}
+
 function formatTimerDisplay() {
   const m = String(Math.floor(appState.timerSeconds / 60)).padStart(2, '0');
   const s = String(appState.timerSeconds % 60).padStart(2, '0');
-  document.getElementById('timer-display').textContent = `${m} : ${s}`;
-  if (appState.timerRunning && !appState.transferring) {
-    document.getElementById('c-clock').textContent = `${m}:${s}`;
+  const disp = document.getElementById('timer-display');
+  if (disp && !disp.querySelector('input')) {
+    disp.textContent = `${m} : ${s}`;
   }
+
+  const cClock = document.getElementById('c-clock');
+  if (appState.timerRunning && !appState.transferring && !appState.prompting && !appState.lockerPrompting) {
+    if (cClock) {
+      cClock.textContent = `${m}:${s}`;
+      cClock.classList.add('c-clock-timer');
+    }
+  } else {
+    if (cClock) cClock.classList.remove('c-clock-timer');
+  }
+  updateTimerChip();
 }
 
 document.getElementById('btn-timer-toggle').addEventListener('click', function () {
   appState.timerRunning = !appState.timerRunning;
   this.textContent = appState.timerRunning ? '⏸ Pause' : '▶ Start';
-  document.getElementById('act-timer').classList.toggle('active', appState.timerRunning);
+  document.getElementById('act-timer')?.classList.toggle('active', appState.timerRunning);
 
   if (appState.timerRunning) {
+    if (appState.timerSeconds === appState.timerPresetMins * 60) announceTimerStart();   // fresh start only, not resume after pause
+    formatTimerDisplay();
     appState.timerInterval = setInterval(() => {
       if (appState.timerSeconds > 0) {
         appState.timerSeconds--;
@@ -3533,14 +4023,19 @@ document.getElementById('btn-timer-toggle').addEventListener('click', function (
         clearInterval(appState.timerInterval);
         appState.timerRunning = false;
         document.getElementById('btn-timer-toggle').textContent = '▶ Start';
-        document.getElementById('act-timer').classList.remove('active');
-        if (SET.notch.timerSound) chime();
-        setTimeout(updateClocks, 2000);
+        document.getElementById('act-timer')?.classList.remove('active');
+        appState.timerSeconds = appState.timerPresetMins * 60;
+        formatTimerDisplay();
+        updateClocks();
+        triggerTimerAlarm();
       }
     }, 1000);
   } else {
     clearInterval(appState.timerInterval);
+    const cClock = document.getElementById('c-clock');
+    if (cClock) cClock.classList.remove('c-clock-timer');
     updateClocks();
+    updateTimerChip();
   }
 });
 
@@ -3549,7 +4044,9 @@ document.getElementById('btn-timer-reset').addEventListener('click', () => {
   appState.timerRunning = false;
   appState.timerSeconds = appState.timerPresetMins * 60;
   document.getElementById('btn-timer-toggle').textContent = '▶ Start';
-  document.getElementById('act-timer').classList.remove('active');
+  document.getElementById('act-timer')?.classList.remove('active');
+  const cClock = document.getElementById('c-clock');
+  if (cClock) cClock.classList.remove('c-clock-timer');
   formatTimerDisplay();
   updateClocks();
 });
@@ -3567,7 +4064,7 @@ function applyCustomTimer(secs) {
   clearInterval(appState.timerInterval);
   appState.timerRunning = false;
   document.getElementById('btn-timer-toggle').textContent = '▶ Start';
-  document.getElementById('act-timer').classList.remove('active');
+  document.getElementById('act-timer')?.classList.remove('active');
   appState.timerSeconds = secs;
   appState.timerPresetMins = secs / 60;
   document.querySelectorAll('.timer-presets button').forEach((b) => b.classList.remove('active'));
@@ -3623,70 +4120,76 @@ document.querySelectorAll('.timer-presets button[data-min]').forEach((btn) => {
 
 // ==================== 10b. CALENDAR GRID ====================
 let calCurrent = new Date();
+const CAL_MONTHS = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'
+];
 
-function renderCalendarGrid() {
+function renderCalendarGrid(dir) {
   const container = document.getElementById('cal-days-grid');
   const title = document.getElementById('cal-month-title');
   if (!container || !title) return;
 
   const year = calCurrent.getFullYear();
   const month = calCurrent.getMonth();
-
-  const monthNames = [
-    'January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December'
-  ];
-  title.textContent = `${monthNames[month]} ${year}`;
-
-  const firstDayIndex = new Date(year, month, 1).getDay();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const daysInPrevMonth = new Date(year, month, 0).getDate();
+  title.innerHTML = `${CAL_MONTHS[month]}<span class="yr">${year}</span>`;
 
   const today = new Date();
   const isThisMonth = today.getFullYear() === year && today.getMonth() === month;
-  const todayDate = today.getDate();
+  const firstDayIndex = new Date(year, month, 1).getDay();
 
-  container.innerHTML = '';
-
-  for (let i = firstDayIndex - 1; i >= 0; i--) {
-    const d = document.createElement('span');
-    d.className = 'cal-day muted';
-    d.textContent = daysInPrevMonth - i;
-    container.appendChild(d);
-  }
-
-  for (let i = 1; i <= daysInMonth; i++) {
-    const d = document.createElement('span');
-    d.className = 'cal-day';
-    if (isThisMonth && i === todayDate) {
-      d.classList.add('today');
+  // always 6 week rows (42 cells), so the menu never changes height between months
+  const frag = document.createDocumentFragment();
+  for (let i = 0; i < 42; i++) {
+    const d = new Date(year, month, 1 - firstDayIndex + i);
+    const cell = document.createElement('span');
+    cell.className = 'cal-day';
+    if (d.getMonth() !== month) cell.classList.add('muted');
+    else if (d.getDay() === 0 || d.getDay() === 6) cell.classList.add('weekend');
+    if (d.getFullYear() === today.getFullYear() && d.getMonth() === today.getMonth() && d.getDate() === today.getDate()) {
+      cell.classList.add('today');
     }
-    d.textContent = i;
-    container.appendChild(d);
+    cell.textContent = d.getDate();
+    frag.appendChild(cell);
   }
+  container.replaceChildren(frag);
 
-  const totalCells = firstDayIndex + daysInMonth;
-  const nextDays = totalCells % 7 === 0 ? 0 : 7 - (totalCells % 7);
-  for (let i = 1; i <= nextDays; i++) {
-    const d = document.createElement('span');
-    d.className = 'cal-day muted';
-    d.textContent = i;
-    container.appendChild(d);
+  if (dir) {
+    container.classList.remove('slide-next', 'slide-prev');
+    void container.offsetWidth;
+    container.classList.add(dir === 'prev' ? 'slide-prev' : 'slide-next');
+  }
+  const todayBtn = document.getElementById('btn-cal-today');
+  if (todayBtn) todayBtn.classList.toggle('ghost', isThisMonth);
+
+  // 6 rows need a bit more room than the other sub menus
+  if (appState.currentView === 'view-calendar') {
+    invokeTauri('resize_island', { width: 316, height: 268 + (hudIsFloating() ? 12 : 0) });
   }
 }
 
-document.getElementById('btn-cal-prev')?.addEventListener('click', () => {
-  calCurrent.setMonth(calCurrent.getMonth() - 1);
-  renderCalendarGrid();
-});
-document.getElementById('btn-cal-next')?.addEventListener('click', () => {
-  calCurrent.setMonth(calCurrent.getMonth() + 1);
-  renderCalendarGrid();
-});
+function calShift(n) {
+  calCurrent = new Date(calCurrent.getFullYear(), calCurrent.getMonth() + n, 1);   // day 1: Jan 31 + 1 month must not jump to March
+  renderCalendarGrid(n > 0 ? 'next' : 'prev');
+}
+
+document.getElementById('btn-cal-prev')?.addEventListener('click', () => calShift(-1));
+document.getElementById('btn-cal-next')?.addEventListener('click', () => calShift(1));
 document.getElementById('btn-cal-today')?.addEventListener('click', () => {
-  calCurrent = new Date();
-  renderCalendarGrid();
+  const now = new Date();
+  const dir = (now.getFullYear() * 12 + now.getMonth()) < (calCurrent.getFullYear() * 12 + calCurrent.getMonth()) ? 'prev' : 'next';
+  calCurrent = now;
+  renderCalendarGrid(dir);
 });
+// mouse wheel flips months
+let calWheelAt = 0;
+document.querySelector('#view-calendar .cal-container')?.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  const t = performance.now();
+  if (t - calWheelAt < 200) return;
+  calWheelAt = t;
+  calShift(e.deltaY > 0 ? 1 : -1);
+}, { passive: false });
 
 // ==================== 10c. QUICK NOTES (BUILT-IN SCRATCHPAD) ====================
 const noteArea = document.getElementById('notepad-textarea');
@@ -3952,10 +4455,10 @@ async function detectLocation() {
       return null;
     },
     async () => {
-      const res = await fetch('http://ip-api.com/json/?fields=status,lat,lon,city,country');
+      const res = await fetch('https://freeipapi.com/api/json');
       if (res.ok) {
         const d = await res.json();
-        if (d && d.lat && d.lon) return { lat: +d.lat, lon: +d.lon, city: d.city || '' };
+        if (d && d.latitude && d.longitude) return { lat: +d.latitude, lon: +d.longitude, city: d.cityName || '' };
       }
       return null;
     }
@@ -4088,14 +4591,53 @@ function batteryOverlays(stats) {
   const g = SET.general;
   // charger plugged in / removed
   if (appState.prevCharging !== undefined && stats.charging !== appState.prevCharging && g.chargeToast) {
-    if (stats.charging) showToast('bolt', `Charging ${stats.battery_pct}%`, 2400);
-    else showToast('battery', `On battery ${stats.battery_pct}%`, 2400);
+    if (stats.charging && hudCanShow()) {
+      showDeviceHud({
+        iconHTML: BOLT_SVG,
+        battery: true,
+        plain: true,
+        accent: 'green',
+        name: 'Charging',
+        tag: `${stats.battery_pct}% • MagSafe Power`,
+        pct: stats.battery_pct,
+        ms: 3200
+      });
+    } else if (stats.charging) {
+      showToast('bolt', `Charging ${stats.battery_pct}%`, 2400);
+    } else if (hudCanShow()) {
+      showDeviceHud({
+        iconHTML: BATT_SVG,
+        battery: true,
+        plain: true,
+        name: 'On Battery',
+        tag: `${stats.battery_pct}% Remaining`,
+        pct: stats.battery_pct,
+        ms: 2800
+      });
+    } else {
+      showToast('battery', `On battery ${stats.battery_pct}%`, 2400);
+    }
   }
   appState.prevCharging = stats.charging;
-  // low battery
+
+  // low battery alert HUD
   const low = g.lowBatteryAlert && !stats.charging && stats.battery_pct <= g.lowBattery;
   if (low && !appState.lowShown) {
-    if (showToast('low', `Low battery ${stats.battery_pct}%`, 4500)) appState.lowShown = true;
+    if (hudCanShow()) {
+      showDeviceHud({
+        iconHTML: LOW_BATT_SVG,
+        battery: true,
+        plain: true,
+        accent: stats.battery_pct <= 10 ? 'red' : 'amber',
+        name: 'Low Battery',
+        tag: `${stats.battery_pct}% • Connect to Power`,
+        pct: stats.battery_pct,
+        ms: 4000
+      });
+      appState.lowShown = true;
+    } else if (showToast('low', `Low battery ${stats.battery_pct}%`, 4500)) {
+      appState.lowShown = true;
+    }
   }
   if (!low && (stats.charging || stats.battery_pct > g.lowBattery + 3)) appState.lowShown = false;
 }
@@ -4149,6 +4691,202 @@ async function applyPrivacy() {
   }
   renderPrivacyDot();
 }
+// ==================== 14c. CLIPBOARD HISTORY SHELF ====================
+const CLIPBOARD_STORAGE_KEY = 'inex.island.clipboard.v1';
+let clipboardItems = [];
+
+function loadClipboardHistory() {
+  try {
+    const raw = localStorage.getItem(CLIPBOARD_STORAGE_KEY);
+    clipboardItems = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(clipboardItems)) clipboardItems = [];
+  } catch (_) {
+    clipboardItems = [];
+  }
+}
+
+function saveClipboardHistory() {
+  try {
+    localStorage.setItem(CLIPBOARD_STORAGE_KEY, JSON.stringify(clipboardItems.slice(0, 25)));
+  } catch (_) {}
+}
+
+function formatRelativeTime(ts) {
+  if (!ts) return 'Just now';
+  const diff = Math.floor((Date.now() - ts) / 1000);
+  if (diff < 30) return 'Just now';
+  if (diff < 60) return `${diff}s ago`;
+  const mins = Math.floor(diff / 60);
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
+}
+
+function addClipboardText(text) {
+  if (!text || typeof text !== 'string') return false;
+  const clean = text.trim();
+  if (!clean || clean.length < 1) return false;
+
+  // Don't duplicate the top item
+  if (clipboardItems.length > 0 && clipboardItems[0].text === clean) {
+    return false;
+  }
+
+  // Remove existing match if already in list to bump to top
+  const existIdx = clipboardItems.findIndex((it) => it.text === clean);
+  if (existIdx >= 0) {
+    clipboardItems.splice(existIdx, 1);
+  }
+
+  clipboardItems.unshift({
+    id: Date.now() + Math.random().toString(36).slice(2, 6),
+    text: clean,
+    time: Date.now()
+  });
+
+  if (clipboardItems.length > 25) {
+    clipboardItems = clipboardItems.slice(0, 25);
+  }
+
+  saveClipboardHistory();
+  if (appState.currentView === 'view-clipboard') {
+    renderClipboardList();
+  }
+  return true;
+}
+
+function renderClipboardList() {
+  const container = document.getElementById('clipboard-list');
+  if (!container) return;
+
+  if (clipboardItems.length === 0) {
+    container.innerHTML = `
+      <div class="clipboard-empty">
+        <svg viewBox="0 0 24 24" width="22" height="22" stroke="currentColor" stroke-width="1.8" fill="none" opacity="0.4"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>
+        <span>No copied text yet</span>
+        <small style="opacity:0.4; font-size:9.5px;">Copy text anywhere (Ctrl+C)</small>
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = '';
+  clipboardItems.forEach((item) => {
+    const card = document.createElement('div');
+    card.className = 'clipboard-item';
+    card.title = 'Click to copy';
+
+    const header = document.createElement('div');
+    header.className = 'clipboard-item-header';
+
+    const timeSpan = document.createElement('span');
+    timeSpan.textContent = `${formatRelativeTime(item.time)} • ${item.text.length} chars`;
+
+    const actions = document.createElement('div');
+    actions.className = 'clipboard-item-actions';
+
+    const copyTag = document.createElement('span');
+    copyTag.className = 'clipboard-copy-tag';
+    copyTag.textContent = 'Copied!';
+
+    const delBtn = document.createElement('button');
+    delBtn.className = 'clipboard-del-btn';
+    delBtn.title = 'Remove';
+    delBtn.innerHTML = '✕';
+    delBtn.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      clipboardItems = clipboardItems.filter((x) => x.id !== item.id);
+      saveClipboardHistory();
+      renderClipboardList();
+    });
+
+    actions.appendChild(copyTag);
+    actions.appendChild(delBtn);
+    header.appendChild(timeSpan);
+    header.appendChild(actions);
+
+    const body = document.createElement('div');
+    body.className = 'clipboard-item-text';
+    body.textContent = item.text;
+
+    card.appendChild(header);
+    card.appendChild(body);
+
+    card.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(item.text);
+        card.classList.add('copied');
+        showToast('snip', 'Copied to clipboard', 1200);
+        setTimeout(() => { card.classList.remove('copied'); }, 1100);
+      } catch (_) {
+        showToast('snip', 'Copy failed', 1200);
+      }
+    });
+
+    container.appendChild(card);
+  });
+}
+
+async function checkSystemClipboard() {
+  try {
+    if (document.hasFocus() && navigator.clipboard && navigator.clipboard.readText) {
+      const text = await navigator.clipboard.readText();
+      if (text) addClipboardText(text);
+    }
+  } catch (_) {}
+}
+
+function openClipboardView() {
+  checkSystemClipboard().then(renderClipboardList);
+}
+
+// Initialise
+loadClipboardHistory();
+
+document.getElementById('btn-clipboard-clear')?.addEventListener('click', () => {
+  if (clipboardItems.length === 0) return;
+  clipboardItems = [];
+  saveClipboardHistory();
+  renderClipboardList();
+  showToast('unlock', 'Clipboard cleared', 1200);
+});
+
+// Periodic and event-driven clipboard capture when user interacts
+window.addEventListener('focus', checkSystemClipboard);
+document.getElementById('island')?.addEventListener('mouseenter', checkSystemClipboard);
+
+// System-wide copy -> little "Copied" popup in the island (Windows tells us the clipboard changed, no matter which app copied)
+const CLIP_HUD_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/><path class="clip-tick" d="M8.5 14.5l2.5 2.5 4.5-5"/></svg>';
+let clipSeqPrev = null;
+let clipHudAt = 0;
+async function pollClipboardSeq() {
+  const seq = await tryInvoke('clipboard_seq', {});
+  if (typeof seq !== 'number' || seq === 0) return;
+  if (clipSeqPrev === null) { clipSeqPrev = seq; return; }
+  if (seq === clipSeqPrev) return;
+  clipSeqPrev = seq;
+  let text = '';
+  try {
+    if (document.hasFocus() && navigator.clipboard && navigator.clipboard.readText) {
+      text = await navigator.clipboard.readText();
+      if (text) addClipboardText(text);
+    }
+  } catch (_) {}
+  // our own copy buttons already show a toast; do not stack a second popup
+  if (appState.toast || !(SET.general.copyToast !== false)) return;
+  const now = Date.now();
+  if (now - clipHudAt < 1200) return;
+  clipHudAt = now;
+  const one = (text || '').replace(/\s+/g, ' ').trim();
+  showDeviceHud({
+    iconHTML: CLIP_HUD_SVG, plain: true,
+    name: 'Copied',
+    tag: one ? (one.length > 24 ? one.slice(0, 24) + '\u2026' : one) : 'Copied to Clipboard',
+    ms: 1700
+  });
+}
+setInterval(pollClipboardSeq, 600);
 let resizeDebounce = null;
 
 function applySettings() {
@@ -4244,3 +4982,261 @@ setTimeout(async () => {
     }
   } catch (_) {}
 }, 25000);
+
+// ==================== 11. CLOCK ALARMS (quick tile "Alarm") ====================
+// Alarms live in localStorage ("inex.alarms.v1"): [{ id, h, m, on, daily }]  (h = 0-23).
+// A once-alarm switches itself off after it rang. Snooze rings again after 9 minutes.
+const ALARM_KEY = 'inex.alarms.v1';
+const ALARM_SNOOZE_MS = 9 * 60 * 1000;
+let alarms = [];
+try { const a = JSON.parse(localStorage.getItem(ALARM_KEY) || '[]'); if (Array.isArray(a)) alarms = a.filter((x) => x && Number.isFinite(x.h) && Number.isFinite(x.m)); } catch (_) {}
+let alarmPick = { h: 7, m: 30, daily: false };
+let alarmSnoozeAt = 0;          // ms timestamp, 0 = no snooze pending
+let alarmLastFired = '';        // "<id>@<yyyy-mm-dd hh:mm>": never ring twice in one minute
+
+function saveAlarms() { try { localStorage.setItem(ALARM_KEY, JSON.stringify(alarms)); } catch (_) {} }
+function pad2(n) { return String(n).padStart(2, '0'); }
+function fmtAlarmTime(h, m) {
+  if (SET.general && SET.general.hour24) return `${pad2(h)}:${pad2(m)}`;
+  return `${((h + 11) % 12) + 1}:${pad2(m)} ${h >= 12 ? 'PM' : 'AM'}`;
+}
+function nextAlarmMs(a, from) {
+  const d = new Date(from); d.setHours(a.h, a.m, 0, 0);
+  if (d.getTime() <= from) d.setDate(d.getDate() + 1);
+  return d.getTime();
+}
+function renderAlarmPicker() {
+  const h24 = !!(SET.general && SET.general.hour24);
+  const hh = h24 ? alarmPick.h : ((alarmPick.h + 11) % 12) + 1;
+  document.getElementById('alarm-pick-h').textContent = pad2(hh);
+  document.getElementById('alarm-pick-m').textContent = pad2(alarmPick.m);
+  const ap = document.getElementById('alarm-pick-ampm');
+  ap.classList.toggle('hidden', h24);
+  ap.textContent = alarmPick.h >= 12 ? 'PM' : 'AM';
+  document.getElementById('alarm-pick-daily').classList.toggle('on', alarmPick.daily);
+}
+function renderAlarmList() {
+  const list = document.getElementById('alarm-list');
+  if (!list) return;
+  list.innerHTML = '';
+  if (!alarms.length) {
+    list.innerHTML = '<div class="empty-hint">No alarms yet. Pick a time and tap Add.</div>';
+  }
+  [...alarms].sort((a, b) => a.h * 60 + a.m - (b.h * 60 + b.m)).forEach((a) => {
+    const row = document.createElement('div');
+    row.className = 'alarm-row' + (a.on ? '' : ' off');
+    const t = document.createElement('div');
+    t.className = 'alarm-row-time';
+    t.textContent = fmtAlarmTime(a.h, a.m);
+    const sub = document.createElement('small');
+    sub.textContent = a.daily ? 'Every day' : 'Once';
+    t.appendChild(sub);
+    const sw = document.createElement('label');
+    sw.className = 'ios-switch';
+    sw.innerHTML = '<input type="checkbox"><span class="slider"></span>';
+    const cb = sw.querySelector('input');
+    cb.checked = !!a.on;
+    cb.addEventListener('change', () => { a.on = cb.checked; saveAlarms(); renderAlarmList(); });
+    const del = document.createElement('button');
+    del.className = 'alarm-del';
+    del.title = 'Delete';
+    del.innerHTML = '<svg viewBox="0 0 24 24" width="10" height="10" stroke="currentColor" stroke-width="2.6" fill="none" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+    del.addEventListener('click', () => { alarms = alarms.filter((x) => x !== a); saveAlarms(); renderAlarmList(); });
+    row.append(t, sw, del);
+    list.appendChild(row);
+  });
+  const lbl = document.getElementById('alarm-next-label');
+  if (lbl) {
+    const now = Date.now();
+    const next = alarms.filter((a) => a.on).map((a) => nextAlarmMs(a, now)).sort((a, b) => a - b)[0];
+    if (next) {
+      const mins = Math.max(1, Math.round((next - now) / 60000));
+      lbl.textContent = mins >= 60 ? `in ${Math.floor(mins / 60)}h ${mins % 60}m` : `in ${mins}m`;
+    } else lbl.textContent = '';
+  }
+}
+function openAlarmView() { renderAlarmPicker(); renderAlarmList(); }
+
+function alarmStep(kind) {
+  if (kind === 'h+') alarmPick.h = (alarmPick.h + 1) % 24;
+  else if (kind === 'h-') alarmPick.h = (alarmPick.h + 23) % 24;
+  else if (kind === 'm+') alarmPick.m = (alarmPick.m + 1) % 60;
+  else if (kind === 'm-') alarmPick.m = (alarmPick.m + 59) % 60;
+  renderAlarmPicker();
+}
+document.querySelectorAll('#view-alarm .alarm-step').forEach((b) => {
+  // tap = one step, hold = keeps stepping
+  let rep = null, hold = null;
+  const stop = () => { clearTimeout(hold); clearInterval(rep); };
+  b.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    alarmStep(b.dataset.step);
+    hold = setTimeout(() => { rep = setInterval(() => alarmStep(b.dataset.step), 70); }, 380);
+  });
+  ['pointerup', 'pointerleave', 'pointercancel'].forEach((ev) => b.addEventListener(ev, stop));
+});
+document.getElementById('alarm-pick-ampm')?.addEventListener('click', () => { alarmPick.h = (alarmPick.h + 12) % 24; renderAlarmPicker(); });
+document.getElementById('alarm-pick-daily')?.addEventListener('click', () => { alarmPick.daily = !alarmPick.daily; renderAlarmPicker(); });
+document.getElementById('alarm-add')?.addEventListener('click', () => {
+  if (alarms.length >= 12) { showToast('done', 'Max 12 alarms', 1400); return; }
+  const dup = alarms.find((a) => a.h === alarmPick.h && a.m === alarmPick.m && !!a.daily === alarmPick.daily);
+  if (dup) dup.on = true;
+  else alarms.push({ id: Date.now().toString(36), h: alarmPick.h, m: alarmPick.m, on: true, daily: alarmPick.daily });
+  saveAlarms();
+  renderAlarmList();
+});
+
+function ringClockAlarm(a, snoozed) {
+  triggerTimerAlarm({
+    title: snoozed ? 'Snoozed alarm' : 'Alarm',
+    sub: a ? fmtAlarmTime(a.h, a.m) : 'Wake up',
+    snooze: true,
+    ms: 60000
+  });
+  appState.lastRungAlarm = a || null;
+}
+function snoozeClockAlarm() {
+  alarmSnoozeAt = Date.now() + ALARM_SNOOZE_MS;
+}
+let alarmLastCheck = Date.now();
+setInterval(() => {
+  const now = new Date();
+  const nowMs = now.getTime();
+  const elapsed = nowMs - alarmLastCheck;
+  alarmLastCheck = nowMs;
+
+  if (alarmSnoozeAt && nowMs >= alarmSnoozeAt) {
+    alarmSnoozeAt = 0;
+    ringClockAlarm(appState.lastRungAlarm, true);
+    return;
+  }
+
+  const justWokeUp = elapsed > 4000;
+  const currentH = now.getHours();
+  const currentM = now.getMinutes();
+  const stamp = `${now.getFullYear()}-${now.getMonth()}-${now.getDate()} ${currentH}:${currentM}`;
+
+  for (const a of alarms) {
+    if (!a.on) continue;
+    let shouldFire = false;
+    let isMissed = false;
+
+    if (a.h === currentH && a.m === currentM && now.getSeconds() <= 5) {
+      shouldFire = true;
+    } else if (justWokeUp) {
+      const alarmTarget = new Date(now);
+      alarmTarget.setHours(a.h, a.m, 0, 0);
+      const targetMs = alarmTarget.getTime();
+      if (targetMs >= (nowMs - elapsed) && targetMs <= nowMs && (nowMs - targetMs) < 2 * 3600 * 1000) {
+        shouldFire = true;
+        isMissed = true;
+      }
+    }
+
+    if (shouldFire) {
+      const key = `${a.id}@${stamp}`;
+      if (alarmLastFired === key) continue;
+      alarmLastFired = key;
+      if (!a.daily) { a.on = false; saveAlarms(); if (appState.currentView === 'view-alarm') renderAlarmList(); }
+      ringClockAlarm(a, false);
+      if (isMissed) {
+        const tagEl = document.getElementById('alarm-hud-tag');
+        if (tagEl) tagEl.textContent = `Missed Alarm • ${fmtAlarmTime(a.h, a.m)}`;
+      }
+      break;
+    }
+  }
+}, 1000);
+
+// ==================== 12. CAPS LOCK / NUM LOCK INDICATOR ====================
+// Rust (lock_keys) reads the toggle state; the island pops a small HUD when it changes.
+// Settings: general.capsToast, general.numToast (System > Startup & Alerts).
+const CAPS_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4 5 12h4v4h6v-4h4z"/><line x1="9" y1="20" x2="15" y2="20"/></svg>';
+const NUM_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="3"/><path d="M9 8v4M9 8l-1 1M14.5 8h1.5v8"/><path d="M8 16h2"/></svg>';
+let lockKeysPrev = null;
+async function pollLockKeys() {
+  const g = SET.general || {};
+  if (!g.capsToast && !g.numToast) { lockKeysPrev = null; return; }
+  const r = await tryInvoke('lock_keys', {});
+  if (!Array.isArray(r) || r.length < 2) return;
+  const [caps, num] = r;
+  if (lockKeysPrev) {
+    if (g.capsToast && caps !== lockKeysPrev[0]) {
+      showDeviceHud({ iconHTML: CAPS_SVG, plain: !caps, accent: caps ? 'blue' : '', name: 'Caps Lock', tag: caps ? 'On' : 'Off', ms: 1500 });
+    } else if (g.numToast && num !== lockKeysPrev[1]) {
+      showDeviceHud({ iconHTML: NUM_SVG, plain: !num, accent: num ? 'blue' : '', name: 'Num Lock', tag: num ? 'On' : 'Off', ms: 1500 });
+    }
+  }
+  lockKeysPrev = [caps, num];
+}
+setInterval(pollLockKeys, 250);
+
+// ==================== 13. DOWNLOAD PROGRESS / COMPLETE HUD ====================
+// Rust (downloads_scan) lists unfinished browser downloads and freshly finished files in the Downloads folder.
+// Browsers do not publish the total size, so: HUD when a download starts, a thin blue sweep on the pill while
+// bytes keep arriving, and a "Download Complete" HUD (click = show in Explorer) when it is done.
+// Setting: general.downloadHud
+const DL_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 11l5 5 5-5"/><path d="M5 20h14"/></svg>';
+const DL_DONE_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline class="clip-tick" points="5 12.5 10 17.5 19 7"/></svg>';
+const dlTrack = new Map();       // partial file name -> { size, changedAt, firstAt }
+const dlSeenRecent = new Set();
+let dlSeeded = false;
+let dlOpenName = null;           // finished file the HUD would open on click
+
+function dlSize(b) {
+  if (b >= 1073741824) return (b / 1073741824).toFixed(1) + ' GB';
+  if (b >= 1048576) return (b / 1048576).toFixed(1) + ' MB';
+  return Math.max(1, Math.round(b / 1024)) + ' KB';
+}
+function dlClean(name) {
+  const n = name.replace(/\.(crdownload|part|opdownload|download|partial)$/i, '');
+  return /^unconfirmed \d+/i.test(n) ? 'New download' : n;
+}
+async function pollDownloads() {
+  if (!(SET.general && SET.general.downloadHud)) {
+    island.classList.remove('dl-active'); dlTrack.clear(); dlSeeded = false; return;
+  }
+  const r = await tryInvoke('downloads_scan', {});
+  if (!r || !Array.isArray(r.partials)) return;
+  const now = Date.now();
+  const cur = new Set();
+  let started = null;
+  for (const f of r.partials) {
+    cur.add(f.name);
+    const t = dlTrack.get(f.name);
+    if (!t) {
+      dlTrack.set(f.name, { size: f.size, changedAt: now, firstAt: now });
+      if (dlSeeded && f.age_secs <= 15 && !started) started = f;
+    } else if (f.size !== t.size) { t.size = f.size; t.changedAt = now; }
+  }
+  // vanished partial = finished (or cancelled): finished only if a fresh file appeared
+  let finished = null;
+  for (const [name, t] of [...dlTrack]) {
+    if (cur.has(name)) continue;
+    dlTrack.delete(name);
+    if (!dlSeeded || now - t.firstAt < 1000) continue;
+    const base = dlClean(name).toLowerCase();
+    const fresh = (r.recent || []).filter((f) => f.age_secs <= 20 && !dlSeenRecent.has(f.name));
+    finished = fresh.find((f) => f.name.toLowerCase() === base) || fresh[0] || null;
+  }
+  (r.recent || []).forEach((f) => dlSeenRecent.add(f.name));
+  if (dlSeenRecent.size > 400) dlSeenRecent.clear();
+  dlSeeded = true;
+
+  const active = [...dlTrack.values()].some((t) => now - t.changedAt < 4000);
+  island.classList.toggle('dl-active', active && appState.currentView === 'view-compact');
+
+  if (finished) {
+    dlOpenName = finished.name;
+    showDeviceHud({ iconHTML: DL_DONE_SVG, plain: true, accent: 'ok', name: finished.name, tag: `Download Complete • ${dlSize(finished.size)}`, ms: 4200 });
+  } else if (started) {
+    showDeviceHud({ iconHTML: DL_SVG, plain: true, accent: 'blue', name: dlClean(started.name), tag: `Downloading • ${dlSize(started.size)}`, ms: 2200 });
+  }
+}
+setInterval(pollDownloads, 1000);
+document.getElementById('c-bt-hud')?.addEventListener('click', (e) => {
+  if (!dlOpenName || !island.classList.contains('bt-hud-active')) return;
+  if (!document.getElementById('bt-hud-name') || document.getElementById('bt-hud-name').textContent !== dlOpenName) return;
+  e.stopPropagation();
+  invokeTauri('open_download', { name: dlOpenName });
+});

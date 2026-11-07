@@ -34,7 +34,10 @@ const SLOT_DEFS = {
     el: 'tile-notepad',
     start: () => {},
     stop: () => {},
-    click: () => invokeTauri('launch_notepad')
+    click: () => {
+      switchView('view-notepad', 'state-sub', 316, 240);
+      if (typeof focusNotepad === 'function') focusNotepad();
+    }
   }
 };
 
@@ -114,6 +117,11 @@ function switchView(viewId, stateClass, winWidth, winHeight) {
   }
 
   invokeTauri('resize_island', { width: winWidth, height: effH });
+
+  if (viewId === 'view-compact' && appState.timerStartPending) {
+    appState.timerStartPending = false;
+    setTimeout(() => { if (appState.timerRunning && typeof showTimerStartHud === 'function') showTimerStartHud(); }, 450);
+  }
 }
 
 function openMedia() {

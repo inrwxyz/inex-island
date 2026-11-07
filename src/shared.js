@@ -4,7 +4,7 @@
 export const KEY = 'inex.settings.v1';
 
 export const DEFAULTS = {
-  general: { launchAtLogin: false, hour24: false, autoUpdate: true, lowBatteryAlert: true, lowBattery: 20, chargeToast: true, lockToast: true },
+  general: { launchAtLogin: false, hour24: false, autoUpdate: true, lowBatteryAlert: true, lowBattery: 20, chargeToast: true, lockToast: true, capsToast: true, numToast: true, downloadHud: true, copyToast: true },
   appearance: {
     notchColor: '#030305', notchOpacity: 100, cornerRadius: 13,
     menuStyle: 'transparent', menuColor: '#0b0b10', menuOpacity: 92,
@@ -20,22 +20,23 @@ export const DEFAULTS = {
   widgets: { left: 'weather', right: 'ram' },
   slots: { a: 'wifi', b: 'bt' },
   menu: {
-    actionTiles: ['awake', 'snip', 'calendar', 'timer', 'notepad', 'lock', 'settings']
+    actionTiles: ['awake', 'snip', 'calendar', 'timer', 'clipboard', 'lock', 'settings']
   },
   overlays: { btBattery: true, privacyDot: true },
   share: { deviceName: '', firebaseUrl: '' }
 };
 
-export const DEFAULT_ACTION_TILES = ['awake', 'snip', 'calendar', 'timer', 'notepad', 'lock', 'settings'];
+export const DEFAULT_ACTION_TILES = ['awake', 'snip', 'calendar', 'timer', 'clipboard', 'lock', 'settings'];
 
 export const ALL_ACTION_TILES = {
   awake: { id: 'awake', label: 'Keep Awake', desc: 'Prevent PC from sleeping', icon: 'sun' },
   snip: { id: 'snip', label: 'Snip Tool', desc: 'Screenshot crop tool (Win+Shift+S)', icon: 'snip' },
   calendar: { id: 'calendar', label: 'Calendar', desc: 'Monthly calendar view', icon: 'calendar' },
   timer: { id: 'timer', label: 'Focus Timer', desc: 'Productivity split timer', icon: 'clock' },
-  notepad: { id: 'notepad', label: 'Quick Notes', desc: 'Island built-in scratchpad', icon: 'notepad' },
+  clipboard: { id: 'clipboard', label: 'Clipboard', desc: 'Recent copied snippets & history', icon: 'clipboard' },
   lock: { id: 'lock', label: 'Lock PC', desc: 'Instantly lock Windows session', icon: 'lock' },
   settings: { id: 'settings', label: 'Settings', desc: 'Open Inex Island settings', icon: 'gear' },
+  alarm: { id: 'alarm', label: 'Alarm', desc: 'Wake-up / clock alarms with snooze', icon: 'bell' },
   calc: { id: 'calc', label: 'Calculator', desc: 'Windows Calculator tool', icon: 'calc' },
   taskmgr: { id: 'taskmgr', label: 'Task Manager', desc: 'Process and performance monitor', icon: 'activity' },
   terminal: { id: 'terminal', label: 'Terminal', desc: 'Command Prompt / PowerShell', icon: 'terminal' },
@@ -49,7 +50,7 @@ export const SLOT_OPTIONS = [
   ['wifi', 'Wi-Fi'],
   ['bt', 'Bluetooth'],
   ['mic', 'Microphone mute'],
-  ['notepad', 'Notepad']
+  ['notepad', 'Quick Notes']
 ];
 
 const FONT_MAP = {

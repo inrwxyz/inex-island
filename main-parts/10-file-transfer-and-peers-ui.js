@@ -264,6 +264,7 @@ async function streamFiles(peerId) {
       if (!s.cancelled && dc.readyState === 'open') {
         dc.send('{"type":"all-done"}');
         s.completed = true;
+        noteProgress(s.total, s.total);   // ring reaches 100% so the notch can show "Sent"
       }
     }
   } catch (e) {
@@ -498,11 +499,14 @@ function renderCenter() {
   const toast = !!appState.toast;
   const isPrompt = !!(appState.prompting || appState.lockerPrompting);
   const busy = appState.transferring || isPrompt || toast;
+  const xferLive = !!(appState.transferring && !isPrompt && !toast);
   island.classList.toggle('transferring', busy);
+  island.classList.toggle('xfer-live', xferLive);
   document.getElementById('c-clock').classList.toggle('hidden', busy);
-  document.getElementById('c-transfer-anim').classList.toggle('hidden', !(appState.transferring && !isPrompt && !toast));
+  document.getElementById('c-transfer-anim').classList.toggle('hidden', !xferLive);
   document.getElementById('c-prompt-anim').classList.toggle('hidden', !(isPrompt && !toast));
   document.getElementById('c-toast').classList.toggle('hidden', !toast);
   updateCompactStateClasses();
+  if (typeof updateTimerChip === 'function') updateTimerChip();   // running timer stays visible next to a transfer / popup
 }
 

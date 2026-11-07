@@ -10,6 +10,7 @@ const TOAST_ICONS = {
   bolt: SVG_A + '<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>',
   battery: SVG_A + '<rect x="2" y="7" width="17" height="10" rx="2"/><line x1="22" y1="11" x2="22" y2="13"/></svg>',
   low: SVG_A + '<rect x="2" y="7" width="17" height="10" rx="2"/><line x1="22" y1="11" x2="22" y2="13"/><line x1="6" y1="10" x2="6" y2="14"/></svg>',
+  done: SVG_A + '<circle cx="12" cy="12" r="9"/><polyline points="8 12.5 11 15.5 16 9"/></svg>',
   mic: SVG_A + '<path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>'
 };
 function showToast(kind, text, ms) {
@@ -31,10 +32,108 @@ function showToast(kind, text, ms) {
   return true;
 }
 
+// ---- Biometric morph (Face ID / Touch ID style) ----
+// pill -> drops down into a rounded square -> scan -> green tick -> back to pill
+let bioTimer = null;
+let bioAnimPhaseTimer = null;
+let bioStartTimer = null;
+let bioEndTimer = null;
+
+const BIO_SVGS = {
+  // generic scan (Windows unlock, password unlock in Locker Pro): viewfinder corners + sweeping line, no face features
+  scan: `<svg class="bio-scan-svg" viewBox="0 0 44 44" width="44" height="44" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+    <path class="bio-br" d="M5 15v-4a6 6 0 0 1 6-6h4"/>
+    <path class="bio-br" d="M39 15v-4a6 6 0 0 0-6-6h-4"/>
+    <path class="bio-br" d="M5 29v4a6 6 0 0 0 6 6h4"/>
+    <path class="bio-br" d="M39 29v4a6 6 0 0 1-6 6h-4"/>
+    <rect class="bio-core" x="14" y="14" width="16" height="16" rx="5"/>
+    <rect class="bio-scan" x="9" y="9" width="26" height="2.2" rx="1.1" stroke="none"/>
+  </svg>`,
+  face: `<svg class="bio-face-svg" viewBox="0 0 44 44" width="44" height="44" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+    <path class="bio-br" d="M5 15v-4a6 6 0 0 1 6-6h4"/>
+    <path class="bio-br" d="M39 15v-4a6 6 0 0 0-6-6h-4"/>
+    <path class="bio-br" d="M5 29v4a6 6 0 0 0 6 6h4"/>
+    <path class="bio-br" d="M39 29v4a6 6 0 0 1-6 6h-4"/>
+    <path class="bio-ft" d="M16 17v3.5"/>
+    <path class="bio-ft" d="M28 17v3.5"/>
+    <path class="bio-ft" d="M22 17v6.5a1.5 1.5 0 0 1-1.5 1.5H19"/>
+    <path class="bio-ft" d="M16 29.5c3.5 3 8.5 3 12 0"/>
+    <rect class="bio-scan" x="9" y="9" width="26" height="2.2" rx="1.1" stroke="none"/>
+  </svg>`,
+  fingerprint: `<svg class="bio-finger-svg" viewBox="0 0 38 38" width="42" height="42" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path class="fp-ridge" d="M19 9a10 10 0 0 0-7 2.9"/>
+    <path class="fp-ridge" d="M19 6a13 13 0 0 0-11 5.9"/>
+    <path class="fp-ridge" d="M19 13a6 6 0 0 0-5.8 4.5"/>
+    <path class="fp-ridge" d="M19 16a3 3 0 0 0-3 3c0 3.5-.8 5-1.5 6.5"/>
+    <path class="fp-ridge" d="M22 17.5a3 3 0 0 1 0 3c-.5 2-.5 4.5-.5 6.5"/>
+    <path class="fp-ridge" d="M25 13a7 7 0 0 1 0 7.5c-1 3-1 6-1 8.5"/>
+    <path class="fp-ridge" d="M19 3a16 16 0 0 1 12 5.5c3 3.5 3 8 3 12"/>
+    <path class="fp-ridge" d="M11 23.5c.5 3.5 2 6.5 4 8.5"/>
+    <path class="fp-ridge" d="M6 20c0 5 2 9 5 12"/>
+  </svg>`,
+  check: `<svg class="bio-check-svg" viewBox="0 0 44 44" width="44" height="44" fill="none">
+    <circle class="fillc" cx="22" cy="22" r="17" fill="rgba(48,209,88,0.16)"/>
+    <circle class="ring" cx="22" cy="22" r="17" stroke="#30d158" stroke-width="2.4" stroke-linecap="round" transform="rotate(-90 22 22)"/>
+    <path class="tick" d="M14 22.5l6 6 11-12.5" stroke="#30d158" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>`
+};
+
+function triggerBiometricMorph(type, label) {
+  if (appState.currentView !== 'view-compact' || appState.alarmActive) return;     // never fight an open menu
+  const kind = (type === 'fingerprint') ? 'fingerprint' : 'scan';   // face is gone: everything except a real fingerprint is a plain scan
+  const box = document.getElementById('c-biometric-box');
+  const glyph = document.getElementById('bio-glyph-wrap');
+  const txt = document.getElementById('bio-label');
+  if (!box || !glyph || !txt) return;
+
+  clearTimeout(bioTimer); clearTimeout(bioAnimPhaseTimer); clearTimeout(bioStartTimer); clearTimeout(bioEndTimer);
+  // a device HUD may be open: close it instantly
+  clearTimeout(btHudTimer); clearTimeout(btHudStartT); clearTimeout(btHudBackT);
+  island.classList.remove('bt-hud-active', 'hud-out', 'hud-back');
+  island.classList.add('bio-hud');   // biometric flow keeps its original animation timings (see styles.css)
+  document.getElementById('c-bt-hud').classList.add('hidden');
+
+  txt.textContent = label ? String(label) : 'Unlocked';
+  glyph.innerHTML = BIO_SVGS[kind];
+  box.classList.remove('hidden');
+
+  // 1) window big enough, 2) old content blurs away, 3) island springs into the rounded square
+  tryInvoke('resize_island', { width: 265, height: 112 });
+  island.classList.add('hud-pre');
+  bioStartTimer = setTimeout(() => {
+    island.classList.remove('hud-pre');
+    island.classList.add('biometric-active');
+  }, 130);
+
+  // scan, then the glyph blurs out and the tick springs in
+  bioAnimPhaseTimer = setTimeout(() => {
+    const cur = glyph.firstElementChild;
+    if (cur) cur.classList.add('bio-leave');
+    setTimeout(() => { glyph.innerHTML = BIO_SVGS.check; }, 150);
+  }, 1150);
+
+  // fade content, shrink back to the pill, restore the normal window
+  bioTimer = setTimeout(() => {
+    island.classList.add('hud-out');
+    bioEndTimer = setTimeout(() => {
+      island.classList.remove('biometric-active', 'hud-out');
+      island.classList.add('hud-back');
+      setTimeout(() => {
+        box.classList.add('hidden');
+        glyph.innerHTML = '';
+        island.classList.remove('hud-back', 'bio-hud');
+        hudRestoreWindow();
+        renderCenter(); updateClocks(); refreshMedia();
+      }, 560);
+    }, 170);
+  }, 2350);
+}
+
 // Inex App Locker / Biometric Unlock Pipe Listener
 let lockerWrongTimer = null;
 let lockerGlowTimer = null;
 let lockerPromptSafetyTimer = null;
+let testTransferTimer = null;
 let lastLockerTs = 0;
 let lastLockToast = { target: '', at: 0 };
 // The locker sends a `locker_prompt` heartbeat every ~3 s for as long as its popup is open.
@@ -149,11 +248,56 @@ onTauriEvent('locker-unlock', (event) => {
     island.classList.add('island-locker-glow');
 
     // Kind: face / fingerprint / unlock
-    const kind = payload.type === 'face' ? 'face' : payload.type === 'fingerprint' ? 'fingerprint' : 'unlock';
-    const targetName = payload.target ? `${payload.target} Unlocked` : 'Unlocked';
+    const kind = payload.type === 'fingerprint' ? 'fingerprint' : payload.type === 'charging' ? 'charging' : payload.type === 'low_battery' ? 'low_battery' : payload.type === 'alarm' ? 'alarm' : payload.type === 'transfer' ? 'transfer' : payload.type === 'bluetooth' ? 'bluetooth' : payload.type === 'caps' ? 'caps' : payload.type === 'num' ? 'num' : payload.type === 'download' ? 'download' : payload.type === 'download_done' ? 'download_done' : 'scan';
+    const targetName = payload.target ? `${payload.target}` : 'Unlocked';
 
     renderCenter();
-    showToast(kind, targetName, 1400);
+    if (kind === 'alarm') {
+      if (typeof triggerTimerAlarm === 'function') triggerTimerAlarm();
+    } else if (kind === 'scan' || kind === 'fingerprint') {
+      triggerBiometricMorph(kind, targetName);
+    } else if (kind === 'charging') {
+      showDeviceHud({ iconHTML: BOLT_SVG, battery: true, plain: true, accent: 'green', name: 'Charging', tag: `${payload.target || '85%'} • MagSafe Power`, pct: parseInt(payload.target, 10) || 85, ms: 3200 });
+    } else if (kind === 'low_battery') {
+      showDeviceHud({ iconHTML: LOW_BATT_SVG, battery: true, plain: true, accent: 'amber', name: 'Low Battery', tag: `${payload.target || '18%'} • Connect Power`, pct: parseInt(payload.target, 10) || 18, ms: 3800 });
+    } else if (kind === 'bluetooth') {
+      if (typeof showBtConnectHud === 'function') {
+        showBtConnectHud(payload.target || 'AirPods Pro', payload.kind || 'headphones', parseInt(payload.pct, 10) || 90);
+      }
+    } else if (kind === 'caps') {
+      const capsSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4 5 12h4v4h6v-4h4z"/><line x1="9" y1="20" x2="15" y2="20"/></svg>';
+      showDeviceHud({ iconHTML: capsSvg, plain: false, accent: 'blue', name: 'Caps Lock', tag: 'On', ms: 2200 });
+    } else if (kind === 'num') {
+      const numSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="3"/><path d="M9 8v4M9 8l-1 1M14.5 8h1.5v8"/><path d="M8 16h2"/></svg>';
+      showDeviceHud({ iconHTML: numSvg, plain: false, accent: 'blue', name: 'Num Lock', tag: 'On', ms: 2200 });
+    } else if (kind === 'download') {
+      const dlSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 11l5 5 5-5"/><path d="M5 20h14"/></svg>';
+      showDeviceHud({ iconHTML: dlSvg, plain: true, accent: 'blue', name: payload.target || 'Inex-Island-Setup.exe', tag: 'Downloading • 3.5 MB', ms: 2500 });
+    } else if (kind === 'download_done') {
+      const dlDoneSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline class="clip-tick" points="5 12.5 10 17.5 19 7"/></svg>';
+      showDeviceHud({ iconHTML: dlDoneSvg, plain: true, accent: 'ok', name: payload.target || 'Inex-Island-Setup.exe', tag: 'Download Complete • 3.5 MB', ms: 4000 });
+    } else if (kind === 'transfer') {
+      clearInterval(testTransferTimer);
+      appState.xferDir = payload.dir === 'recv' ? 'recv' : 'send';
+      startCompactTransferUI();
+      let p = 0;
+      testTransferTimer = setInterval(() => {
+        p += 10;
+        if (p >= 100) {
+          p = 100;
+          clearInterval(testTransferTimer);
+          updateCompactTransferPct(100);
+          lastReportedPct = 100;
+          setTimeout(() => {
+            finishCompactTransferUI();
+          }, 600);
+        } else {
+          updateCompactTransferPct(p);
+        }
+      }, 200);
+    } else {
+      showToast(kind, `${targetName} Unlocked`, 1400);
+    }
 
     clearTimeout(lockerGlowTimer);
     lockerGlowTimer = setTimeout(() => {
@@ -202,92 +346,67 @@ onTauriEvent('locker-unlock', (event) => {
   }
 });
 
-// Voice Assistant bridge listener (Aura -> Inex Island)
-let voiceEndTimeout = null;
+// ---- File transfer in the notch (same animation for the P2P link and for direct sharing) ----
+const XFER_UP = '<line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/>';
+const XFER_DOWN = '<line x1="12" y1="5" x2="12" y2="19"/><polyline points="5 12 12 19 19 12"/>';
 
-function finishVoiceAssistant() {
-  clearTimeout(voiceEndTimeout);
-  voiceEndTimeout = null;
-  appState.voiceActive = false;
-  const isl = document.getElementById('island') || document.querySelector('.island');
-  if (isl) {
-    isl.classList.remove('island-voice-active');
-    if (appState.unhidForVoice) {
-      appState.unhidForVoice = false;
-      if (SET.notch.mode === 'smart' && appState.isFs) {
-        isl.classList.add('smart-hidden');
-      }
-    }
+function xferDirection() {
+  let send = false, recv = false;
+  for (const e of rtcPeers.values()) {
+    if (e.send && e.send.active) send = true;
+    if (e.recv && e.recv.active) recv = true;
   }
-  if (appState.toast) {
-    appState.toast = false;
-    renderCenter();
-    updateClocks();
-    refreshMedia();
-  }
+  return send && recv ? 'both' : recv ? 'recv' : 'send';
 }
 
-onTauriEvent('voice-assistant', (event) => {
-  let payload = event.payload;
-  if (typeof payload === 'string') {
-    try { payload = JSON.parse(payload); } catch (_) {}
-  }
-  if (!payload || typeof payload !== 'object') payload = {};
-  const ev = payload.event;
-  const text = payload.text || '';
-  const action = payload.action || '';
+function setXferDirectionUI() {
+  const box = document.getElementById('c-transfer-anim');
+  if (!box) return;
+  const dir = appState.xferDir || xferDirection();
+  if (box.dataset.dir === dir) return;
+  box.dataset.dir = dir;
+  appState.xferDir = dir;
+  box.classList.toggle('recv', dir === 'recv');
+  const label = document.getElementById('c-xfer-label');
+  if (label) label.textContent = dir === 'recv' ? 'Receiving' : dir === 'both' ? 'Transferring' : 'Sending';
+  const glyph = document.getElementById('c-xfer-glyph');
+  if (glyph) glyph.innerHTML = dir === 'recv' ? XFER_DOWN : XFER_UP;
+}
 
-  clearTimeout(voiceEndTimeout);
-
-  const isl = document.getElementById('island') || document.querySelector('.island');
-
-  if (ev === 'wake') {
-    appState.voiceActive = true;
-    if (isl) {
-      isl.classList.add('island-voice-active');
-      if (isl.classList.contains('smart-hidden')) {
-        isl.classList.remove('smart-hidden');
-        appState.unhidForVoice = true;
-      }
-    }
-    showToast('mic', 'Listening...', 4500);
-    voiceEndTimeout = setTimeout(finishVoiceAssistant, 12000);
-  } else if (ev === 'speech') {
-    appState.voiceActive = true;
-    if (isl) {
-      isl.classList.add('island-voice-active');
-      if (isl.classList.contains('smart-hidden')) {
-        isl.classList.remove('smart-hidden');
-        appState.unhidForVoice = true;
-      }
-    }
-    showToast('mic', text ? `"${text}"` : 'Processing...', 3500);
-    voiceEndTimeout = setTimeout(finishVoiceAssistant, 10000);
-  } else if (ev === 'action') {
-    if (isl) isl.classList.add('island-voice-active');
-    showToast('bolt', text + (action ? ` • ${action}` : ''), 2500);
-    voiceEndTimeout = setTimeout(finishVoiceAssistant, 2800);
-  } else if (ev === 'end') {
-    finishVoiceAssistant();
-  }
-});
+function setXferRing(pct) {
+  const ring = document.getElementById('c-xfer-ring-fg');
+  if (ring) ring.style.strokeDashoffset = String(66 * (1 - Math.max(0, Math.min(100, pct)) / 100));
+}
 
 function startCompactTransferUI() {
   appState.transferring = true;
+  lastReportedPct = -1;
+  const box = document.getElementById('c-transfer-anim');
+  if (box) { box.dataset.dir = ''; box.classList.add('indeterminate'); }
+  setXferDirectionUI();
+  setXferRing(0);
   document.getElementById('c-transfer-pct').textContent = '0%';
   renderCenter();
 }
 
 function updateCompactTransferPct(pct) {
   document.getElementById('c-transfer-pct').textContent = `${pct}%`;
+  const box = document.getElementById('c-transfer-anim');
+  if (box && pct > 0) box.classList.remove('indeterminate');
+  setXferDirectionUI();
+  setXferRing(pct);
 }
 
 function finishCompactTransferUI() {
+  const completed = lastReportedPct >= 100;     // 100% reached = really finished (a cancel never gets there)
+  const dir = appState.xferDir;
   appState.transferring = false;
+  lastReportedPct = -1;
   endTransferStats();
   renderCenter();
   updateClocks();
   refreshMedia();
+  if (completed) showToast('done', dir === 'recv' ? 'Received' : 'Sent', 1500);
 }
 
 // Windows password / PIN / credential prompts -> lock animation in the notch
@@ -306,15 +425,22 @@ async function pollNativePrompt() {
 }
 setInterval(pollNativePrompt, 400);
 
-// Windows lock screen (Win+L, Dynamic Lock, idle lock): when the PC is unlocked, play the unlock animation
+// Windows lock screen (Win+L, Dynamic Lock, idle lock): when the PC is unlocked (password, PIN, fingerprint, face,
+// phone proximity: Windows does not tell us which), play the plain scan unlock animation.
+// (is_session_locked in main.rs reads SessionFlags at offset 16; it used to read offset 12 and always said "locked".)
 let lockPrev = null;
+let lockUnlockT = null;
 async function pollLock() {
   const r = await tryInvoke('is_session_locked', {});
   if (typeof r !== 'boolean') return;
-  if (lockPrev === true && r === false && SET.general.lockToast) showToast('unlock', 'Unlocked', 1900);
+  if (lockPrev === true && r === false && SET.general.lockToast) {
+    // let the desktop finish appearing before the island starts to move
+    clearTimeout(lockUnlockT);
+    lockUnlockT = setTimeout(() => triggerBiometricMorph('scan', 'Unlocked'), 450);
+  }
   lockPrev = r;
 }
-setInterval(pollLock, 1200);
+setInterval(pollLock, 800);
 
 
 // 9. Media Transport Controls

@@ -43,6 +43,7 @@ const ICON = {
   activity: I('<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>'),
   terminal: I('<polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>'),
   notepad: I('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/>'),
+  clipboard: I('<path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/><line x1="8" y1="11" x2="16" y2="11"/><line x1="8" y1="15" x2="13" y2="15"/>'),
   folder: I('<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>'),
   lock: I('<rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>'),
   plus: I('<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>'),
@@ -73,7 +74,7 @@ const GLOW_SWATCHES = ['#ffffff', '#dc143c', '#38bdf8', '#22c55e', '#a855f7', '#
 const PAGES = [
   { id: 'notch', label: 'Notch', icon: 'notch', sections: [
     { title: 'Design & Shape', rows: [
-      { path: 'notch.style', type: 'seg', icon: 'notch', t: 'Notch Style', d: 'Mac Notch touches top bezel; Floating Island floats below with all rounded corners', options: [['attached', 'Mac Notch'], ['floating', 'Floating Island']] },
+      { path: 'notch.style', type: 'seg', icon: 'notch', t: 'Notch Style', d: 'Bezel Notch touches the top edge; Floating Island floats below with all rounded corners', options: [['attached', 'Bezel Notch'], ['floating', 'Floating Island']] },
       { path: 'notch.mode', type: 'seg', icon: 'notch', t: 'Behavior', d: 'Smart hides on fullscreen, Fixed stays, Ghost is glass outline', options: [['smart', 'Smart'], ['fixed', 'Fixed'], ['ghost', 'Ghost']] },
       { path: 'appearance.notchColor', type: 'color', icon: 'palette', t: 'Color', d: 'Background colour of the collapsed notch' },
       { path: 'appearance.notchOpacity', type: 'range', icon: 'drop', t: 'Opacity', d: 'Solid or translucent notch', min: 30, max: 100, step: 5, unit: '%' },
@@ -135,6 +136,10 @@ const PAGES = [
       { path: 'general.autoUpdate', type: 'toggle', icon: 'spark', t: 'Auto Update', d: 'Automatically check and notify for updates' },
       { path: 'general.hour24', type: 'toggle', icon: 'clock', t: '24-Hour Time', d: 'Display military 24-hour time' },
       { path: 'general.lockToast', type: 'toggle', icon: 'power', t: 'Unlock Animation', d: 'Reveal animation after Windows unlock' },
+      { path: 'general.capsToast', type: 'toggle', icon: 'lock', t: 'Caps Lock Indicator', d: 'Island pops up when Caps Lock is turned on or off' },
+      { path: 'general.numToast', type: 'toggle', icon: 'lock', t: 'Num Lock Indicator', d: 'Island pops up when Num Lock is turned on or off' },
+      { path: 'general.downloadHud', type: 'toggle', icon: 'download', t: 'Download Notification', d: 'Island shows when a browser download starts and finishes (Downloads folder)' },
+      { path: 'general.copyToast', type: 'toggle', icon: 'spark', t: 'Clipboard Copy Notification', d: 'Island popup preview when text is copied' },
       { path: 'general.chargeToast', type: 'toggle', icon: 'battery', t: 'Charger Notification', d: 'Island popup when laptop charger is connected' },
       { path: 'general.lowBatteryAlert', type: 'toggle', icon: 'battery', t: 'Low Battery Alert', d: 'Alert when PC reaches low battery threshold' },
       { path: 'general.lowBattery', type: 'range', icon: 'battery', t: 'Alert Level', d: 'Threshold to trigger low battery warning', min: 5, max: 50, step: 5, unit: '%', showIf: (s) => s.general.lowBatteryAlert }
@@ -543,9 +548,9 @@ function renderPage(resetScroll) {
     if (isConnected) {
       directCardHtml += `
         <div class="row" style="padding:10px 0;">
-          <div class="ico-box" style="color:#22c55e;">${ICON.check}</div>
+          <div class="ico-box" style="color:#f4f4f6;">${ICON.check}</div>
           <div class="txt">
-            <div class="t" style="color:#22c55e;">Connected to ${escHtml(directState.peerName || 'Direct Partner')}</div>
+            <div class="t" style="color:#f4f4f6;">Connected to ${escHtml(directState.peerName || 'Direct Partner')}</div>
             <div class="d">P2P DataChannel open. You can drag and drop files onto Inex Island to send them directly.</div>
           </div>
           <div class="ctl">

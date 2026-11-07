@@ -1,11 +1,11 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod bluetooth;
+mod downloads;
 mod audio;
 mod brightness;
 mod live;
 mod locker_bridge;
-mod voice_bridge;
 mod net;
 mod privacy;
 mod shelf;
@@ -102,6 +102,19 @@ struct SysStats {
     wifi_signal: u32,
     wifi_on: bool,
     is_fullscreen: bool,
+}
+
+// Windows bumps this number every time anything is copied (any app): the island polls it to show the "Copied" popup.
+#[tauri::command]
+fn clipboard_seq() -> u32 {
+    #[cfg(windows)]
+    {
+        unsafe { windows::Win32::System::DataExchange::GetClipboardSequenceNumber() }
+    }
+    #[cfg(not(windows))]
+    {
+        0
+    }
 }
 
 #[tauri::command]
@@ -1200,6 +1213,20 @@ fn launch_quick_action(id: String) {
 
 const RUN_KEY: &str = r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run";
 
+// Caps Lock / Num Lock toggle state: [caps, num]
+#[tauri::command]
+fn lock_keys() -> [bool; 2] {
+    #[cfg(target_os = "windows")]
+    unsafe {
+        use windows::Win32::UI::Input::KeyboardAndMouse::{GetKeyState, VK_CAPITAL, VK_NUMLOCK};
+        let caps = (GetKeyState(VK_CAPITAL.0 as i32) & 1) != 0;
+        let num = (GetKeyState(VK_NUMLOCK.0 as i32) & 1) != 0;
+        return [caps, num];
+    }
+    #[cfg(not(target_os = "windows"))]
+    [false, false]
+}
+
 // True while the Windows lock screen is up (Win+L, Dynamic Lock, idle lock, sign-in screen).
 #[tauri::command]
 fn is_session_locked() -> bool {
@@ -1221,12 +1248,16 @@ fn is_session_locked() -> bool {
             fn OpenInputDesktop(flags: u32, inherit: i32, access: u32) -> isize;
             fn CloseDesktop(h: isize) -> i32;
         }
-        // 1) Session info: SessionFlags == 0 means locked (not fooled by UAC prompts)
+        // 1) Session info: SessionFlags == 0 means locked (not fooled by UAC prompts).
+        // WTSINFOEXW = { DWORD Level; <8-byte aligned union> }, and the LEVEL1 struct inside starts with
+        // SessionId (4) + SessionState (4) before SessionFlags. The union is 8-byte aligned (it holds
+        // LARGE_INTEGERs), so SessionFlags sits at offset 16, NOT 12 (offset 12 is SessionState, which is
+        // 0 for every active session and made the PC look locked all the time).
         let mut p: *mut u16 = std::ptr::null_mut();
         let mut n: u32 = 0;
         if WTSQuerySessionInformationW(0, 0xFFFF_FFFF, 25, &mut p, &mut n) != 0 && !p.is_null() {
-            let flags = if n >= 16 {
-                Some(*((p as *const u8).add(12) as *const i32))
+            let flags = if n >= 20 {
+                Some(*((p as *const u8).add(16) as *const i32))
             } else {
                 None
             };
@@ -1532,7 +1563,6 @@ fn main() {
             shelf::setup_shelf_drop(app.handle().clone());
             visualizer::setup_audio_visualization(app.handle().clone());
             locker_bridge::start(app.handle().clone());
-            voice_bridge::start(app.handle().clone());
 
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.set_always_on_top(true);
@@ -1618,11 +1648,15 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             resize_island,
+            clipboard_seq,
             get_net_speed,
             privacy::privacy_watch_start,
             focus_island,
             island_visible,
             is_session_locked,
+            lock_keys,
+            downloads::downloads_scan,
+            downloads::open_download,
             open_settings,
             close_settings,
             drag_settings,
