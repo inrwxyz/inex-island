@@ -2526,3 +2526,92 @@ body {
   animation: dlSweep 1.3s ease-in-out infinite;
 }
 @keyframes dlSweep { 0% { background-position: -50% 0; } 100% { background-position: 150% 0; } }
+
+
+/* ===== Mac Control Center style (default look) ===== */
+:root { --mac-accent: #0a84ff; }
+
+.island.island.island:not([data-theme="matrix"]) .ctrl-grid { gap: 10px; }
+
+.island.island.island:not([data-theme="matrix"]) .ctrl-tile {
+  display: grid !important;
+  grid-template-columns: 34px 1fr;
+  column-gap: 10px;
+  align-items: center; justify-items: start; text-align: left;
+  height: 58px; padding: 0 12px;
+  background: color-mix(in srgb, var(--menu-fg) 9%, transparent);
+  border: 0 !important; border-radius: 20px;
+  box-shadow: none !important; color: inherit !important;
+}
+.island.island.island:not([data-theme="matrix"]) .ctrl-tile:hover {
+  background: color-mix(in srgb, var(--menu-fg) 14%, transparent);
+}
+.island:not([data-theme="matrix"]) .ctrl-tile .ico {
+  grid-row: 1 / 3; margin: 0;
+  width: 34px; height: 34px; padding: 8px; border-radius: 50%;
+  background: color-mix(in srgb, var(--menu-fg) 20%, transparent);
+  transition: background 0.18s ease;
+}
+.island.island.island:not([data-theme="matrix"]) .ctrl-tile.active .ico {
+  background: var(--mac-accent); color: #fff;
+}
+
+/* name + status */
+.island:not([data-theme="matrix"]) .ctrl-tile .sr {
+  display: block !important;
+  grid-row: 1 / 3; grid-column: 2; align-self: center;
+  font-size: 11px; font-weight: 500; line-height: 1.25;
+  color: var(--menu-fg-dim);
+}
+.island:not([data-theme="matrix"]) .ctrl-tile.active .sr { color: var(--mac-accent); }
+.island:not([data-theme="matrix"]) .ctrl-tile .sr::before {
+  display: block; font-size: 13px; font-weight: 600; color: var(--menu-fg);
+}
+#wifi-sub::before { content: "Wi-Fi"; }
+#tile-p2p-sub::before { content: "P2P Link"; }
+#bt-sub::before { content: "Bluetooth"; }
+#tile-tray-sub::before { content: "Tray"; }
+#mic-sub::before { content: "Microphone"; }
+#tile-notepad .sr { font-size: 0 !important; }
+#tile-notepad .sr::before { content: "Quick Notes"; font-size: 13px; }
+.island:not([data-theme="matrix"]) #tile-p2p-title,
+.island:not([data-theme="matrix"]) .ctrl-tile .cap { display: none !important; }
+
+/* round quick buttons */
+.island.island.island:not([data-theme="matrix"]) .q-icon-btn {
+  flex: none; width: 38px; height: 38px; border-radius: 50%; border: 0;
+  background: color-mix(in srgb, var(--menu-fg) 12%, transparent);
+}
+.island.island.island:not([data-theme="matrix"]) .q-icon-btn.active {
+  background: var(--color-tile-on-bg) !important;
+  color: var(--color-tile-on-fg) !important;
+  border: 0 !important;
+}
+.island:not([data-theme="matrix"]) .quick-icons-row { padding: 8px 14px; }
+
+/* pill sliders, icon inside */
+.island:not([data-theme="matrix"]) .ctrl-sliders { gap: 10px; }
+.island:not([data-theme="matrix"]) .ctrl-slider-row { position: relative; gap: 0; }
+.island:not([data-theme="matrix"]) .ctrl-slider-row input[type="range"] {
+  -webkit-appearance: none; appearance: none;
+  flex: 1; height: 34px; margin: 0; overflow: hidden;
+  border-radius: 17px;
+  background-color: color-mix(in srgb, var(--menu-fg) 16%, transparent) !important;
+}
+.island:not([data-theme="matrix"]) .ctrl-slider-row input[type="range"]::-webkit-slider-runnable-track {
+  height: 34px; background: transparent;
+}
+.island:not([data-theme="matrix"]) .ctrl-slider-row input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 34px; height: 34px; border-radius: 50%;
+  background: var(--color-tile-on-bg);
+  box-shadow: -600px 0 0 600px var(--color-tile-on-bg);
+}
+.island:not([data-theme="matrix"]) .ctrl-slider-row .s-ico {
+  position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
+  width: 14px; height: 14px; opacity: 1; z-index: 2; pointer-events: none;
+  color: var(--color-tile-on-fg);
+}
+.island:not([data-theme="matrix"]) .ctrl-slider-row .s-val {
+  position: absolute; right: 14px; width: auto; z-index: 2;
+  pointer-events: none; color: #fff; mix-blend-mode: difference; opacity: 1;
+}

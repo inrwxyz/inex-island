@@ -107,6 +107,7 @@ const PAGES = [
     { title: 'Appearance', rows: [
       { path: 'appearance.menuStyle', type: 'seg', icon: 'layers', t: 'Style', d: 'Transparent blurred glass or solid contrast color', options: [['transparent', 'Transparent Glass'], ['color', 'Solid Color']] },
       { path: 'appearance.menuColor', type: 'color', icon: 'palette', t: 'Background', d: 'Panel colour in solid mode', showIf: (s) => s.appearance.menuStyle === 'color' },
+      { path: 'appearance.tileAccent', type: 'color', icon: 'palette', t: 'Tile accent', d: 'Colour of active menu tiles' },
       { path: 'appearance.menuOpacity', type: 'range', icon: 'drop', t: 'Glass Transparency', d: 'Lower = more see-through blur', min: 20, max: 100, step: 5, unit: '%', showIf: (s) => s.appearance.menuStyle === 'color' },
       { path: 'appearance.borderColor', type: 'color', icon: 'border', t: 'Border Outline', d: 'Color of the menu borders' },
       { path: 'appearance.borderOpacity', type: 'range', icon: 'drop', t: 'Border Strength', d: 'Outline visibility', min: 10, max: 100, step: 5, unit: '%' },

@@ -9,7 +9,7 @@ export const DEFAULTS = {
     notchColor: '#030305', notchOpacity: 100, cornerRadius: 13,
     menuStyle: 'transparent', menuColor: '#0b0b10', menuOpacity: 92,
     themeStyle: 'default',
-    glowColor: '#ffffff', borderColor: '#ffffff', borderOpacity: 45,
+    tileAccent: '#0a84ff', glowColor: '#ffffff', borderColor: '#ffffff', borderOpacity: 45,
     fontStyle: 'jakarta', scale: 100, animations: true
   },
   notch: {
@@ -155,6 +155,7 @@ export function applyTheme(s) {
   root.setProperty('--color-tile-on-fg', menuLight ? '#ffffff' : '#050507');
 
   root.setProperty('--on', hexToRgb(a.glowColor).join(', '));
+  root.setProperty('--mac-accent', a.tileAccent || '#0a84ff');
   root.setProperty('--line', `rgba(${br}, ${bg}, ${bb}, ${a.borderOpacity / 100})`);
   root.setProperty('--radius', a.cornerRadius + 'px');
   root.setProperty('--radius-menu', Math.round(a.cornerRadius * 1.15) + 'px');
