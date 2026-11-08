@@ -103,6 +103,8 @@ const WINEVENT_SKIPOWNPROCESS: u32 = 2;
 static GLOBAL_APP: Mutex<Option<AppHandle>> = Mutex::new(None);
 static KBD_HOOK: AtomicIsize = AtomicIsize::new(0);
 static WIN_HOOK: AtomicIsize = AtomicIsize::new(0);
+// LOCATIONCHANGE hook, bound to the thread of the current foreground window only (see rehook_location)
+static LOC_HOOK: AtomicIsize = AtomicIsize::new(0);
 
 static LAST_CAPS: AtomicBool = AtomicBool::new(false);
 static LAST_NUM: AtomicBool = AtomicBool::new(false);
@@ -226,6 +228,34 @@ unsafe extern "system" fn low_level_keyboard_proc(
     CallNextHookEx(HHOOK(hook_raw as *mut _), n_code, w_param, l_param)
 }
 
+/// EVENT_OBJECT_LOCATIONCHANGE fires for every window / cursor movement on the whole desktop.
+/// A global hook would wake this app for all of them, so it is bound to the thread of the window
+/// that is in the foreground and moved to the next one whenever the foreground changes.
+unsafe fn rehook_location(hwnd: HWND) {
+    let old = LOC_HOOK.swap(0, Ordering::Relaxed);
+    if old != 0 {
+        let _ = UnhookWinEvent(old);
+    }
+    if hwnd == HWND::default() {
+        return;
+    }
+    let mut pid = 0u32;
+    let tid = GetWindowThreadProcessId(hwnd, Some(&mut pid));
+    if tid == 0 {
+        return;
+    }
+    let h = SetWinEventHook(
+        EVENT_OBJECT_LOCATIONCHANGE,
+        EVENT_OBJECT_LOCATIONCHANGE,
+        0,
+        win_event_proc,
+        0,
+        tid,
+        WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS,
+    );
+    LOC_HOOK.store(h, Ordering::Relaxed);
+}
+
 unsafe extern "system" fn win_event_proc(
     _h_hook: isize,
     event: u32,
@@ -252,6 +282,7 @@ unsafe extern "system" fn win_event_proc(
     }
 
     // EVENT_SYSTEM_FOREGROUND: another window became active
+    rehook_location(hwnd);
     recheck_fullscreen();
 
     if hwnd == HWND::default() {
@@ -369,15 +400,8 @@ pub fn setup_native_events(app: AppHandle) {
                 0,
                 WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS,
             );
-            let _ = SetWinEventHook(
-                EVENT_OBJECT_LOCATIONCHANGE,
-                EVENT_OBJECT_LOCATIONCHANGE,
-                0,
-                win_event_proc,
-                0,
-                0,
-                WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS,
-            );
+            // follow the foreground window's position / size (F11, maximize, game fullscreen)
+            rehook_location(windows::Win32::UI::WindowsAndMessaging::GetForegroundWindow());
 
             let mut msg = MSG::default();
             while GetMessageW(&mut msg, HWND::default(), 0, 0).as_bool() {

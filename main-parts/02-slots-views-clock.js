@@ -110,6 +110,7 @@ function switchView(viewId, stateClass, winWidth, winHeight) {
   updateCompactStateClasses();
   if (typeof syncLoadTimer === 'function') syncLoadTimer();
   if (typeof syncMediaTick === 'function') syncMediaTick();
+  if (typeof eqKick === 'function') eqKick();
 
   const isFloating = SET.notch && SET.notch.style === 'floating';
   let effH = winHeight;

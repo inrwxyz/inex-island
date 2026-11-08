@@ -370,7 +370,12 @@ body {
   width: 2.2px;
   background: currentColor;
   border-radius: 2px;
-  transition: height 0.08s linear;
+  /* bar level is set from JS as transform: scaleY (no layout / repaint per frame) */
+  height: 100%;
+  transform: scaleY(0.167);
+  transform-origin: 50% 100%;
+  will-change: transform;
+  transition: transform 0.08s linear; /* same softening as the old height transition, but compositor-only */
 }
 .island.state-compact:not(:hover) .c-media-disc.paused { display: none; }
 .island.state-compact:not(:hover) #c-eq.quiet { display: none; }
@@ -1188,7 +1193,7 @@ body {
   text-overflow: ellipsis;
 }
 .m-eq { height: 20px; }
-.m-eq span { width: 3px; background: rgba(255, 255, 255, 0.9) !important; }
+.m-eq span { width: 3px; background: rgba(255, 255, 255, 0.9) !important; transform: scaleY(0.1); }
 
 .media-timeline {
   display: flex;
