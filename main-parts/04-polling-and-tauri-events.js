@@ -138,19 +138,46 @@ async function refreshWifiNow() {
   if (appState.currentView === 'view-wifi') loadWifiList(true);
 }
 onTauriEvent('wifi-changed', () => { clearTimeout(wifiEvT); wifiEvT = setTimeout(refreshWifiNow, 300); });
+onTauriEvent('settings-changed', (e) => {
+  try {
+    if (e && e.payload) {
+      const raw = typeof e.payload === 'string' ? e.payload : JSON.stringify(e.payload);
+      localStorage.setItem('inex.settings.v1', raw);
+    }
+  } catch (_) {}
+  if (typeof loadSettings === 'function' && typeof applySettings === 'function') {
+    SET = loadSettings();
+    applySettings();
+  }
+});
 pollSystemAndMedia();
 syncLoadTimer();
 
-// 3. Compact Bar Clicks
-document.getElementById('c-center-trigger').addEventListener('click', (e) => {
+// 3. Compact Bar Clicks (Whole compact notch expands into control menu on click)
+const compactBarEl = document.querySelector('.compact-bar');
+if (compactBarEl) {
+  compactBarEl.addEventListener('click', (e) => {
+    if (e.target.closest('#c-media-btn, #c-eq, #c-tray-btn, #c-peer-badge, #c-incoming-alert, #c-transfer-cancel-btn, #btn-hud-accept, #btn-hud-decline, #c-alarm-box, #btn-alarm-snooze, #btn-alarm-dismiss')) {
+      return;
+    }
+    if (island.classList.contains('alarm-active')) {
+      if (typeof dismissTimerAlarm === 'function') dismissTimerAlarm();
+      return;
+    }
+    switchView('view-control', 'state-control', 316, 292);
+    try { refreshBtCaption(); } catch (_) {}
+    if (slotRunning.has('mic')) try { refreshMic(); } catch (_) {}
+  });
+}
+document.getElementById('c-center-trigger')?.addEventListener('click', (e) => {
   if (e.target.closest('#c-incoming-alert')) return;
   if (island.classList.contains('alarm-active')) {
     if (typeof dismissTimerAlarm === 'function') dismissTimerAlarm();
     return;
   }
   switchView('view-control', 'state-control', 316, 292);
-  refreshBtCaption();
-  if (slotRunning.has('mic')) refreshMic();
+  try { refreshBtCaption(); } catch (_) {}
+  if (slotRunning.has('mic')) try { refreshMic(); } catch (_) {}
 });
 document.getElementById('c-alarm-box')?.addEventListener('click', (e) => {
   e.stopPropagation();

@@ -6,7 +6,7 @@ export const KEY = 'inex.settings.v1';
 export const DEFAULTS = {
   general: { launchAtLogin: false, hour24: false, autoUpdate: false, lowBatteryAlert: true, lowBattery: 20, chargeToast: true, lockToast: true, capsToast: false, numToast: false, downloadHud: false, copyToast: false },
   appearance: {
-    notchColor: '#030305', notchOpacity: 100, cornerRadius: 13,
+    notchColor: '#030305', notchOpacity: 100, notchBorderColor: '#ffffff', notchBorderOpacity: 45, cornerRadius: 13,
     menuStyle: 'transparent', menuColor: '#0b0b10', menuOpacity: 92,
     themeStyle: 'default',
     tileAccent: '#0a84ff', glowColor: '#ffffff', borderColor: '#ffffff', borderOpacity: 45,
@@ -135,12 +135,22 @@ export function save(settings) {
 
 export function subscribe(cb) {
   window.addEventListener('storage', (e) => { if (e.key === KEY) cb(load()); });
-  try {
-    window.__TAURI__?.event.listen('settings-changed', (e) => {
-      try { localStorage.setItem(KEY, e.payload); } catch (_) {}
-      cb(load());
-    });
-  } catch (_) {}
+  const register = () => {
+    if (window.__TAURI__ && window.__TAURI__.event && typeof window.__TAURI__.event.listen === 'function') {
+      window.__TAURI__.event.listen('settings-changed', (e) => {
+        try {
+          if (e && e.payload) {
+            const raw = typeof e.payload === 'string' ? e.payload : JSON.stringify(e.payload);
+            localStorage.setItem(KEY, raw);
+          }
+        } catch (_) {}
+        cb(load());
+      });
+    } else {
+      setTimeout(register, 100);
+    }
+  };
+  register();
 }
 
 export function hexToRgb(hex) {
@@ -160,6 +170,11 @@ export function applyTheme(s) {
   const [nr, ng, nb] = hexToRgb(a.notchColor);
   const [mr, mg, mb] = hexToRgb(a.menuColor);
   const [br, bg, bb] = hexToRgb(a.borderColor);
+
+  const nbc = a.notchBorderColor || a.borderColor || '#ffffff';
+  const nbo = a.notchBorderOpacity !== undefined ? a.notchBorderOpacity : (a.borderOpacity !== undefined ? a.borderOpacity : 45);
+  const [nbr, nbg, nbb] = hexToRgb(nbc);
+  root.setProperty('--notch-line', `rgba(${nbr}, ${nbg}, ${nbb}, ${nbo / 100})`);
 
   const notchLight = isLightRgb(nr, ng, nb) && a.notchOpacity > 45;
   const menuLight = a.menuStyle === 'color' && isLightRgb(mr, mg, mb) && a.menuOpacity > 45;

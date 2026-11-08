@@ -78,6 +78,8 @@ const PAGES = [
       { path: 'notch.mode', type: 'seg', icon: 'notch', t: 'Behavior', d: 'Smart hides on fullscreen, Fixed stays, Ghost is glass outline', options: [['smart', 'Smart'], ['fixed', 'Fixed'], ['ghost', 'Ghost']] },
       { path: 'appearance.notchColor', type: 'color', icon: 'palette', t: 'Color', d: 'Background colour of the collapsed notch' },
       { path: 'appearance.notchOpacity', type: 'range', icon: 'drop', t: 'Opacity', d: 'Solid or translucent notch', min: 30, max: 100, step: 5, unit: '%' },
+      { path: 'appearance.notchBorderColor', type: 'color', icon: 'border', t: 'Border Color', d: 'Outline border color of the collapsed notch' },
+      { path: 'appearance.notchBorderOpacity', type: 'range', icon: 'drop', t: 'Border Strength', d: 'Outline visibility of the notch', min: 0, max: 100, step: 5, unit: '%' },
       { path: 'appearance.cornerRadius', type: 'range', icon: 'corner', t: 'Corner Roundness', d: 'Curvature of the notch and menus', min: 6, max: 26, step: 1, unit: 'px' }
     ] },
     { title: 'Typography & Scale', rows: [
@@ -109,8 +111,8 @@ const PAGES = [
       { path: 'appearance.menuColor', type: 'color', icon: 'palette', t: 'Background', d: 'Panel colour in solid mode', showIf: (s) => s.appearance.menuStyle === 'color' },
       { path: 'appearance.tileAccent', type: 'color', icon: 'palette', t: 'Tile accent', d: 'Colour of active menu tiles' },
       { path: 'appearance.menuOpacity', type: 'range', icon: 'drop', t: 'Glass Transparency', d: 'Lower = more see-through blur', min: 20, max: 100, step: 5, unit: '%', showIf: (s) => s.appearance.menuStyle === 'color' },
-      { path: 'appearance.borderColor', type: 'color', icon: 'border', t: 'Border Outline', d: 'Color of the menu borders' },
-      { path: 'appearance.borderOpacity', type: 'range', icon: 'drop', t: 'Border Strength', d: 'Outline visibility', min: 10, max: 100, step: 5, unit: '%' },
+      { path: 'appearance.borderColor', type: 'color', icon: 'border', t: 'Menu Border Outline', d: 'Color of the expanded menu borders' },
+      { path: 'appearance.borderOpacity', type: 'range', icon: 'drop', t: 'Menu Border Strength', d: 'Outline visibility of expanded menus', min: 10, max: 100, step: 5, unit: '%' },
       { path: 'appearance.glowColor', type: 'color', icon: 'spark', t: 'Active Glow', d: 'Accent outline on active switches and sliders', swatches: GLOW_SWATCHES }
     ] },
     { title: '2x2 Slots', rows: [

@@ -60,28 +60,9 @@ scheduleWeather(12 * 60 * 1000);
 // back on screen after a long pause: refresh (refreshWeather keeps its own 10 min cache)
 document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshWeather(); });
 
-// ---- Intro animation: wait until Rust has placed + shown the window, then play it ----
+// ---- Intro animation: island is immediately visible without delay ----
 (function introAnimation() {
-  let played = false;
-  const play = () => {
-    if (played) return;
-    played = true;
-    island.classList.remove('intro-pre');
-    island.classList.add('intro-play');
-    const done = () => island.classList.remove('intro-play');
-    island.addEventListener('animationend', done, { once: true });
-    setTimeout(done, 1500);
-  };
-  (async () => {
-    if (!(window.__TAURI__ && window.__TAURI__.core)) { play(); return; }
-    for (let i = 0; i < 150; i++) {            // up to ~18 s (slow boots)
-      try {
-        if (await window.__TAURI__.core.invoke('island_visible')) { play(); return; }
-      } catch (e) { break; }
-      await new Promise((r) => setTimeout(r, 120));
-    }
-    play();                                     // never leave the island invisible
-  })();
+  island.classList.remove('intro-pre', 'intro-play');
 })();
 
 // Background Auto-Update check (runs ~25s after boot if Auto Update is enabled)

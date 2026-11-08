@@ -1771,13 +1771,11 @@ fn main() {
                 std::thread::spawn(move || {
                     let mut placed = place_island(&w, 290.0, 44.0);
                     let mut tries = 0;
-                    while !placed && tries < 20 {
-                        std::thread::sleep(Duration::from_millis(500));
+                    while !placed && tries < 10 {
+                        std::thread::sleep(Duration::from_millis(50));
                         placed = place_island(&w, 290.0, 44.0);
                         tries += 1;
                     }
-                    log(&format!("island placed={} tries={}", placed, tries));
-                    std::thread::sleep(Duration::from_millis(250)); // let the page finish loading
                     let _ = w.show();
                 });
             }

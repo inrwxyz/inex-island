@@ -16,6 +16,8 @@ models/
 *.zip
 *.log
 *.tmp
+*.exe
+*.msi
 temp/
 .cache/
 

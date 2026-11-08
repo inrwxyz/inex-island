@@ -736,19 +736,46 @@ async function refreshWifiNow() {
   if (appState.currentView === 'view-wifi') loadWifiList(true);
 }
 onTauriEvent('wifi-changed', () => { clearTimeout(wifiEvT); wifiEvT = setTimeout(refreshWifiNow, 300); });
+onTauriEvent('settings-changed', (e) => {
+  try {
+    if (e && e.payload) {
+      const raw = typeof e.payload === 'string' ? e.payload : JSON.stringify(e.payload);
+      localStorage.setItem('inex.settings.v1', raw);
+    }
+  } catch (_) {}
+  if (typeof loadSettings === 'function' && typeof applySettings === 'function') {
+    SET = loadSettings();
+    applySettings();
+  }
+});
 pollSystemAndMedia();
 syncLoadTimer();
 
-// 3. Compact Bar Clicks
-document.getElementById('c-center-trigger').addEventListener('click', (e) => {
+// 3. Compact Bar Clicks (Whole compact notch expands into control menu on click)
+const compactBarEl = document.querySelector('.compact-bar');
+if (compactBarEl) {
+  compactBarEl.addEventListener('click', (e) => {
+    if (e.target.closest('#c-media-btn, #c-eq, #c-tray-btn, #c-peer-badge, #c-incoming-alert, #c-transfer-cancel-btn, #btn-hud-accept, #btn-hud-decline, #c-alarm-box, #btn-alarm-snooze, #btn-alarm-dismiss')) {
+      return;
+    }
+    if (island.classList.contains('alarm-active')) {
+      if (typeof dismissTimerAlarm === 'function') dismissTimerAlarm();
+      return;
+    }
+    switchView('view-control', 'state-control', 316, 292);
+    try { refreshBtCaption(); } catch (_) {}
+    if (slotRunning.has('mic')) try { refreshMic(); } catch (_) {}
+  });
+}
+document.getElementById('c-center-trigger')?.addEventListener('click', (e) => {
   if (e.target.closest('#c-incoming-alert')) return;
   if (island.classList.contains('alarm-active')) {
     if (typeof dismissTimerAlarm === 'function') dismissTimerAlarm();
     return;
   }
   switchView('view-control', 'state-control', 316, 292);
-  refreshBtCaption();
-  if (slotRunning.has('mic')) refreshMic();
+  try { refreshBtCaption(); } catch (_) {}
+  if (slotRunning.has('mic')) try { refreshMic(); } catch (_) {}
 });
 document.getElementById('c-alarm-box')?.addEventListener('click', (e) => {
   e.stopPropagation();
@@ -5554,28 +5581,9 @@ scheduleWeather(12 * 60 * 1000);
 // back on screen after a long pause: refresh (refreshWeather keeps its own 10 min cache)
 document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshWeather(); });
 
-// ---- Intro animation: wait until Rust has placed + shown the window, then play it ----
+// ---- Intro animation: island is immediately visible without delay ----
 (function introAnimation() {
-  let played = false;
-  const play = () => {
-    if (played) return;
-    played = true;
-    island.classList.remove('intro-pre');
-    island.classList.add('intro-play');
-    const done = () => island.classList.remove('intro-play');
-    island.addEventListener('animationend', done, { once: true });
-    setTimeout(done, 1500);
-  };
-  (async () => {
-    if (!(window.__TAURI__ && window.__TAURI__.core)) { play(); return; }
-    for (let i = 0; i < 150; i++) {            // up to ~18 s (slow boots)
-      try {
-        if (await window.__TAURI__.core.invoke('island_visible')) { play(); return; }
-      } catch (e) { break; }
-      await new Promise((r) => setTimeout(r, 120));
-    }
-    play();                                     // never leave the island invisible
-  })();
+  island.classList.remove('intro-pre', 'intro-play');
 })();
 
 // Background Auto-Update check (runs ~25s after boot if Auto Update is enabled)

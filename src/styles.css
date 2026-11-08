@@ -68,8 +68,8 @@ body {
 .island {
   background: var(--notch-bg);
   color: var(--notch-fg);
-  border-radius: 0 0 var(--radius) var(--radius);
-  border: 1px solid var(--line);
+  border-radius: 0 0 var(--radius) var(--radius) !important;
+  border: 1px solid var(--notch-line, var(--line));
   border-top: none;
   margin-top: 0 !important;
   transform-origin: top center;
@@ -293,6 +293,7 @@ body {
   align-items: center;
   justify-content: normal;
   padding: 0 11px;
+  cursor: pointer;
 }
 .c-left, .c-right {
   flex: 1 1 0;
