@@ -2,7 +2,9 @@
 //
 // Every app that records from a microphone has an active capture session on that device.
 // This asks Windows for those sessions: no registry tricks, no hard-coded app names.
-// The check runs every 1.5 s and only while the Settings toggle is on.
+// No timer: Windows itself updates the privacy "ConsentStore" registry key every time an app
+// starts or stops recording; RegNotifyChangeKeyValue wakes the thread on exactly those moments and
+// only then the capture sessions are looked at. The thread sleeps (0 % CPU) the rest of the time.
 // The island gets "privacy-changed" {kind: "mic", app: "<name>" | null} whenever it changes.
 
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -14,6 +16,9 @@ use tauri::Emitter;
 static ENABLED: AtomicBool = AtomicBool::new(false);
 #[cfg(target_os = "windows")]
 static STARTED: AtomicBool = AtomicBool::new(false);
+// event handle (as isize) that wakes the thread when the Settings toggle changes
+#[cfg(target_os = "windows")]
+static WAKE: std::sync::atomic::AtomicIsize = std::sync::atomic::AtomicIsize::new(0);
 
 // Name of the app using microphone right now
 static MIC_STATE: Mutex<Option<String>> = Mutex::new(None);
@@ -26,6 +31,7 @@ pub async fn privacy_watch_start(app: AppHandle, enabled: bool) -> Option<String
     {
         if enabled {
             start_once(app);
+            wake();
         }
     }
     #[cfg(not(target_os = "windows"))]
@@ -48,10 +54,29 @@ fn start_once(app: AppHandle) {
 }
 
 #[cfg(target_os = "windows")]
+fn wake() {
+    use windows::Win32::Foundation::HANDLE;
+    use windows::Win32::System::Threading::SetEvent;
+    let raw = WAKE.load(Ordering::SeqCst);
+    if raw != 0 {
+        unsafe {
+            let _ = SetEvent(HANDLE(raw as *mut core::ffi::c_void));
+        }
+    }
+}
+
+#[cfg(target_os = "windows")]
 fn mic_loop(app: AppHandle) {
     use std::time::Duration;
+    use windows::core::{w, PCWSTR};
+    use windows::Win32::Foundation::{ERROR_SUCCESS, HANDLE, WAIT_OBJECT_0};
     use windows::Win32::Media::Audio::{IMMDeviceEnumerator, MMDeviceEnumerator};
     use windows::Win32::System::Com::{CoCreateInstance, CoInitializeEx, CLSCTX_ALL, COINIT_MULTITHREADED};
+    use windows::Win32::System::Registry::{
+        RegNotifyChangeKeyValue, RegOpenKeyExW, HKEY, HKEY_CURRENT_USER, KEY_NOTIFY,
+        REG_NOTIFY_CHANGE_LAST_SET, REG_NOTIFY_CHANGE_NAME,
+    };
+    use windows::Win32::System::Threading::{CreateEventW, WaitForMultipleObjects, INFINITE};
     unsafe {
         let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
         let Ok(enumerator) =
@@ -59,12 +84,40 @@ fn mic_loop(app: AppHandle) {
         else {
             return;
         };
+
+        // Windows writes LastUsedTimeStart / LastUsedTimeStop here for every app that uses the mic
+        let mut key = HKEY::default();
+        let opened = RegOpenKeyExW(
+            HKEY_CURRENT_USER,
+            w!(r"Software\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\microphone"),
+            0,
+            KEY_NOTIFY,
+            &mut key,
+        ) == ERROR_SUCCESS;
+
+        let Ok(reg_ev) = CreateEventW(None, false, false, PCWSTR::null()) else { return };
+        let Ok(wake_ev) = CreateEventW(None, false, false, PCWSTR::null()) else { return };
+        WAKE.store(wake_ev.0 as isize, Ordering::SeqCst);
+
         loop {
             if ENABLED.load(Ordering::Relaxed) {
                 publish(&app, mic_in_use(&enumerator));
-                std::thread::sleep(Duration::from_millis(1500));
-            } else {
-                std::thread::sleep(Duration::from_millis(3000)); // switched off: just wait
+            }
+            // arm the notification again (it fires once), then sleep until something happens
+            if opened {
+                let _ = RegNotifyChangeKeyValue(
+                    key,
+                    true,
+                    REG_NOTIFY_CHANGE_NAME | REG_NOTIFY_CHANGE_LAST_SET,
+                    reg_ev,
+                    true,
+                );
+            }
+            let handles: [HANDLE; 2] = [reg_ev, wake_ev];
+            let which = WaitForMultipleObjects(&handles, false, INFINITE);
+            if which == WAIT_OBJECT_0 {
+                // let the audio engine finish switching the session state before we read it
+                std::thread::sleep(Duration::from_millis(150));
             }
         }
     }

@@ -62,14 +62,17 @@ function applySlots() {
 }
 
 // Microphone slot: real system mute of the default capture device
-async function refreshMic() {
-  const m = await invokeTauri('get_mic_muted');
+function renderMic(m) {
   const t = document.getElementById('tile-mic');
+  if (!t) return;
   const none = m === null || m === undefined;
   t.classList.toggle('muted', m === true);
   t.classList.toggle('active', m === false);
   document.getElementById('mic-sub').textContent = none ? 'No mic' : m ? 'Muted' : 'On';
   document.getElementById('mic-cap').textContent = none ? 'No mic' : m ? 'Muted' : '';
+}
+async function refreshMic() {
+  renderMic(await invokeTauri('get_mic_muted'));
 }
 async function toggleMic() {
   const muted = document.getElementById('tile-mic').classList.contains('muted');
@@ -105,6 +108,8 @@ function switchView(viewId, stateClass, winWidth, winHeight) {
   island.classList.add(stateClass);
   appState.currentView = viewId;
   updateCompactStateClasses();
+  if (typeof syncLoadTimer === 'function') syncLoadTimer();
+  if (typeof syncMediaTick === 'function') syncMediaTick();
 
   const isFloating = SET.notch && SET.notch.style === 'floating';
   let effH = winHeight;

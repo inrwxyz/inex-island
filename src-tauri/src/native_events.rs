@@ -6,6 +6,9 @@
 //!   3. WM_POWERBROADCAST             -> Power / Battery / Charger events
 //!   4. WH_KEYBOARD_LL                -> Caps Lock & Num Lock key events
 //!   5. SetWinEventHook               -> Fullscreen (Smart Mode) & PIN/Password prompts
+//!   6. WM_DISPLAYCHANGE              -> Fullscreen re-check after a resolution / monitor change
+//!   7. WM_QUERYENDSESSION/ENDSESSION -> Windows shutting down / logging off
+//!   8. RegisterPowerSettingNotification -> exact battery % and AC/DC source changes
 //!
 //! Result: 0.0% CPU when idle!
 
@@ -50,6 +53,11 @@ extern "system" {
         dw_flags: u32,
     ) -> isize;
     fn UnhookWinEvent(h_win_event_hook: isize) -> i32;
+    fn RegisterPowerSettingNotification(
+        h_recipient: isize,
+        power_setting_guid: *const windows::core::GUID,
+        flags: u32,
+    ) -> isize;
 }
 
 #[link(name = "comctl32")]
@@ -74,7 +82,21 @@ const PBT_APMPOWERSTATUSCHANGE: usize = 0x000A;
 const PBT_APMRESUMEAUTOMATIC: usize = 0x0012;
 const PBT_APMRESUMESUSPEND: usize = 0x0007;
 
+const PBT_POWERSETTINGCHANGE: usize = 0x8013;
+const DEVICE_NOTIFY_WINDOW_HANDLE: u32 = 0;
+// GUID_BATTERY_PERCENTAGE_REMAINING / GUID_ACDC_POWER_SOURCE
+const GUID_BATTERY_PERCENT: u128 = 0xa7ad8041_b45a_4cae_87a3_eecbb468a9e1;
+const GUID_ACDC_SOURCE: u128 = 0x5d3e9a59_e9d5_4b00_a6bd_ff34ff516548;
+
+const WM_DISPLAYCHANGE: u32 = 0x007E;
+const WM_QUERYENDSESSION: u32 = 0x0011;
+const WM_ENDSESSION: u32 = 0x0016;
+
 const EVENT_SYSTEM_FOREGROUND: u32 = 0x0003;
+const EVENT_SYSTEM_MINIMIZESTART: u32 = 0x0016;
+const EVENT_SYSTEM_MINIMIZEEND: u32 = 0x0017;
+const EVENT_OBJECT_LOCATIONCHANGE: u32 = 0x800B;
+const OBJID_WINDOW: i32 = 0;
 const WINEVENT_OUTOFCONTEXT: u32 = 0;
 const WINEVENT_SKIPOWNPROCESS: u32 = 2;
 
@@ -85,6 +107,35 @@ static WIN_HOOK: AtomicIsize = AtomicIsize::new(0);
 static LAST_CAPS: AtomicBool = AtomicBool::new(false);
 static LAST_NUM: AtomicBool = AtomicBool::new(false);
 static LAST_PROMPT: AtomicBool = AtomicBool::new(false);
+static LAST_FS: AtomicBool = AtomicBool::new(false);
+
+/// Set by WM_QUERYENDSESSION (Windows is about to shut down / log off), cleared if it is cancelled.
+pub static SHUTTING_DOWN: AtomicBool = AtomicBool::new(false);
+
+/// Compute the fullscreen state of the foreground window and tell the UI only if it changed.
+/// Called from the WinEvent hooks and WM_DISPLAYCHANGE (no timer).
+fn recheck_fullscreen() {
+    let fs = crate::foreground_is_fullscreen();
+    if LAST_FS.swap(fs, Ordering::Relaxed) != fs {
+        if let Ok(guard) = GLOBAL_APP.lock() {
+            if let Some(ref app) = *guard {
+                let _ = app.emit("fullscreen-changed", serde_json::json!({ "is_fullscreen": fs }));
+            }
+        }
+    }
+}
+
+fn emit_power() {
+    if let Ok(guard) = GLOBAL_APP.lock() {
+        if let Some(ref app) = *guard {
+            let current = crate::battery_info();
+            let _ = app.emit("power-changed", serde_json::json!({
+                "battery_pct": current.0,
+                "charging": current.1
+            }));
+        }
+    }
+}
 
 unsafe extern "system" fn main_window_subclass(
     hwnd: HWND,
@@ -113,22 +164,32 @@ unsafe extern "system" fn main_window_subclass(
             }
         }
         WM_POWERBROADCAST => {
-            if wparam.0 == PBT_APMPOWERSTATUSCHANGE {
-                if let Ok(guard) = GLOBAL_APP.lock() {
-                    if let Some(ref app) = *guard {
-                        let current = crate::battery_info();
-                        let _ = app.emit("power-changed", serde_json::json!({
-                            "battery_pct": current.0,
-                            "charging": current.1
-                        }));
-                    }
-                }
+            // PBT_APMPOWERSTATUSCHANGE: coarse change; PBT_POWERSETTINGCHANGE: exact % / AC-DC source
+            if wparam.0 == PBT_APMPOWERSTATUSCHANGE || wparam.0 == PBT_POWERSETTINGCHANGE {
+                emit_power();
             } else if wparam.0 == PBT_APMRESUMEAUTOMATIC || wparam.0 == PBT_APMRESUMESUSPEND {
                 if let Ok(guard) = GLOBAL_APP.lock() {
                     if let Some(ref app) = *guard {
                         let _ = app.emit("system-resumed", ());
                     }
                 }
+            }
+        }
+        WM_DISPLAYCHANGE => {
+            recheck_fullscreen();
+        }
+        WM_QUERYENDSESSION => {
+            SHUTTING_DOWN.store(true, Ordering::SeqCst);
+        }
+        WM_ENDSESSION => {
+            if wparam.0 != 0 {
+                // Windows is really shutting down: stop at once so no helper process starts now
+                let app = GLOBAL_APP.lock().ok().and_then(|g| g.clone());
+                if let Some(app) = app {
+                    app.exit(0);
+                }
+            } else {
+                SHUTTING_DOWN.store(false, Ordering::SeqCst); // the shutdown was cancelled
             }
         }
         _ => {}
@@ -167,13 +228,32 @@ unsafe extern "system" fn low_level_keyboard_proc(
 
 unsafe extern "system" fn win_event_proc(
     _h_hook: isize,
-    _event: u32,
+    event: u32,
     hwnd: HWND,
-    _id_object: i32,
+    id_object: i32,
     _id_child: i32,
     _id_event_thread: u32,
     _dwms_event_time: u32,
 ) {
+    use windows::Win32::UI::WindowsAndMessaging::GetForegroundWindow;
+
+    // Fullscreen / maximized state of the foreground window changed (Smart Mode).
+    if event == EVENT_OBJECT_LOCATIONCHANGE {
+        // very frequent event: only the foreground window itself matters
+        if id_object != OBJID_WINDOW || hwnd != GetForegroundWindow() {
+            return;
+        }
+        recheck_fullscreen();
+        return;
+    }
+    if event == EVENT_SYSTEM_MINIMIZESTART || event == EVENT_SYSTEM_MINIMIZEEND {
+        recheck_fullscreen();
+        return;
+    }
+
+    // EVENT_SYSTEM_FOREGROUND: another window became active
+    recheck_fullscreen();
+
     if hwnd == HWND::default() {
         return;
     }
@@ -227,6 +307,7 @@ pub fn setup_native_events(app: AppHandle) {
         LAST_CAPS.store((GetKeyState(VK_CAPITAL.0 as i32) & 1) != 0, Ordering::Relaxed);
         LAST_NUM.store((GetKeyState(VK_NUMLOCK.0 as i32) & 1) != 0, Ordering::Relaxed);
     }
+    LAST_FS.store(crate::foreground_is_fullscreen(), Ordering::Relaxed);
 
     // Attach Subclass to Main Window for WTS & Clipboard messages
     let app_clone = app.clone();
@@ -240,6 +321,10 @@ pub fn setup_native_events(app: AppHandle) {
                         let _ = WTSRegisterSessionNotification(raw.0 as isize, NOTIFY_FOR_THIS_SESSION);
                         let _ = AddClipboardFormatListener(raw.0 as isize);
                         let _ = SetWindowSubclass(hwnd, main_window_subclass, 1001, 0);
+                        for g in [GUID_BATTERY_PERCENT, GUID_ACDC_SOURCE] {
+                            let guid = windows::core::GUID::from_u128(g);
+                            let _ = RegisterPowerSettingNotification(raw.0 as isize, &guid, DEVICE_NOTIFY_WINDOW_HANDLE);
+                        }
                     }
                     break;
                 }
@@ -273,6 +358,26 @@ pub fn setup_native_events(app: AppHandle) {
                 WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS,
             );
             WIN_HOOK.store(win_hook, Ordering::Relaxed);
+
+            // window minimized / restored, and the foreground window moved or resized (F11, game fullscreen, maximize)
+            let _ = SetWinEventHook(
+                EVENT_SYSTEM_MINIMIZESTART,
+                EVENT_SYSTEM_MINIMIZEEND,
+                0,
+                win_event_proc,
+                0,
+                0,
+                WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS,
+            );
+            let _ = SetWinEventHook(
+                EVENT_OBJECT_LOCATIONCHANGE,
+                EVENT_OBJECT_LOCATIONCHANGE,
+                0,
+                win_event_proc,
+                0,
+                0,
+                WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS,
+            );
 
             let mut msg = MSG::default();
             while GetMessageW(&mut msg, HWND::default(), 0, 0).as_bool() {

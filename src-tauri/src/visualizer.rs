@@ -5,15 +5,16 @@
 //! `audio-visualization` event.
 //!
 //! CPU notes
-//!   * paused (UI says not visible / not playing): the stream is stopped, the thread only wakes
-//!     every 400 ms to look at the flag;
+//!   * paused (UI says not visible / not playing): the stream is stopped and the thread sleeps on a
+//!     condition variable until the UI turns the visualizer on or Windows reports an audio device
+//!     change (no timer at all);
 //!   * playing: wakes every 20 ms, events go out at most every ~32 ms;
 //!   * silence: wakes every 60 ms for a few seconds (so the UI can fade out), then every 150 ms
 //!     and sends nothing.
 
 use rustfft::{num_complex::Complex, Fft, FftPlanner};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter};
 use windows::Win32::Media::Audio::{
@@ -26,6 +27,39 @@ use windows::Win32::System::Com::{
 
 pub static VISUALIZER_ACTIVE: AtomicBool = AtomicBool::new(true);
 
+/// Set (by audio_events.rs) when Windows switched the default output device.
+static OUTPUT_CHANGED: AtomicBool = AtomicBool::new(false);
+
+// Wake-up counter + condition variable: the capture thread sleeps here instead of using timers.
+static SIGNAL: (Mutex<u64>, Condvar) = (Mutex::new(0), Condvar::new());
+
+fn signal_gen() -> u64 {
+    *SIGNAL.0.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+fn signal() {
+    let mut g = SIGNAL.0.lock().unwrap_or_else(|e| e.into_inner());
+    *g += 1;
+    SIGNAL.1.notify_all();
+}
+
+/// Sleep until signal() is called again (returns at once if it already was since `seen`).
+fn wait_signal(seen: u64) {
+    let mut g = SIGNAL.0.lock().unwrap_or_else(|e| e.into_inner());
+    while *g == seen {
+        g = SIGNAL.1.wait(g).unwrap_or_else(|e| e.into_inner());
+    }
+}
+
+/// Called from the Core Audio notification thread: an audio device was added / removed / changed.
+/// `default_output_changed` = the default playback device is a different one now.
+pub fn device_event(default_output_changed: bool) {
+    if default_output_changed {
+        OUTPUT_CHANGED.store(true, Ordering::SeqCst);
+    }
+    signal();
+}
+
 #[derive(Clone, serde::Serialize)]
 pub struct AudioVisualizationData {
     pub frequencies: Vec<f32>,
@@ -33,7 +67,8 @@ pub struct AudioVisualizationData {
 
 #[tauri::command]
 pub fn set_visualizer_active(active: bool) {
-    VISUALIZER_ACTIVE.store(active, Ordering::Relaxed);
+    VISUALIZER_ACTIVE.store(active, Ordering::SeqCst);
+    signal();
 }
 
 // ───────────────────────────── tuning ─────────────────────────────
@@ -52,10 +87,8 @@ const RELEASE: f32 = 0.28;
 const POLL_ACTIVE: Duration = Duration::from_millis(20);
 const POLL_FADE: Duration = Duration::from_millis(60);
 const POLL_IDLE: Duration = Duration::from_millis(150);
-const POLL_PAUSED: Duration = Duration::from_millis(400);
 const EMIT_EVERY: Duration = Duration::from_millis(32);
 const QUIET_AFTER: Duration = Duration::from_millis(1200);
-const DEVICE_CHECK_EVERY: Duration = Duration::from_secs(2);
 /// Flat frames sent after the music stops so the UI can switch itself to "quiet".
 const FLAT_FRAMES: u32 = 60;
 /// Loopback buffer length in 100 ns units (0.5 s).
@@ -269,14 +302,6 @@ impl Analyzer {
 
 // ───────────────────────────── capture ─────────────────────────────
 
-unsafe fn default_device_id(enumerator: &IMMDeviceEnumerator) -> Option<String> {
-    let device = enumerator.GetDefaultAudioEndpoint(eRender, eConsole).ok()?;
-    let id = device.GetId().ok()?;
-    let text = id.to_string().ok();
-    CoTaskMemFree(Some(id.0 as *const _));
-    text
-}
-
 /// Read every packet that is waiting and feed it to the analyzer.
 unsafe fn drain(capture: &IAudioCaptureClient, layout: &Layout, an: &mut Analyzer) -> Result<(), String> {
     loop {
@@ -312,7 +337,7 @@ fn run_session(app: &AppHandle) -> Result<(), String> {
         let device = enumerator
             .GetDefaultAudioEndpoint(eRender, eConsole)
             .map_err(|e| format!("endpoint: {e:?}"))?;
-        let started_on = default_device_id(&enumerator);
+        OUTPUT_CHANGED.store(false, Ordering::SeqCst);
 
         let client: IAudioClient = device
             .Activate(CLSCTX_ALL, None)
@@ -344,11 +369,17 @@ fn run_session(app: &AppHandle) -> Result<(), String> {
 
         let mut an = Analyzer::new(layout.rate);
         let mut running = false;
-        let mut last_device_check = Instant::now();
 
         loop {
+            let seen = signal_gen();
+
+            // Windows switched the default output device: start a fresh session on the new one
+            if OUTPUT_CHANGED.swap(false, Ordering::SeqCst) {
+                return Err("default output device changed".to_string());
+            }
+
             // start / stop the stream when the UI asks
-            let wanted = VISUALIZER_ACTIVE.load(Ordering::Relaxed);
+            let wanted = VISUALIZER_ACTIVE.load(Ordering::SeqCst);
             if wanted != running {
                 if wanted {
                     let _ = client.Reset();
@@ -360,17 +391,8 @@ fn run_session(app: &AppHandle) -> Result<(), String> {
                 running = wanted;
             }
 
-            // did the default output device change?
-            if last_device_check.elapsed() >= DEVICE_CHECK_EVERY {
-                last_device_check = Instant::now();
-                let now_on = default_device_id(&enumerator);
-                if now_on.is_some() && started_on.is_some() && now_on != started_on {
-                    return Err("default output device changed".to_string());
-                }
-            }
-
             if !running {
-                std::thread::sleep(POLL_PAUSED);
+                wait_signal(seen); // sleep until the UI or Windows wakes us
                 continue;
             }
 
@@ -403,8 +425,13 @@ pub fn setup_audio_visualization(app: AppHandle) {
             }
             loop {
                 // an Err just means "start a fresh session" (device switched, driver restarted ...)
+                let seen = signal_gen();
                 let _ = run_session(&app);
-                std::thread::sleep(Duration::from_millis(2500));
+                // session ended (device switched / removed, driver restarted): wait for the next
+                // device event or UI request instead of retrying on a timer
+                if !OUTPUT_CHANGED.load(Ordering::SeqCst) {
+                    wait_signal(seen);
+                }
             }
         });
 }

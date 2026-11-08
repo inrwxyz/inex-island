@@ -137,14 +137,17 @@ function applySlots() {
 }
 
 // Microphone slot: real system mute of the default capture device
-async function refreshMic() {
-  const m = await invokeTauri('get_mic_muted');
+function renderMic(m) {
   const t = document.getElementById('tile-mic');
+  if (!t) return;
   const none = m === null || m === undefined;
   t.classList.toggle('muted', m === true);
   t.classList.toggle('active', m === false);
   document.getElementById('mic-sub').textContent = none ? 'No mic' : m ? 'Muted' : 'On';
   document.getElementById('mic-cap').textContent = none ? 'No mic' : m ? 'Muted' : '';
+}
+async function refreshMic() {
+  renderMic(await invokeTauri('get_mic_muted'));
 }
 async function toggleMic() {
   const muted = document.getElementById('tile-mic').classList.contains('muted');
@@ -180,6 +183,8 @@ function switchView(viewId, stateClass, winWidth, winHeight) {
   island.classList.add(stateClass);
   appState.currentView = viewId;
   updateCompactStateClasses();
+  if (typeof syncLoadTimer === 'function') syncLoadTimer();
+  if (typeof syncMediaTick === 'function') syncMediaTick();
 
   const isFloating = SET.notch && SET.notch.style === 'floating';
   let effH = winHeight;
@@ -292,11 +297,19 @@ function renderMediaProgress(pos) {
 }
 
 // Tick media progress smoothly every 250ms when expanded media player is open
-setInterval(() => {
-  if (appState.currentView === 'view-media' && appState.mediaPlaying && !appState.mediaSeeking && appState.mediaDuration > 0) {
-    renderMediaProgress();
+// The timer only exists while the media panel is open and a track is playing.
+var mediaTickT; // var + no initializer: switchView() may call syncMediaTick() early
+function syncMediaTick() {
+  const want = appState.currentView === 'view-media' && appState.mediaPlaying && appState.mediaDuration > 0;
+  if (want && !mediaTickT) {
+    mediaTickT = setInterval(() => {
+      if (!appState.mediaSeeking) renderMediaProgress();
+    }, 250);
+  } else if (!want && mediaTickT) {
+    clearInterval(mediaTickT);
+    mediaTickT = null;
   }
-}, 250);
+}
 
 // Interactive Media Timeline Seek Bar
 const seekSlider = document.getElementById('m-seek-slider');
@@ -381,8 +394,13 @@ function dominantColor(img) {
   return `${Math.min(255, Math.round(r * k))}, ${Math.min(255, Math.round(g * k))}, ${Math.min(255, Math.round(b * k))}`;
 }
 
-setInterval(updateClocks, 1000);
-updateClocks();
+// The clock shows hours:minutes, so wake only on the minute (and again after the PC resumes).
+function tickClock() {
+  updateClocks();
+  setTimeout(tickClock, 60000 - (Date.now() % 60000) + 20);
+}
+tickClock();
+onTauriEvent('system-resumed', updateClocks);
 
 function clearMediaUI() {
   appState.cachedMedia = null;
@@ -425,6 +443,7 @@ function clearMediaUI() {
 
   appState.mediaProgressSec = 0;
   appState.mediaDuration = 0;
+  if (typeof syncMediaTick === 'function') syncMediaTick();
   renderMediaProgress();
 
   island.classList.remove('media-active');
@@ -460,6 +479,7 @@ async function refreshMedia() {
   }
 
   if (media.duration > 0) appState.mediaDuration = media.duration;
+  syncMediaTick();
 
   // Active track exists
   if (isPlaying) {
@@ -543,13 +563,6 @@ async function refreshStats() {
   const stats = await invokeTauri('get_sys_stats');
   if (stats) {
     appState.stats = stats;
-    // network speed is only read while the Net Speed widget is selected
-    if (SET.widgets.left === 'net' || SET.widgets.right === 'net') {
-      try {
-        const n = await invokeTauri('get_net_speed');
-        if (Array.isArray(n)) appState.net = n;
-      } catch (_) {}
-    }
     renderWidgets();
     batteryOverlays(stats);
     if (slotRunning.has('wifi')) {
@@ -573,18 +586,41 @@ async function pollSystemAndMedia() {
   await refreshStats();
 }
 
-let pollBusy = false;
-async function pollLight() {
-  if (document.hidden || pollBusy) return;
-  if (appState.currentView !== 'view-compact') return;
+// CPU / GPU / RAM / Disk / Net speed: Windows has no "value changed" event for these, so they are
+// sampled. The timer exists ONLY while one of those widgets is on screen (compact view, window visible);
+// everything else (battery, Wi-Fi, radios, media, fullscreen, volume ...) arrives as a native event.
+// (var, no initializer: switchView() may call syncLoadTimer() before this line has run)
+var loadTimer, loadBusy;
+function loadWanted() {
+  if (document.hidden || appState.currentView !== 'view-compact') return false;
   const wL = SET.widgets ? SET.widgets.left : null;
   const wR = SET.widgets ? SET.widgets.right : null;
-  const needsStats = ['ram', 'cpu', 'gpu', 'disk', 'net'].some(k => wL === k || wR === k);
-  if (!needsStats) return;
-  pollBusy = true;
-  try { await refreshStats(); } finally { pollBusy = false; }
+  return ['ram', 'cpu', 'gpu', 'disk', 'net'].some(k => wL === k || wR === k);
 }
-setInterval(pollLight, 3500);
+async function refreshLoad() {
+  const load = await invokeTauri('get_sys_load');
+  if (!load) return;
+  appState.stats = Object.assign(appState.stats || {}, load);
+  // network speed is only read while the Net Speed widget is selected
+  if (SET.widgets.left === 'net' || SET.widgets.right === 'net') {
+    try {
+      const n = await invokeTauri('get_net_speed');
+      if (Array.isArray(n)) appState.net = n;
+    } catch (_) {}
+  }
+  renderWidgets();
+}
+async function loadTick() {
+  if (loadBusy) return;
+  loadBusy = true;
+  try { await refreshLoad(); } finally { loadBusy = false; }
+}
+function syncLoadTimer() {
+  const want = loadWanted();
+  if (want && !loadTimer) { loadTick(); loadTimer = setInterval(loadTick, 3500); }
+  else if (!want && loadTimer) { clearInterval(loadTimer); loadTimer = null; }
+}
+document.addEventListener('visibilitychange', syncLoadTimer);
 function onTauriEvent(name, fn) {
   try {
     const r = window.__TAURI__.event.listen(name, fn);
@@ -600,6 +636,26 @@ onTauriEvent('media-changed', () => {
       loadMediaArt();
     }
   }, 100);
+});
+// Player was seeked / position corrected (also from another app): refresh the progress only
+let mediaTlT = null;
+onTauriEvent('media-timeline-changed', () => { clearTimeout(mediaTlT); mediaTlT = setTimeout(refreshMedia, 300); });
+// Volume / mute changed anywhere in Windows (volume keys, tray slider, headset, other apps)
+let volDrag = false;
+['slider-vol', 'm-vol-slider'].forEach((id) => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener('pointerdown', () => { volDrag = true; });
+});
+window.addEventListener('pointerup', () => { volDrag = false; });
+onTauriEvent('volume-changed', (e) => {
+  const l = e && e.payload && e.payload.level;
+  if (!volDrag && typeof l === 'number') setVolumeUI(l);
+});
+// Microphone mute changed anywhere in Windows
+onTauriEvent('mic-muted-changed', (e) => renderMic(e && e.payload ? e.payload.muted : null));
+// Speaker / headphone / mic plugged, removed or switched
+onTauriEvent('audio-device-changed', () => {
+  if (appState.currentView === 'view-audio') loadAudioDeviceList(false);
 });
 onTauriEvent('radio-changed', () => { clearTimeout(radioEvT); radioEvT = setTimeout(refreshRadios, 200); });
 // Instant smart mode fullscreen response (0ms latency from Rust watcher)
@@ -634,6 +690,7 @@ async function refreshWifiNow() {
 }
 onTauriEvent('wifi-changed', () => { clearTimeout(wifiEvT); wifiEvT = setTimeout(refreshWifiNow, 300); });
 pollSystemAndMedia();
+syncLoadTimer();
 
 // 3. Compact Bar Clicks
 document.getElementById('c-center-trigger').addEventListener('click', (e) => {
@@ -4913,6 +4970,7 @@ function applySettings() {
   if (SET.share.deviceName) myDeviceName = SET.share.deviceName;
   updateClocks();
   renderWidgets();
+  if (typeof syncLoadTimer === 'function') syncLoadTimer();
   applyPrivacy();
   refreshWeather();
   syncEq();

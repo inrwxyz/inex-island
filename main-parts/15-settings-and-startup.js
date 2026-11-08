@@ -33,6 +33,7 @@ function applySettings() {
   if (SET.share.deviceName) myDeviceName = SET.share.deviceName;
   updateClocks();
   renderWidgets();
+  if (typeof syncLoadTimer === 'function') syncLoadTimer();
   applyPrivacy();
   refreshWeather();
   syncEq();

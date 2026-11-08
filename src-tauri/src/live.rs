@@ -2,6 +2,8 @@
 // Native Windows listeners notify Inex Island when states change:
 //   * radio_watcher : Wi-Fi / Bluetooth radio switched on/off  -> "radio-changed"
 //   * media_watcher : track, play/pause or player changed      -> "media-changed"
+//                     seek / position changed in the player    -> "media-timeline-changed"
+// (fullscreen, power, lock, clipboard ... live in native_events.rs; volume / mic mute in audio_events.rs)
 // Current Wi-Fi name + signal are retrieved directly via the native WLAN API with 0% idle CPU.
 
 use std::sync::atomic::{AtomicBool, AtomicI8, AtomicU64, Ordering};
@@ -132,35 +134,40 @@ fn radio_watcher(app: AppHandle) {
 }
 
 #[cfg(target_os = "windows")]
+fn hook_session(
+    app: &AppHandle,
+    s: &windows::Media::Control::GlobalSystemMediaTransportControlsSession,
+) {
+    use windows::Foundation::TypedEventHandler;
+    let a = app.clone();
+    let _ = s.MediaPropertiesChanged(&TypedEventHandler::new(move |_, _| {
+        let _ = a.emit("media-changed", ());
+        Ok(())
+    }));
+    let b = app.clone();
+    let _ = s.PlaybackInfoChanged(&TypedEventHandler::new(move |_, _| {
+        let _ = b.emit("media-changed", ());
+        Ok(())
+    }));
+    // the player was seeked / its position was corrected (also from another app)
+    let c = app.clone();
+    let _ = s.TimelinePropertiesChanged(&TypedEventHandler::new(move |_, _| {
+        let _ = c.emit("media-timeline-changed", ());
+        Ok(())
+    }));
+}
+
+#[cfg(target_os = "windows")]
 fn attach_media(
     app: &AppHandle,
     m: &windows::Media::Control::GlobalSystemMediaTransportControlsSessionManager,
 ) {
-    use windows::Foundation::TypedEventHandler;
     if let Ok(sessions) = m.GetSessions() {
         for s in sessions {
-            let a = app.clone();
-            let _ = s.MediaPropertiesChanged(&TypedEventHandler::new(move |_, _| {
-                let _ = a.emit("media-changed", ());
-                Ok(())
-            }));
-            let b = app.clone();
-            let _ = s.PlaybackInfoChanged(&TypedEventHandler::new(move |_, _| {
-                let _ = b.emit("media-changed", ());
-                Ok(())
-            }));
+            hook_session(app, &s);
         }
     } else if let Ok(s) = m.GetCurrentSession() {
-        let a = app.clone();
-        let _ = s.MediaPropertiesChanged(&TypedEventHandler::new(move |_, _| {
-            let _ = a.emit("media-changed", ());
-            Ok(())
-        }));
-        let b = app.clone();
-        let _ = s.PlaybackInfoChanged(&TypedEventHandler::new(move |_, _| {
-            let _ = b.emit("media-changed", ());
-            Ok(())
-        }));
+        hook_session(app, &s);
     }
 }
 
@@ -196,29 +203,14 @@ fn media_watcher(app: AppHandle) {
     }
 }
 
-#[cfg(target_os = "windows")]
-fn fullscreen_watcher(app: AppHandle) {
-    let mut prev_fs: Option<bool> = None;
-    loop {
-        let is_fs = crate::foreground_is_fullscreen();
-        if prev_fs != Some(is_fs) {
-            prev_fs = Some(is_fs);
-            let _ = app.emit("fullscreen-changed", serde_json::json!({ "is_fullscreen": is_fs }));
-        }
-        std::thread::sleep(std::time::Duration::from_millis(80));
-    }
-}
-
 /// Start the watchers (Windows only). Called once from setup().
 pub fn start(app: AppHandle) {
     #[cfg(target_os = "windows")]
     {
         let a = app.clone();
         std::thread::spawn(move || radio_watcher(a));
-        let b = app.clone();
+        let b = app;
         std::thread::spawn(move || media_watcher(b));
-        let c = app;
-        std::thread::spawn(move || fullscreen_watcher(c));
     }
     #[cfg(not(target_os = "windows"))]
     let _ = app;

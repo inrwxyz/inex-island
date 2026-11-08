@@ -52,11 +52,19 @@ function renderMediaProgress(pos) {
 }
 
 // Tick media progress smoothly every 250ms when expanded media player is open
-setInterval(() => {
-  if (appState.currentView === 'view-media' && appState.mediaPlaying && !appState.mediaSeeking && appState.mediaDuration > 0) {
-    renderMediaProgress();
+// The timer only exists while the media panel is open and a track is playing.
+var mediaTickT; // var + no initializer: switchView() may call syncMediaTick() early
+function syncMediaTick() {
+  const want = appState.currentView === 'view-media' && appState.mediaPlaying && appState.mediaDuration > 0;
+  if (want && !mediaTickT) {
+    mediaTickT = setInterval(() => {
+      if (!appState.mediaSeeking) renderMediaProgress();
+    }, 250);
+  } else if (!want && mediaTickT) {
+    clearInterval(mediaTickT);
+    mediaTickT = null;
   }
-}, 250);
+}
 
 // Interactive Media Timeline Seek Bar
 const seekSlider = document.getElementById('m-seek-slider');
@@ -141,8 +149,13 @@ function dominantColor(img) {
   return `${Math.min(255, Math.round(r * k))}, ${Math.min(255, Math.round(g * k))}, ${Math.min(255, Math.round(b * k))}`;
 }
 
-setInterval(updateClocks, 1000);
-updateClocks();
+// The clock shows hours:minutes, so wake only on the minute (and again after the PC resumes).
+function tickClock() {
+  updateClocks();
+  setTimeout(tickClock, 60000 - (Date.now() % 60000) + 20);
+}
+tickClock();
+onTauriEvent('system-resumed', updateClocks);
 
 function clearMediaUI() {
   appState.cachedMedia = null;
@@ -185,6 +198,7 @@ function clearMediaUI() {
 
   appState.mediaProgressSec = 0;
   appState.mediaDuration = 0;
+  if (typeof syncMediaTick === 'function') syncMediaTick();
   renderMediaProgress();
 
   island.classList.remove('media-active');
@@ -220,6 +234,7 @@ async function refreshMedia() {
   }
 
   if (media.duration > 0) appState.mediaDuration = media.duration;
+  syncMediaTick();
 
   // Active track exists
   if (isPlaying) {

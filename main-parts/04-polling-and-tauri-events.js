@@ -12,13 +12,6 @@ async function refreshStats() {
   const stats = await invokeTauri('get_sys_stats');
   if (stats) {
     appState.stats = stats;
-    // network speed is only read while the Net Speed widget is selected
-    if (SET.widgets.left === 'net' || SET.widgets.right === 'net') {
-      try {
-        const n = await invokeTauri('get_net_speed');
-        if (Array.isArray(n)) appState.net = n;
-      } catch (_) {}
-    }
     renderWidgets();
     batteryOverlays(stats);
     if (slotRunning.has('wifi')) {
@@ -42,18 +35,41 @@ async function pollSystemAndMedia() {
   await refreshStats();
 }
 
-let pollBusy = false;
-async function pollLight() {
-  if (document.hidden || pollBusy) return;
-  if (appState.currentView !== 'view-compact') return;
+// CPU / GPU / RAM / Disk / Net speed: Windows has no "value changed" event for these, so they are
+// sampled. The timer exists ONLY while one of those widgets is on screen (compact view, window visible);
+// everything else (battery, Wi-Fi, radios, media, fullscreen, volume ...) arrives as a native event.
+// (var, no initializer: switchView() may call syncLoadTimer() before this line has run)
+var loadTimer, loadBusy;
+function loadWanted() {
+  if (document.hidden || appState.currentView !== 'view-compact') return false;
   const wL = SET.widgets ? SET.widgets.left : null;
   const wR = SET.widgets ? SET.widgets.right : null;
-  const needsStats = ['ram', 'cpu', 'gpu', 'disk', 'net'].some(k => wL === k || wR === k);
-  if (!needsStats) return;
-  pollBusy = true;
-  try { await refreshStats(); } finally { pollBusy = false; }
+  return ['ram', 'cpu', 'gpu', 'disk', 'net'].some(k => wL === k || wR === k);
 }
-setInterval(pollLight, 3500);
+async function refreshLoad() {
+  const load = await invokeTauri('get_sys_load');
+  if (!load) return;
+  appState.stats = Object.assign(appState.stats || {}, load);
+  // network speed is only read while the Net Speed widget is selected
+  if (SET.widgets.left === 'net' || SET.widgets.right === 'net') {
+    try {
+      const n = await invokeTauri('get_net_speed');
+      if (Array.isArray(n)) appState.net = n;
+    } catch (_) {}
+  }
+  renderWidgets();
+}
+async function loadTick() {
+  if (loadBusy) return;
+  loadBusy = true;
+  try { await refreshLoad(); } finally { loadBusy = false; }
+}
+function syncLoadTimer() {
+  const want = loadWanted();
+  if (want && !loadTimer) { loadTick(); loadTimer = setInterval(loadTick, 3500); }
+  else if (!want && loadTimer) { clearInterval(loadTimer); loadTimer = null; }
+}
+document.addEventListener('visibilitychange', syncLoadTimer);
 function onTauriEvent(name, fn) {
   try {
     const r = window.__TAURI__.event.listen(name, fn);
@@ -69,6 +85,26 @@ onTauriEvent('media-changed', () => {
       loadMediaArt();
     }
   }, 100);
+});
+// Player was seeked / position corrected (also from another app): refresh the progress only
+let mediaTlT = null;
+onTauriEvent('media-timeline-changed', () => { clearTimeout(mediaTlT); mediaTlT = setTimeout(refreshMedia, 300); });
+// Volume / mute changed anywhere in Windows (volume keys, tray slider, headset, other apps)
+let volDrag = false;
+['slider-vol', 'm-vol-slider'].forEach((id) => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener('pointerdown', () => { volDrag = true; });
+});
+window.addEventListener('pointerup', () => { volDrag = false; });
+onTauriEvent('volume-changed', (e) => {
+  const l = e && e.payload && e.payload.level;
+  if (!volDrag && typeof l === 'number') setVolumeUI(l);
+});
+// Microphone mute changed anywhere in Windows
+onTauriEvent('mic-muted-changed', (e) => renderMic(e && e.payload ? e.payload.muted : null));
+// Speaker / headphone / mic plugged, removed or switched
+onTauriEvent('audio-device-changed', () => {
+  if (appState.currentView === 'view-audio') loadAudioDeviceList(false);
 });
 onTauriEvent('radio-changed', () => { clearTimeout(radioEvT); radioEvT = setTimeout(refreshRadios, 200); });
 // Instant smart mode fullscreen response (0ms latency from Rust watcher)
@@ -103,6 +139,7 @@ async function refreshWifiNow() {
 }
 onTauriEvent('wifi-changed', () => { clearTimeout(wifiEvT); wifiEvT = setTimeout(refreshWifiNow, 300); });
 pollSystemAndMedia();
+syncLoadTimer();
 
 // 3. Compact Bar Clicks
 document.getElementById('c-center-trigger').addEventListener('click', (e) => {

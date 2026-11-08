@@ -13,6 +13,8 @@ mod visualizer;
 mod wifi;
 #[cfg(target_os = "windows")]
 mod native_events;
+#[cfg(target_os = "windows")]
+mod audio_events;
 
 use serde::Serialize;
 use std::io::{Read, Write};
@@ -57,7 +59,9 @@ fn system_shutting_down() -> bool {
     #[cfg(target_os = "windows")]
     unsafe {
         use windows::Win32::UI::WindowsAndMessaging::{GetSystemMetrics, SYSTEM_METRICS_INDEX};
-        return GetSystemMetrics(SYSTEM_METRICS_INDEX(0x2000)) != 0;
+        // SM_SHUTTINGDOWN, or WM_QUERYENDSESSION already seen by native_events.rs
+        return GetSystemMetrics(SYSTEM_METRICS_INDEX(0x2000)) != 0
+            || native_events::SHUTTING_DOWN.load(std::sync::atomic::Ordering::SeqCst);
     }
     #[cfg(not(target_os = "windows"))]
     false
@@ -879,6 +883,39 @@ pub fn foreground_is_fullscreen() -> bool {
     }
 }
 
+// Only the figures Windows cannot push (it has no "CPU % changed" event): sampled, and only while
+// a load widget is on screen. Battery, Wi-Fi and fullscreen are NOT read here: they arrive as events.
+#[derive(Serialize)]
+struct SysLoad {
+    ram_pct: u32,
+    cpu_pct: u32,
+    gpu_pct: u32,
+    disk_pct: u32,
+}
+
+#[allow(unused_assignments)]
+#[tauri::command]
+async fn get_sys_load() -> SysLoad {
+    let (mut ram_pct, mut cpu_pct, mut gpu_pct, mut disk_pct) = (0, 0, 0, 0);
+    #[cfg(target_os = "windows")]
+    unsafe {
+        use windows::Win32::System::SystemInformation::{GlobalMemoryStatusEx, MEMORYSTATUSEX};
+        let mut mem = MEMORYSTATUSEX {
+            dwLength: std::mem::size_of::<MEMORYSTATUSEX>() as u32,
+            ..Default::default()
+        };
+        if GlobalMemoryStatusEx(&mut mem).is_ok() {
+            ram_pct = mem.dwMemoryLoad;
+        }
+        cpu_pct = cpu_percent();
+        gpu_pct = gpu::percent();
+        disk_pct = disk_percent();
+    }
+    #[cfg(not(target_os = "windows"))]
+    let _ = (&mut ram_pct, &mut cpu_pct, &mut gpu_pct, &mut disk_pct);
+    SysLoad { ram_pct, cpu_pct, gpu_pct, disk_pct }
+}
+
 #[allow(unused_assignments)]
 #[tauri::command]
 async fn get_sys_stats() -> SysStats {
@@ -1677,6 +1714,7 @@ fn main() {
             #[cfg(target_os = "windows")]
             {
                 native_events::setup_native_events(app.handle().clone());
+                audio_events::start(app.handle().clone());
                 downloads::start_downloads_watcher(app.handle().clone());
             }
 
@@ -1700,19 +1738,9 @@ fn main() {
                 });
             }
 
-            // Windows is shutting down / logging off: stop at once so no helper process
-            // (netsh, powershell...) is started while the system is closing. Starting
-            // processes at that moment is what shows "The application was unable to
-            // start correctly (0xc0000142)".
-            let exit_handle = app.handle().clone();
-            std::thread::spawn(move || loop {
-                std::thread::sleep(Duration::from_millis(300));
-                if system_shutting_down() {
-                    log("system shutting down, exiting");
-                    exit_handle.exit(0);
-                    break;
-                }
-            });
+            // Windows shutting down / logging off: native_events.rs reacts to WM_ENDSESSION and exits
+            // at once, so no helper process (netsh, powershell...) is started while the system closes
+            // (that is what shows "The application was unable to start correctly (0xc0000142)").
 
             // Listen for second-launch signal (when user clicks Desktop Shortcut)
             let handle = app.handle().clone();
@@ -1803,6 +1831,7 @@ fn main() {
             set_radio_state,
             set_system_brightness,
             get_sys_stats,
+            get_sys_load,
             wifi::get_wifi_networks,
             wifi::wifi_scan,
             wifi::connect_wifi_network,
