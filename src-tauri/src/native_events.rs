@@ -84,7 +84,6 @@ static WIN_HOOK: AtomicIsize = AtomicIsize::new(0);
 
 static LAST_CAPS: AtomicBool = AtomicBool::new(false);
 static LAST_NUM: AtomicBool = AtomicBool::new(false);
-static LAST_FS: AtomicBool = AtomicBool::new(false);
 static LAST_PROMPT: AtomicBool = AtomicBool::new(false);
 
 unsafe extern "system" fn main_window_subclass(
@@ -181,13 +180,7 @@ unsafe extern "system" fn win_event_proc(
 
     if let Ok(guard) = GLOBAL_APP.lock() {
         if let Some(ref app) = *guard {
-            // 1. Check Fullscreen / Maximized
-            let is_fs = crate::foreground_is_fullscreen();
-            if LAST_FS.swap(is_fs, Ordering::Relaxed) != is_fs {
-                let _ = app.emit("fullscreen-changed", serde_json::json!({ "is_fullscreen": is_fs }));
-            }
-
-            // 2. Check Credential / PIN prompt
+            // Check Credential / PIN prompt
             let is_prompt = check_is_credential_prompt(hwnd);
             if LAST_PROMPT.swap(is_prompt, Ordering::Relaxed) != is_prompt {
                 let _ = app.emit("native-prompt-changed", serde_json::json!({ "active": is_prompt }));

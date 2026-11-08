@@ -576,7 +576,7 @@ async function pollSystemAndMedia() {
 let pollBusy = false;
 async function pollLight() {
   if (document.hidden || pollBusy) return;
-  if (island.classList.contains('smart-hidden') || appState.currentView !== 'view-compact') return;
+  if (appState.currentView !== 'view-compact') return;
   const wL = SET.widgets ? SET.widgets.left : null;
   const wR = SET.widgets ? SET.widgets.right : null;
   const needsStats = ['ram', 'cpu', 'gpu', 'disk', 'net'].some(k => wL === k || wR === k);

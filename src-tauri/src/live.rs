@@ -196,14 +196,29 @@ fn media_watcher(app: AppHandle) {
     }
 }
 
+#[cfg(target_os = "windows")]
+fn fullscreen_watcher(app: AppHandle) {
+    let mut prev_fs: Option<bool> = None;
+    loop {
+        let is_fs = crate::foreground_is_fullscreen();
+        if prev_fs != Some(is_fs) {
+            prev_fs = Some(is_fs);
+            let _ = app.emit("fullscreen-changed", serde_json::json!({ "is_fullscreen": is_fs }));
+        }
+        std::thread::sleep(std::time::Duration::from_millis(80));
+    }
+}
+
 /// Start the watchers (Windows only). Called once from setup().
 pub fn start(app: AppHandle) {
     #[cfg(target_os = "windows")]
     {
         let a = app.clone();
         std::thread::spawn(move || radio_watcher(a));
-        let b = app;
+        let b = app.clone();
         std::thread::spawn(move || media_watcher(b));
+        let c = app;
+        std::thread::spawn(move || fullscreen_watcher(c));
     }
     #[cfg(not(target_os = "windows"))]
     let _ = app;
