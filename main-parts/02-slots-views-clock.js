@@ -48,9 +48,11 @@ function applySlots() {
   if (!SLOT_DEFS[b]) b = 'bt';
   if (a === b) b = a === 'bt' ? 'wifi' : 'bt';
   const want = new Set([a, b]);
-  // grid order: slot A, P2P, slot B, Tray  (same 2x2 layout as before)
-  document.getElementById('tile-p2p').style.order = 2;
-  document.getElementById('tile-tray').style.order = 4;
+  // grid order: slot A, Inex Drop, slot B, Tray (2x2 layout)
+  const dropTile = document.getElementById('tile-drop') || document.getElementById('tile-p2p');
+  if (dropTile) dropTile.style.order = 2;
+  const trayTile = document.getElementById('tile-tray');
+  if (trayTile) trayTile.style.order = 4;
   Object.entries(SLOT_DEFS).forEach(([id, def]) => {
     const tile = document.getElementById(def.el);
     const on = want.has(id);

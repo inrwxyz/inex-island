@@ -55,7 +55,9 @@ const ACTION_TILE_ICONS = {
   taskmgr: '<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>',
   terminal: '<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>',
   explorer: '<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>',
-  restart: '<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/></svg>'
+  restart: '<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/></svg>',
+  notepad: '<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><path d="M16 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8z"/><path d="M15 3v5h5"/><path d="M8 13h8M8 17h5"/></svg>',
+  drop: '<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"><path d="M12 2v10M8 8l4-4 4 4M4 14v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg>'
 };
 
 const ACTION_TILE_TITLES = {
@@ -71,7 +73,9 @@ const ACTION_TILE_TITLES = {
   taskmgr: 'Task Manager',
   terminal: 'Terminal / Command Prompt',
   explorer: 'File Explorer',
-  restart: 'Restart Inex Island'
+  restart: 'Restart Inex Island',
+  notepad: 'Quick Notes',
+  drop: 'Inex Drop'
 };
 
 let awakeState = false;
@@ -135,6 +139,15 @@ function renderQuickActionTiles() {
       btn.addEventListener('click', () => invokeTauri('open_settings'));
     } else if (id === 'restart') {
       btn.addEventListener('click', () => invokeTauri('restart_app'));
+    } else if (id === 'notepad') {
+      btn.addEventListener('click', () => {
+        switchView('view-notepad', 'state-sub', 316, 240);
+        if (typeof focusNotepad === 'function') focusNotepad();
+      });
+    } else if (id === 'drop') {
+      btn.addEventListener('click', () => {
+        if (typeof openDropView === 'function') openDropView();
+      });
     } else {
       btn.addEventListener('click', () => {
         invokeTauri('launch_quick_action', { id });

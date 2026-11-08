@@ -11,6 +11,7 @@ mod privacy;
 mod shelf;
 mod visualizer;
 mod wifi;
+mod inex_drop;
 #[cfg(target_os = "windows")]
 mod native_events;
 #[cfg(target_os = "windows")]
@@ -1871,6 +1872,10 @@ fn main() {
             net::stage_begin,
             net::stage_end,
             setup_shelf_drop,
+            inex_drop::start_inex_drop,
+            inex_drop::stop_inex_drop,
+            inex_drop::get_inex_drop_status,
+            inex_drop::stage_file_for_phone,
             check_update,
             get_app_version,
             apply_update

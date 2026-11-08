@@ -165,10 +165,11 @@
           <i class="ring"></i>
         </div>
 
-        <div id="tile-p2p" class="ctrl-tile">
-          <svg class="ico ico-p2p" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="1.5" y="3" width="9" height="7" rx="1.5"/><path d="M4 13h4"/><rect x="13.5" y="12" width="9" height="7" rx="1.5"/><path d="M16 22h4"/><path class="flow f1" d="M12 6.5h4.5V10"/><path class="flow f2" d="M12 17.5H7.5V14"/></svg>
-          <small id="tile-p2p-sub" class="sr">0 Peers</small><span id="tile-p2p-title" class="sr">P2P Link</span>
-          <em id="p2p-cap" class="cap"></em>
+        <div id="tile-drop" class="ctrl-tile">
+          <svg class="ico ico-drop" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v10M8 8l4-4 4 4M4 14v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg>
+          <small id="tile-drop-sub" class="sr">Off</small><span id="tile-drop-title" class="sr">Inex Drop</span>
+          <em id="drop-cap" class="cap"></em>
+          <button class="chev" title="Inex Drop"><svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg></button>
           <i class="ring"></i>
         </div>
 
@@ -294,27 +295,57 @@
     <!-- ==================== 7. FIREBASE WEBRTC P2P (Up to 5 Users) ==================== -->
     <div id="view-p2p" class="view">
       <div class="subview-header">
-        <button class="back-btn icon-back" data-back="view-control" title="Back"><svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg><svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="1.9" fill="none" stroke-linecap="round" stroke-linejoin="round"><rect x="1.5" y="3" width="9" height="7" rx="1.5"/><path d="M4 13h4"/><rect x="13.5" y="12" width="9" height="7" rx="1.5"/><path d="M16 22h4"/><path d="M12 6.5h4.5V10"/><path d="M12 17.5H7.5V14"/></svg></button>
-        <span id="p2p-expiry-timer" class="p2p-expiry-badge hidden" title="Code expires in">05:00</span>
-        <button id="btn-exit-room" class="p2p-exit-btn hidden" title="Exit Room">Exit Room</button>
-        <span id="p2p-status-pill" class="status-tag">Standby</span>
+        <button class="back-btn icon-back" data-back="view-control" title="Back"><svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg><svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v10M8 8l4-4 4 4M4 14v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg></button>
+        <span id="drop-countdown-badge" class="p2p-expiry-badge hidden" title="Auto-closing in">01:00</span>
+        <button id="btn-drop-disconnect" class="p2p-exit-btn hidden" title="Disconnect">Disconnect</button>
+        <span id="drop-status-pill" class="status-tag">Off</span>
       </div>
 
-      <div class="p2p-body">
-        <div class="p2p-top-actions">
-          <button id="btn-gen-code" class="gen-code-btn">Generate Code</button>
-          <div id="code-display-box" class="code-badge hidden" title="Click to Copy">
-            <span id="my-p2p-code">------</span>
+      <div class="drop-body" id="drop-body">
+        <div id="drop-state-idle" class="drop-state-box">
+          <div class="drop-idle-ico">
+            <svg viewBox="0 0 24 24" width="38" height="38" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round"><path d="M12 2v10M8 8l4-4 4 4M4 14v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg>
           </div>
+          <div class="drop-idle-title">Inex Drop is Off</div>
+          <div class="drop-idle-sub">Send & receive files offline over Wi-Fi or Hotspot</div>
+          <button id="btn-drop-start" class="pair-btn" style="margin-top:10px; width:130px;">Turn On</button>
+        </div>
 
-          <div class="join-box" id="p2p-join-box">
-            <input type="text" id="input-peer-code" placeholder="Enter code..." maxlength="6" />
-            <button id="btn-join-code" class="pair-btn">Join</button>
+        <div id="drop-state-waiting" class="drop-state-box hidden">
+          <div class="drop-qr-wrap" id="drop-qr-container"></div>
+          <div class="drop-qr-hint">Scan with phone camera to connect</div>
+          <div class="drop-url-row">
+            <span id="drop-url-text" class="drop-url-txt">http://...</span>
+            <button id="btn-copy-drop-url" class="copy-url-btn" title="Copy Link">Copy</button>
           </div>
         </div>
 
-        <div id="p2p-peers-list" class="smooth-scroll-list">
-          <div class="empty-hint">Generate a code or enter partner code (Max 5 PCs)</div>
+        <div id="drop-state-connected" class="drop-state-box hidden">
+          <div class="drop-conn-card">
+            <div class="drop-dev-ico">
+              <svg viewBox="0 0 24 24" width="22" height="22" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"><rect x="7" y="2" width="10" height="20" rx="2"/><line x1="11" y1="18" x2="13" y2="18"/></svg>
+            </div>
+            <div class="drop-dev-info">
+              <strong id="drop-dev-name">Phone</strong>
+              <small id="drop-dev-ip">Connected • Ready</small>
+            </div>
+          </div>
+          <div class="drop-actions-card">
+            <div class="drop-act-row">
+              <span>Files staged in Tray:</span>
+              <strong id="drop-tray-count">0</strong>
+            </div>
+            <button id="btn-drop-push" class="pair-btn" style="margin-top:6px;width:100%;">Push Tray Files to Phone</button>
+          </div>
+          <div id="drop-rx-progress" class="hidden" style="margin-top:8px;text-align:left;">
+            <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:3px;">
+              <span id="drop-rx-name">Receiving...</span>
+              <span id="drop-rx-pct">0%</span>
+            </div>
+            <div style="width:100%;height:6px;border-radius:3px;background:rgba(255,255,255,0.1);overflow:hidden;">
+              <div id="drop-rx-bar" style="width:0%;height:100%;background:var(--mac-accent);border-radius:3px;"></div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -475,6 +506,7 @@
 
   </div>
 
+  <script src="qrcode.js"></script>
   <script src="p2p-codec.js"></script>
   <script type="module" src="main.js?v=0.3.5"></script>
 </body>
