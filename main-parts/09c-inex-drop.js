@@ -7,6 +7,7 @@ let dropConnected = false;
 let dropCurrentUrl = '';
 let currentPromptId = null;
 let promptExpireTimer = null;
+let dlActiveCount = 0;   // PC -> phone downloads running right now
 let promptQueue = [];   // more requests waiting behind the one on screen: every file needs its own Accept
 
 function fileCategory(name) {
@@ -417,8 +418,32 @@ onTauriEvent('inexdrop-event', (event) => {
     setTimeout(() => {
       if (rxBox) rxBox.classList.add('hidden');
     }, 2500);
+  } else if (p.type === 'download_start') {
+    // PC -> phone: same island animation as receiving, arrow pointing up ("Sending")
+    dlActiveCount++;
+    if (dlActiveCount === 1 && typeof startCompactTransferUI === 'function') {
+      appState.xferDir = 'send';
+      startCompactTransferUI();
+    }
+  } else if (p.type === 'download_progress') {
+    if (typeof updateCompactTransferPct === 'function') updateCompactTransferPct(p.pct, p.speed);
+  } else if (p.type === 'download_cancelled') {
+    dlActiveCount = Math.max(0, dlActiveCount - 1);
+    if (dlActiveCount === 0 && typeof finishCompactTransferUI === 'function') finishCompactTransferUI();
   } else if (p.type === 'pushed_file_downloaded') {
-    showToast('done', `${p.name || 'File'} downloaded on Phone!`, 2200);
+    dlActiveCount = Math.max(0, dlActiveCount - 1);
+    if (dlActiveCount === 0 && typeof finishCompactTransferUI === 'function') finishCompactTransferUI();
+    const sentSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline class="clip-tick" points="5 12.5 10 17.5 19 7"/></svg>';
+    if (typeof showDeviceHud === 'function') {
+      showDeviceHud({
+        iconHTML: sentSvg,
+        plain: true,
+        accent: 'ok',
+        name: p.name || 'File sent',
+        tag: 'Sent to Phone',
+        ms: 3000
+      });
+    }
   }
 });
 

@@ -485,25 +485,66 @@ fn handle_client(mut stream: TcpStream, app: &AppHandle, valid_pin: &str) {
                         clean_filename(&file_name),
                         file_size
                     );
+                    let mut started = false;
+                    let mut sent: u64 = 0;
                     if stream.write_all(header.as_bytes()).is_ok() {
+                        started = true;
                         let _ = stream.set_nodelay(true);
+                        let _ = app.emit("inexdrop-event", serde_json::json!({
+                            "type": "download_start",
+                            "name": file_name,
+                            "size": file_size
+                        }));
                         let mut buf = [0u8; 256 * 1024];
+                        let mut last_emit = std::time::Instant::now();
+                        let mut last_speed_time = std::time::Instant::now();
+                        let mut last_speed_bytes: u64 = 0;
+                        let mut speed = String::from("0 MB/s");
                         while let Ok(n) = f.read(&mut buf) {
                             if n == 0 || get_stop_flag().load(Ordering::SeqCst) { break; }
                             if stream.write_all(&buf[..n]).is_err() { break; }
+                            sent += n as u64;
+
+                            let ms = last_speed_time.elapsed().as_millis();
+                            if ms >= 180 {
+                                let secs = (ms as f64) / 1000.0;
+                                let diff = sent.saturating_sub(last_speed_bytes);
+                                speed = format!("{:.1} MB/s", (diff as f64) / (1024.0 * 1024.0 * secs));
+                                last_speed_time = std::time::Instant::now();
+                                last_speed_bytes = sent;
+                            }
+                            if last_emit.elapsed().as_millis() >= 150 {
+                                last_emit = std::time::Instant::now();
+                                let pct = if file_size > 0 { (sent * 100) / file_size } else { 100 };
+                                let _ = app.emit("inexdrop-event", serde_json::json!({
+                                    "type": "download_progress",
+                                    "pct": pct,
+                                    "speed": speed,
+                                    "name": file_name
+                                }));
+                            }
                         }
                     }
-                    // Remove from staged_files immediately after download so it EXPIRES!
-                    {
-                        let mut state = get_state().lock().unwrap();
-                        state.staged_files.retain(|sf| {
-                            PathBuf::from(sf).file_name().map(|n| n.to_string_lossy() != file_name).unwrap_or(true)
-                        });
+                    let completed = started && sent >= file_size;
+                    if completed {
+                        // Remove from staged_files after a finished download so it EXPIRES!
+                        {
+                            let mut state = get_state().lock().unwrap();
+                            state.staged_files.retain(|sf| {
+                                PathBuf::from(sf).file_name().map(|n| n.to_string_lossy() != file_name).unwrap_or(true)
+                            });
+                        }
+                        let _ = app.emit("inexdrop-event", serde_json::json!({
+                            "type": "pushed_file_downloaded",
+                            "name": file_name
+                        }));
+                    } else if started {
+                        // phone cancelled / connection dropped: keep it staged so it can be tried again
+                        let _ = app.emit("inexdrop-event", serde_json::json!({
+                            "type": "download_cancelled",
+                            "name": file_name
+                        }));
                     }
-                    let _ = app.emit("inexdrop-event", serde_json::json!({
-                        "type": "pushed_file_downloaded",
-                        "name": file_name
-                    }));
                     return;
                 }
             }
