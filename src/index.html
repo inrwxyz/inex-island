@@ -348,11 +348,36 @@
         </div>
 
         <div id="drop-state-waiting" class="drop-state-box hidden">
+          <div class="drop-mode-toggle">
+            <button id="btn-drop-mode-web" class="drop-tab-btn active">Browser</button>
+            <button id="btn-drop-mode-app" class="drop-tab-btn">App</button>
+          </div>
           <div class="drop-qr-wrap" id="drop-qr-container"></div>
-          <div class="drop-qr-hint">Scan with phone camera to connect</div>
-          <div class="drop-url-row">
+          <div class="drop-qr-hint" id="drop-qr-hint">Scan with phone camera to connect</div>
+          <div class="drop-url-row" id="drop-url-row">
             <span id="drop-url-text" class="drop-url-txt">http://...</span>
             <button id="btn-copy-drop-url" class="copy-url-btn" title="Copy Link">Copy</button>
+          </div>
+          <div class="drop-app-row hidden" id="drop-app-row" style="margin-top:6px;">
+            <button id="btn-copy-apk-url" class="pair-btn" style="height:26px;font-size:11px;padding:0 12px;background:rgba(255,255,255,0.08);">Direct APK Link</button>
+          </div>
+        </div>
+
+        <div id="drop-state-prompt" class="drop-state-box hidden">
+          <div class="drop-prompt-card">
+            <div class="drop-prompt-dev">
+              <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><rect x="7" y="2" width="10" height="20" rx="2"/><line x1="11" y1="18" x2="13" y2="18"/></svg>
+              <span id="prompt-sender-name">Android Phone</span>
+            </div>
+            <div class="drop-prompt-headline">wants to send a file:</div>
+            <div class="drop-prompt-filebox">
+              <span id="prompt-file-name" class="prompt-fname">file.mp4</span>
+              <small id="prompt-file-size" class="prompt-fsize">12 MB</small>
+            </div>
+            <div class="drop-prompt-actions">
+              <button id="btn-prompt-accept" class="pair-btn prompt-accept-btn">Accept</button>
+              <button id="btn-prompt-decline" class="pair-btn prompt-decline-btn">Decline</button>
+            </div>
           </div>
         </div>
 

@@ -1,0 +1,32 @@
+R_DEF: Internal format may change without notice
+local
+color accent_blue
+color accent_green
+color accent_red
+color bg_black
+color border_line
+color card_bg
+color text_dim
+color text_white
+drawable ic_launcher_background
+drawable ic_launcher_foreground
+id btnDisconnect
+id btnManualConnect
+id btnPickFiles
+id btnScanQR
+id etHost
+id etPin
+id layoutConnectCard
+id layoutConnectedPanel
+id layoutIncomingBox
+id layoutIncomingItems
+id layoutProgress
+id progressBar
+id tvProgressSpeed
+id tvProgressTitle
+id tvStatusBadge
+layout activity_main
+mipmap ic_launcher
+mipmap ic_launcher_round
+string app_name
+style Theme.InexDrop

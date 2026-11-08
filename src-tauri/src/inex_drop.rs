@@ -1,8 +1,9 @@
 // Inex Drop: Fast, offline, native local file transfer between Phone and PC (Wi-Fi / Hotspot).
 // Uses pure standard library TCP/HTTP streaming with zero polling and zero external dependencies.
 
+use std::collections::HashMap;
 use std::fs::File;
-use std::io::{BufRead, BufReader, Read, Write};
+use std::io::{BufRead, BufReader, BufWriter, Read, Write};
 use std::net::{TcpListener, TcpStream, UdpSocket};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
@@ -25,6 +26,22 @@ pub struct DropStatus {
     pub remaining: u32,
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub enum TransferApproval {
+    Pending,
+    Accepted,
+    Declined,
+}
+
+#[derive(Clone, Debug)]
+pub struct PendingTransfer {
+    pub id: String,
+    pub name: String,
+    pub size: usize,
+    pub device: String,
+    pub status: TransferApproval,
+}
+
 struct DropServerState {
     running: bool,
     connected: bool,
@@ -34,6 +51,7 @@ struct DropServerState {
     device: String,
     remaining: u32,
     staged_files: Vec<String>,
+    pending_transfers: HashMap<String, PendingTransfer>,
 }
 
 static SERVER_STATE: OnceLock<Mutex<DropServerState>> = OnceLock::new();
@@ -51,6 +69,7 @@ fn get_state() -> &'static Mutex<DropServerState> {
             device: String::new(),
             remaining: 60,
             staged_files: Vec::new(),
+            pending_transfers: HashMap::new(),
         })
     })
 }
@@ -199,9 +218,97 @@ fn handle_client(mut stream: TcpStream, app: &AppHandle, valid_pin: &str) {
 
             let _ = stream.write_all(b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n{\"ok\":true}");
         }
+        ("POST", "/request_transfer") => {
+            if !pin_ok {
+                let _ = stream.write_all(b"HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n");
+                return;
+            }
+            let mut body = vec![0u8; content_length.min(4096)];
+            let _ = reader.read_exact(&mut body);
+            let (file_name, file_size) = if let Ok(json) = serde_json::from_slice::<serde_json::Value>(&body) {
+                let n = json.get("name").and_then(|v| v.as_str()).unwrap_or("received_file").to_string();
+                let s = json.get("size").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+                (n, s)
+            } else {
+                ("received_file".to_string(), 0)
+            };
+
+            let transfer_id = format!("{:x}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0));
+            let clean_name = clean_filename(&file_name);
+            let dev_name = {
+                let st = get_state().lock().unwrap();
+                if st.device.is_empty() { "Phone".to_string() } else { st.device.clone() }
+            };
+
+            {
+                let mut state = get_state().lock().unwrap();
+                state.pending_transfers.insert(transfer_id.clone(), PendingTransfer {
+                    id: transfer_id.clone(),
+                    name: clean_name.clone(),
+                    size: file_size,
+                    device: dev_name.clone(),
+                    status: TransferApproval::Pending,
+                });
+            }
+
+            let _ = app.emit("inexdrop-event", serde_json::json!({
+                "type": "transfer_prompt",
+                "id": transfer_id,
+                "name": clean_name,
+                "size": file_size,
+                "device": dev_name
+            }));
+
+            let resp = serde_json::json!({
+                "ok": true,
+                "id": transfer_id,
+                "status": "pending"
+            }).to_string();
+            let header = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                resp.len(),
+                resp
+            );
+            let _ = stream.write_all(header.as_bytes());
+        }
+        ("GET", "/check_transfer") => {
+            if !pin_ok {
+                let _ = stream.write_all(b"HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n");
+                return;
+            }
+            let transfer_id = query_params.get("id").copied().unwrap_or("");
+            let status = {
+                let state = get_state().lock().unwrap();
+                state.pending_transfers.get(transfer_id).map(|t| match t.status {
+                    TransferApproval::Pending => "pending",
+                    TransferApproval::Accepted => "accepted",
+                    TransferApproval::Declined => "declined",
+                }).unwrap_or("unknown")
+            };
+            let resp = serde_json::json!({ "status": status }).to_string();
+            let header = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                resp.len(),
+                resp
+            );
+            let _ = stream.write_all(header.as_bytes());
+        }
         ("POST", "/upload") => {
             if !pin_ok {
                 let _ = stream.write_all(b"HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n");
+                return;
+            }
+
+            let transfer_id = query_params.get("id").copied().unwrap_or("");
+            let is_approved = if transfer_id.is_empty() {
+                true // fallback for legacy direct uploads
+            } else {
+                let state = get_state().lock().unwrap();
+                state.pending_transfers.get(transfer_id).map(|t| t.status == TransferApproval::Accepted).unwrap_or(false)
+            };
+
+            if !is_approved {
+                let _ = stream.write_all(b"HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\nTransfer not accepted by PC");
                 return;
             }
 
@@ -216,11 +323,14 @@ fn handle_client(mut stream: TcpStream, app: &AppHandle, valid_pin: &str) {
                 "size": content_length
             }));
 
-            if let Ok(mut out_file) = File::create(&save_path) {
-                let mut buf = [0u8; 64 * 1024];
+            if let Ok(raw_file) = File::create(&save_path) {
+                let _ = stream.set_nodelay(true);
+                let mut out_file = BufWriter::with_capacity(512 * 1024, raw_file);
+                let mut buf = vec![0u8; 512 * 1024];
                 let mut received: usize = 0;
                 let mut last_reported_pct: usize = 0;
                 let transfer_start = std::time::Instant::now();
+                let mut last_emit_time = std::time::Instant::now();
                 let mut last_speed_time = std::time::Instant::now();
                 let mut last_speed_bytes: usize = 0;
                 let mut current_speed = String::from("0 MB/s");
@@ -247,7 +357,7 @@ fn handle_client(mut stream: TcpStream, app: &AppHandle, valid_pin: &str) {
                             received += n;
 
                             let elapsed_ms = last_speed_time.elapsed().as_millis();
-                            if elapsed_ms >= 250 {
+                            if elapsed_ms >= 180 {
                                 let elapsed_sec = (elapsed_ms as f64) / 1000.0;
                                 let bytes_diff = received.saturating_sub(last_speed_bytes);
                                 let mb_s = (bytes_diff as f64) / (1024.0 * 1024.0 * elapsed_sec);
@@ -257,7 +367,9 @@ fn handle_client(mut stream: TcpStream, app: &AppHandle, valid_pin: &str) {
                             }
 
                             let pct = if content_length > 0 { (received * 100) / content_length } else { 100 };
-                            if pct != last_reported_pct || !current_speed.is_empty() {
+                            // High performance throttled IPC emission
+                            if last_emit_time.elapsed().as_millis() >= 150 || pct == 100 {
+                                last_emit_time = std::time::Instant::now();
                                 last_reported_pct = pct;
                                 let _ = app.emit("inexdrop-event", serde_json::json!({
                                     "type": "progress",
@@ -272,6 +384,7 @@ fn handle_client(mut stream: TcpStream, app: &AppHandle, valid_pin: &str) {
                         Err(_) => break,
                     }
                 }
+                let _ = out_file.flush();
 
                 let total_elapsed = transfer_start.elapsed().as_secs_f64();
                 let avg_speed = if total_elapsed > 0.05 {
@@ -292,6 +405,34 @@ fn handle_client(mut stream: TcpStream, app: &AppHandle, valid_pin: &str) {
             } else {
                 let _ = stream.write_all(b"HTTP/1.1 500 Internal Error\r\nConnection: close\r\n\r\n");
             }
+        }
+        ("GET", "/inex-drop.apk") => {
+            let candidates = [
+                std::env::current_exe().ok().and_then(|p| p.parent().map(|d| d.join("inex-drop.apk"))).unwrap_or_default(),
+                PathBuf::from("E:\\one inex\\working experimental\\inex-island\\android\\app\\build\\outputs\\apk\\debug\\app-debug.apk"),
+                PathBuf::from("E:\\one inex\\working experimental\\inex-island\\inex-drop.apk"),
+                PathBuf::from("C:\\Users\\inrwx\\AppData\\Local\\Inex Island\\inex-drop.apk"),
+            ];
+            let found = candidates.into_iter().find(|p| p.exists() && p.is_file());
+            if let Some(apk) = found {
+                if let Ok(mut f) = File::open(&apk) {
+                    let size = f.metadata().map(|m| m.len()).unwrap_or(0);
+                    let header = format!(
+                        "HTTP/1.1 200 OK\r\nContent-Type: application/vnd.android.package-archive\r\nContent-Disposition: attachment; filename=\"InexDrop.apk\"\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                        size
+                    );
+                    if stream.write_all(header.as_bytes()).is_ok() {
+                        let _ = stream.set_nodelay(true);
+                        let mut buf = vec![0u8; 256 * 1024];
+                        while let Ok(n) = f.read(&mut buf) {
+                            if n == 0 { break; }
+                            if stream.write_all(&buf[..n]).is_err() { break; }
+                        }
+                    }
+                    return;
+                }
+            }
+            let _ = stream.write_all(b"HTTP/1.1 404 Not Found\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nAPK is building or not ready yet.");
         }
         ("GET", "/files") => {
             let files_json = {
@@ -516,6 +657,7 @@ fn stop_inex_drop_internal(app: &AppHandle) -> Result<(), String> {
         state.device.clear();
         state.remaining = 60;
         state.staged_files.clear();
+        state.pending_transfers.clear();
         state.port
     };
 
@@ -523,6 +665,20 @@ fn stop_inex_drop_internal(app: &AppHandle) -> Result<(), String> {
 
     let _ = app.emit("inexdrop-event", serde_json::json!({ "type": "stopped" }));
     Ok(())
+}
+
+#[tauri::command]
+pub fn respond_inex_transfer(id: String, accept: bool) -> bool {
+    let mut state = get_state().lock().unwrap();
+    if let Some(t) = state.pending_transfers.get_mut(&id) {
+        t.status = if accept {
+            TransferApproval::Accepted
+        } else {
+            TransferApproval::Declined
+        };
+        return true;
+    }
+    false
 }
 
 #[tauri::command]

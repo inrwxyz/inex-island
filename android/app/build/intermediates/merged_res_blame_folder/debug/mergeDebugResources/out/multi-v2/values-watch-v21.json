@@ -1,0 +1,20 @@
+{
+    "logs": [
+        {
+            "outputFile": "com.inex.drop.app-mergeDebugResources-31:/values-watch-v21/values-watch-v21.xml",
+            "map": [
+                {
+                    "source": "C:\\Users\\inrwx\\.gradle\\caches\\8.11.1\\transforms\\a093605dbab0da6f988b301907f6e350\\transformed\\appcompat-1.7.0\\res\\values-watch-v21\\values-watch-v21.xml",
+                    "from": {
+                        "startLines": "2,6,10",
+                        "startColumns": "4,4,4",
+                        "startOffsets": "55,271,499",
+                        "endLines": "5,9,13",
+                        "endColumns": "12,12,12",
+                        "endOffsets": "266,494,724"
+                    }
+                }
+            ]
+        }
+    ]
+}

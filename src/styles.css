@@ -2690,3 +2690,54 @@ body {
 }
 .drop-act-row { display: flex; justify-content: space-between; font-size: 11.5px; color: var(--menu-fg-dim); }
 .drop-act-row strong { color: var(--menu-fg); }
+
+/* Inex Drop Browser vs App Mode Tabs */
+.drop-mode-toggle {
+  display: flex; gap: 4px; background: rgba(255, 255, 255, 0.06); padding: 2px;
+  border-radius: 9px; margin-bottom: 7px;
+}
+.drop-tab-btn {
+  background: transparent; border: 0; color: var(--menu-fg-dim); font-size: 10px; font-weight: 600;
+  padding: 3px 12px; border-radius: 7px; cursor: pointer; transition: all 0.15s ease;
+}
+.drop-tab-btn.active {
+  background: var(--mac-accent); color: #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+}
+
+/* Inex Drop Transfer Authorization Prompt (Accept / Decline) */
+.drop-prompt-card {
+  width: 100%; display: flex; flex-direction: column; align-items: center; text-align: center;
+  padding: 12px 14px; border-radius: 16px; background: color-mix(in srgb, var(--menu-fg) 8%, transparent);
+  border: 1px solid rgba(255, 255, 255, 0.08); animation: toastPop 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.drop-prompt-dev {
+  display: flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 700; color: var(--menu-fg);
+}
+.drop-prompt-headline {
+  font-size: 11px; color: var(--menu-fg-dim); margin: 2px 0 6px;
+}
+.drop-prompt-filebox {
+  width: 100%; background: rgba(0, 0, 0, 0.25); border-radius: 10px; padding: 6px 10px;
+  margin-bottom: 10px; border: 1px solid rgba(255, 255, 255, 0.05);
+}
+.prompt-fname {
+  display: block; font-size: 12px; font-weight: 600; color: #fff; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; max-width: 240px; margin: 0 auto;
+}
+.prompt-fsize {
+  display: block; font-size: 10px; color: var(--mac-accent); font-weight: 600; margin-top: 1px;
+}
+.drop-prompt-actions {
+  display: flex; gap: 8px; width: 100%;
+}
+.prompt-accept-btn {
+  flex: 1; height: 32px; background: #30d158 !important; color: #fff !important; font-size: 12px; font-weight: 700;
+  border-radius: 9px; border: 0; cursor: pointer; transition: opacity 0.15s;
+}
+.prompt-accept-btn:active { opacity: 0.8; }
+.prompt-decline-btn {
+  flex: 1; height: 32px; background: rgba(255, 69, 58, 0.2) !important; color: #ff453a !important;
+  border: 1px solid rgba(255, 69, 58, 0.4) !important; font-size: 12px; font-weight: 600;
+  border-radius: 9px; cursor: pointer; transition: opacity 0.15s;
+}
+.prompt-decline-btn:active { opacity: 0.8; }

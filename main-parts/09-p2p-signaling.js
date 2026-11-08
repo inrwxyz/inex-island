@@ -147,7 +147,7 @@ async function exitP2PRoom(isManual = true) {
   updateTrayUI();
 
   if (isManual) {
-    showToast('unlock', 'Left P2P Room', 1500);
+    showToast('done', 'Left P2P Room', 1500);
   }
 }
 

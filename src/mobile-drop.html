@@ -62,8 +62,14 @@ body { margin:0; padding:16px; background:var(--bg); color:var(--fg); font-famil
   <div class="success-msg" id="successMsg">✓ File transferred to PC Downloads!</div>
 
   <div class="file-list" id="pcFilesBox" style="display:none;">
-    <h4>Files from PC</h4>
+    <h4>Incoming Files from PC</h4>
     <div id="pcFilesList"></div>
+  </div>
+
+  <div class="card" style="margin-top:14px;background:rgba(255,255,255,0.02);padding:14px;border-radius:18px;">
+    <div style="font-size:13px;font-weight:600;margin-bottom:3px;">Prefer Native App?</div>
+    <div style="font-size:11px;color:var(--dim);margin-bottom:10px;">Get the lightweight Inex Drop Android App</div>
+    <a href="/inex-drop.apk" class="btn" style="height:38px;font-size:13px;text-decoration:none;background:rgba(10,132,255,0.18);border:1px solid rgba(10,132,255,0.4);color:var(--accent);">Download Inex Drop APK</a>
   </div>
 
   <button class="btn btn-outline" onclick="disconnect()">Disconnect</button>
@@ -105,8 +111,11 @@ function pollFiles() {
         box.style.display = 'block';
         list.innerHTML = data.map(f => `
           <div class="file-item">
-            <span>${f.name} (${(f.size/1024/1024).toFixed(1)} MB)</span>
-            <a href="/download/${encodeURIComponent(f.name)}?pin=${encodeURIComponent(pin)}" download>Download</a>
+            <div style="text-align:left;">
+              <strong style="display:block;font-size:13px;">${f.name}</strong>
+              <small style="color:var(--dim);">${(f.size/1024/1024).toFixed(1)} MB</small>
+            </div>
+            <a href="/download/${encodeURIComponent(f.name)}?pin=${encodeURIComponent(pin)}" download class="btn" style="height:32px;width:auto;padding:0 14px;font-size:12px;text-decoration:none;">Accept & Save</a>
           </div>
         `).join('');
       } else {
@@ -133,33 +142,84 @@ async function uploadQueue(queue) {
   }
 }
 
-function uploadSingle(file) {
+async function uploadSingle(file) {
+  const progBox = document.getElementById('progBox');
+  const progFill = document.getElementById('progFill');
+  const progPct = document.getElementById('progPct');
+  const progFileName = document.getElementById('progFileName');
+  const successMsg = document.getElementById('successMsg');
+
+  progBox.style.display = 'block';
+  successMsg.style.display = 'none';
+  progFileName.textContent = 'Waiting for PC to Accept ' + file.name + '...';
+  progFill.style.width = '20%';
+  progPct.textContent = 'Prompting PC...';
+
+  // 1. Send pre-flight transfer request to PC
+  let transferId = '';
+  try {
+    const reqRes = await fetch('/request_transfer?pin=' + encodeURIComponent(pin), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: file.name, size: file.size })
+    }).then(r => r.json());
+    if (reqRes && reqRes.id) {
+      transferId = reqRes.id;
+    }
+  } catch (e) {
+    alert('Could not contact PC');
+    progBox.style.display = 'none';
+    return;
+  }
+
+  // 2. Poll for Accept or Decline (up to 40s)
+  let approved = false;
+  const startWait = Date.now();
+  while (Date.now() - startWait < 40000) {
+    await new Promise(r => setTimeout(r, 600));
+    try {
+      const check = await fetch(`/check_transfer?id=${transferId}&pin=${encodeURIComponent(pin)}`).then(r => r.json());
+      if (check.status === 'accepted') {
+        approved = true;
+        break;
+      } else if (check.status === 'declined') {
+        progFileName.textContent = 'Transfer Declined by PC';
+        progPct.textContent = 'Declined';
+        progFill.style.background = '#ff453a';
+        setTimeout(() => {
+          progBox.style.display = 'none';
+          progFill.style.background = 'var(--accent)';
+        }, 2800);
+        return;
+      }
+    } catch (_) {}
+  }
+
+  if (!approved) {
+    progFileName.textContent = 'Transfer timed out';
+    setTimeout(() => { progBox.style.display = 'none'; }, 2200);
+    return;
+  }
+
+  // 3. PC Accepted! Now stream high-speed upload
+  progFileName.textContent = 'Sending ' + file.name;
+  progFill.style.width = '0%';
+  progPct.textContent = '0%';
+
   return new Promise((resolve) => {
-    const progBox = document.getElementById('progBox');
-    const progFill = document.getElementById('progFill');
-    const progPct = document.getElementById('progPct');
-    const progFileName = document.getElementById('progFileName');
-    const successMsg = document.getElementById('successMsg');
-
-    progBox.style.display = 'block';
-    successMsg.style.display = 'none';
-    progFileName.textContent = file.name;
-    progFill.style.width = '0%';
-    progPct.textContent = '0%';
-
     let lastTime = performance.now();
     let lastLoaded = 0;
     let speedText = '';
 
     const xhr = new XMLHttpRequest();
-    xhr.open('POST', '/upload?name=' + encodeURIComponent(file.name) + '&pin=' + encodeURIComponent(pin), true);
+    xhr.open('POST', `/upload?id=${transferId}&name=${encodeURIComponent(file.name)}&pin=${encodeURIComponent(pin)}`, true);
 
     xhr.upload.onprogress = (e) => {
       if (e.lengthComputable) {
         const pct = Math.round((e.loaded / e.total) * 100);
         const now = performance.now();
         const dt = (now - lastTime) / 1000;
-        if (dt >= 0.25) {
+        if (dt >= 0.2) {
           const bytesDiff = e.loaded - lastLoaded;
           const mbps = (bytesDiff / (1024 * 1024 * dt)).toFixed(1);
           speedText = `${mbps} MB/s`;
@@ -181,15 +241,13 @@ function uploadSingle(file) {
         }, 1800);
         resolve();
       } else {
-        alert('Transfer disconnected: Inex Drop was turned off on PC.');
-        document.body.innerHTML = '<div class="card" style="margin-top:60px;"><h2>Disconnected</h2><p style="color:var(--dim);">Inex Drop was turned off on PC.</p></div>';
+        alert('Transfer failed or was declined on PC.');
         resolve();
       }
     };
 
     xhr.onerror = () => {
       alert('Upload failed: Inex Drop disconnected.');
-      document.body.innerHTML = '<div class="card" style="margin-top:60px;"><h2>Disconnected</h2><p style="color:var(--dim);">Inex Drop was turned off on PC.</p></div>';
       resolve();
     };
 
