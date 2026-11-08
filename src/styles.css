@@ -2535,10 +2535,10 @@ body {
 
 .island.island.island:not([data-theme="matrix"]) .ctrl-tile {
   display: grid !important;
-  grid-template-columns: 34px 1fr;
-  column-gap: 10px;
+  grid-template-columns: 32px minmax(0, 1fr);
+  column-gap: 8px;
   align-items: center; justify-items: start; text-align: left;
-  height: 58px; padding: 0 12px;
+  height: 58px; padding: 0 10px;
   background: color-mix(in srgb, var(--menu-fg) 9%, transparent);
   border: 0 !important; border-radius: 20px;
   box-shadow: none !important; color: inherit !important;
@@ -2546,9 +2546,14 @@ body {
 .island.island.island:not([data-theme="matrix"]) .ctrl-tile:hover {
   background: color-mix(in srgb, var(--menu-fg) 14%, transparent);
 }
+.island.island.island.island:not([data-theme="matrix"]) .ctrl-tile.active,
+.island.island.island.island:not([data-theme="matrix"]) .ctrl-tile.active:hover {
+  background: color-mix(in srgb, var(--menu-fg) 9%, transparent) !important;
+  border: 0 !important; box-shadow: none !important; color: inherit !important;
+}
 .island:not([data-theme="matrix"]) .ctrl-tile .ico {
   grid-row: 1 / 3; margin: 0;
-  width: 34px; height: 34px; padding: 8px; border-radius: 50%;
+  width: 32px; height: 32px; padding: 7px; border-radius: 50%;
   background: color-mix(in srgb, var(--menu-fg) 20%, transparent);
   transition: background 0.18s ease;
 }
@@ -2560,12 +2565,15 @@ body {
 .island:not([data-theme="matrix"]) .ctrl-tile .sr {
   display: block !important;
   grid-row: 1 / 3; grid-column: 2; align-self: center;
-  font-size: 11px; font-weight: 500; line-height: 1.25;
+  font-size: 10.5px; font-weight: 500; line-height: 1.25;
+  min-width: 0; max-width: 100%;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   color: var(--menu-fg-dim);
 }
 .island:not([data-theme="matrix"]) .ctrl-tile.active .sr { color: var(--mac-accent); }
 .island:not([data-theme="matrix"]) .ctrl-tile .sr::before {
-  display: block; font-size: 13px; font-weight: 600; color: var(--menu-fg);
+  display: block; font-size: 12px; font-weight: 600; color: var(--menu-fg);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 #wifi-sub::before { content: "Wi-Fi"; }
 #tile-p2p-sub::before { content: "P2P Link"; }
@@ -2573,7 +2581,7 @@ body {
 #tile-tray-sub::before { content: "Tray"; }
 #mic-sub::before { content: "Microphone"; }
 #tile-notepad .sr { font-size: 0 !important; }
-#tile-notepad .sr::before { content: "Quick Notes"; font-size: 13px; }
+#tile-notepad .sr::before { content: "Quick Notes"; font-size: 12px; }
 .island:not([data-theme="matrix"]) #tile-p2p-title,
 .island:not([data-theme="matrix"]) .ctrl-tile .cap { display: none !important; }
 
