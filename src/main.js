@@ -700,7 +700,7 @@ document.getElementById('c-center-trigger').addEventListener('click', (e) => {
     if (typeof dismissTimerAlarm === 'function') dismissTimerAlarm();
     return;
   }
-  switchView('view-control', 'state-control', 316, 256);
+  switchView('view-control', 'state-control', 316, 292);
   refreshBtCaption();
   if (slotRunning.has('mic')) refreshMic();
 });
@@ -1589,7 +1589,7 @@ document.getElementById('tile-tray').addEventListener('click', openTrayView);
 
 document.querySelectorAll('.back-btn').forEach((btn) => {
   btn.addEventListener('click', () => {
-    switchView('view-control', 'state-control', 316, 256);
+    switchView('view-control', 'state-control', 316, 292);
   });
 });
 
@@ -1788,7 +1788,7 @@ document.getElementById('audio-back-btn')?.addEventListener('click', () => {
   if (lastAudioOrigin === 'view-media' && appState.mediaPlaying) {
     openMedia();
   } else {
-    switchView('view-control', 'state-control', 316, 256);
+    switchView('view-control', 'state-control', 316, 292);
   }
 });
 

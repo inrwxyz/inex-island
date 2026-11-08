@@ -148,7 +148,7 @@ document.getElementById('c-center-trigger').addEventListener('click', (e) => {
     if (typeof dismissTimerAlarm === 'function') dismissTimerAlarm();
     return;
   }
-  switchView('view-control', 'state-control', 316, 256);
+  switchView('view-control', 'state-control', 316, 292);
   refreshBtCaption();
   if (slotRunning.has('mic')) refreshMic();
 });

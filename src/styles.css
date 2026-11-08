@@ -232,7 +232,7 @@ body {
 }
 
 .island.state-drop     { width: 195px; height: 86px; border-style: dashed; }
-.island.state-control  { width: 312px; height: 252px; }
+.island.state-control  { width: 312px; height: 288px; }
 .island.state-tray     { width: 312px; height: 214px; }
 .island.state-tray.picker-open { height: 248px; }
 .island.state-sub      { width: 312px; height: 204px; }
@@ -2536,9 +2536,9 @@ body {
 .island.island.island:not([data-theme="matrix"]) .ctrl-tile {
   display: grid !important;
   grid-template-columns: 32px minmax(0, 1fr);
-  column-gap: 8px;
+  column-gap: 7px;
   align-items: center; justify-items: start; text-align: left;
-  height: 58px; padding: 0 10px;
+  height: 52px; padding: 0 8px;
   background: color-mix(in srgb, var(--menu-fg) 9%, transparent);
   border: 0 !important; border-radius: 20px;
   box-shadow: none !important; color: inherit !important;
@@ -2546,6 +2546,7 @@ body {
 .island.island.island:not([data-theme="matrix"]) .ctrl-tile:hover {
   background: color-mix(in srgb, var(--menu-fg) 14%, transparent);
 }
+.island.island.island.island:not([data-theme="matrix"]) .ctrl-tile.hidden { display: none !important; }
 .island.island.island.island:not([data-theme="matrix"]) .ctrl-tile.active,
 .island.island.island.island:not([data-theme="matrix"]) .ctrl-tile.active:hover {
   background: color-mix(in srgb, var(--menu-fg) 9%, transparent) !important;
@@ -2572,7 +2573,7 @@ body {
 }
 .island:not([data-theme="matrix"]) .ctrl-tile.active .sr { color: var(--mac-accent); }
 .island:not([data-theme="matrix"]) .ctrl-tile .sr::before {
-  display: block; font-size: 12px; font-weight: 600; color: var(--menu-fg);
+  display: block; font-size: 11.5px; font-weight: 600; letter-spacing: -0.03em; color: var(--menu-fg);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 #wifi-sub::before { content: "Wi-Fi"; }
@@ -2581,13 +2582,13 @@ body {
 #tile-tray-sub::before { content: "Tray"; }
 #mic-sub::before { content: "Microphone"; }
 #tile-notepad .sr { font-size: 0 !important; }
-#tile-notepad .sr::before { content: "Quick Notes"; font-size: 12px; }
+#tile-notepad .sr::before { content: "Quick Notes"; font-size: 11.5px; }
 .island:not([data-theme="matrix"]) #tile-p2p-title,
 .island:not([data-theme="matrix"]) .ctrl-tile .cap { display: none !important; }
 
 /* round quick buttons */
 .island.island.island:not([data-theme="matrix"]) .q-icon-btn {
-  flex: none; width: 38px; height: 38px; border-radius: 50%; border: 0;
+  flex: none; width: 36px; height: 36px; border-radius: 50%; border: 0;
   background: color-mix(in srgb, var(--menu-fg) 12%, transparent);
 }
 .island.island.island:not([data-theme="matrix"]) .q-icon-btn.active {
@@ -2595,27 +2596,27 @@ body {
   color: var(--color-tile-on-fg) !important;
   border: 0 !important;
 }
-.island:not([data-theme="matrix"]) .quick-icons-row { padding: 8px 14px; }
+.island:not([data-theme="matrix"]) .quick-icons-row { padding: 6px 14px; }
 
 /* pill sliders, icon inside */
-.island:not([data-theme="matrix"]) .ctrl-sliders { gap: 10px; }
+.island:not([data-theme="matrix"]) .ctrl-sliders { gap: 8px; }
 .island:not([data-theme="matrix"]) .ctrl-slider-row { position: relative; gap: 0; }
 .island:not([data-theme="matrix"]) .ctrl-slider-row input[type="range"] {
   -webkit-appearance: none; appearance: none;
-  flex: 1; height: 34px; margin: 0; overflow: hidden;
-  border-radius: 17px;
+  flex: 1; height: 30px; margin: 0; overflow: hidden;
+  border-radius: 15px;
   background-color: color-mix(in srgb, var(--menu-fg) 16%, transparent) !important;
 }
 .island:not([data-theme="matrix"]) .ctrl-slider-row input[type="range"]::-webkit-slider-runnable-track {
-  height: 34px; background: transparent;
+  height: 30px; background: transparent;
 }
 .island:not([data-theme="matrix"]) .ctrl-slider-row input[type="range"]::-webkit-slider-thumb {
-  -webkit-appearance: none; width: 34px; height: 34px; border-radius: 50%;
+  -webkit-appearance: none; width: 30px; height: 30px; border-radius: 50%;
   background: var(--color-tile-on-bg);
   box-shadow: -600px 0 0 600px var(--color-tile-on-bg);
 }
 .island:not([data-theme="matrix"]) .ctrl-slider-row .s-ico {
-  position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
+  position: absolute; left: 8px; top: 50%; transform: translateY(-50%);
   width: 14px; height: 14px; opacity: 1; z-index: 2; pointer-events: none;
   color: var(--color-tile-on-fg);
 }
