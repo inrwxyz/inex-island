@@ -114,8 +114,10 @@ const PAGES = [
       { path: 'appearance.glowColor', type: 'color', icon: 'spark', t: 'Active Glow', d: 'Accent outline on active switches and sliders', swatches: GLOW_SWATCHES }
     ] },
     { title: '2x2 Slots', rows: [
-      { path: 'slots.a', type: 'select', icon: 'widgets', t: 'Slot 1 (Top-Left)', d: 'Default is Wi-Fi. Inactive backends power down', options: SLOT_OPTIONS, onChange: slotChange('b') },
-      { path: 'slots.b', type: 'select', icon: 'widgets', t: 'Slot 2 (Bottom-Left)', d: 'Default is Bluetooth. Pair devices or notepad', options: SLOT_OPTIONS, onChange: slotChange('a') }
+      { path: 'slots.a', type: 'select', icon: 'widgets', t: 'Slot 1 (Top-Left)', d: 'Default is Wi-Fi', options: SLOT_OPTIONS, onChange: slotChange('a') },
+      { path: 'slots.b', type: 'select', icon: 'widgets', t: 'Slot 2 (Top-Right)', d: 'Default is Inex Drop', options: SLOT_OPTIONS, onChange: slotChange('b') },
+      { path: 'slots.c', type: 'select', icon: 'widgets', t: 'Slot 3 (Bottom-Left)', d: 'Default is Bluetooth', options: SLOT_OPTIONS, onChange: slotChange('c') },
+      { path: 'slots.d', type: 'select', icon: 'widgets', t: 'Slot 4 (Bottom-Right)', d: 'Default is File Tray', options: SLOT_OPTIONS, onChange: slotChange('d') }
     ] },
     { title: 'Motion', rows: [
       { path: 'appearance.animations', type: 'toggle', icon: 'spark', t: 'Micro-Interactions', d: 'Haptic button scaling, spring transitions & glass highlights' }
@@ -196,10 +198,18 @@ function debouncedCommit(path, value, onChange) {
   }, 40);
   if (onChange) onChange(value, prev);
 }
-// Two control-panel slots can never hold the same item: picking one that the other slot has swaps them.
-function slotChange(other) {
+// Two control-panel slots can never hold the same item: picking one that another slot has swaps them.
+function slotChange(currentKey) {
   return (v, prev) => {
-    if (S.slots[other] === v) { S.slots[other] = prev; save(S); }
+    if (!S.slots) S.slots = { a: 'wifi', b: 'drop', c: 'bt', d: 'tray' };
+    const keys = ['a', 'b', 'c', 'd'];
+    for (const k of keys) {
+      if (k !== currentKey && S.slots[k] === v) {
+        S.slots[k] = prev;
+        save(S);
+        break;
+      }
+    }
     renderPage();
   };
 }

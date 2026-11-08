@@ -2629,41 +2629,41 @@ body {
 
 /* Inex Drop Sub-View */
 .drop-body {
-  padding: 10px 14px 14px;
+  padding: 8px 14px 10px;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
-  min-height: 190px;
+  min-height: 180px;
 }
 .drop-state-box {
   width: 100%; display: flex; flex-direction: column; align-items: center; text-align: center;
 }
 .drop-idle-ico {
-  width: 58px; height: 58px; border-radius: 50%;
+  width: 50px; height: 50px; border-radius: 50%;
   background: color-mix(in srgb, var(--menu-fg) 10%, transparent);
   color: var(--mac-accent);
-  display: grid; place-items: center; margin-bottom: 10px;
+  display: grid; place-items: center; margin-bottom: 8px;
 }
-.drop-idle-title { font-size: 14px; font-weight: 600; margin-bottom: 4px; color: var(--menu-fg); }
+.drop-idle-title { font-size: 13.5px; font-weight: 600; margin-bottom: 3px; color: var(--menu-fg); }
 .drop-idle-sub { font-size: 11px; color: var(--menu-fg-dim); max-width: 220px; line-height: 1.3; }
 
 .drop-qr-wrap {
-  width: 130px; height: 130px; background: #fff; border-radius: 14px;
-  padding: 8px; display: grid; place-items: center;
+  width: 96px; height: 96px; background: #fff; border-radius: 12px;
+  padding: 6px; display: grid; place-items: center;
   box-shadow: 0 4px 16px rgba(0,0,0,0.4);
 }
-.drop-qr-wrap svg { width: 114px; height: 114px; display: block; }
-.drop-qr-hint { font-size: 11px; font-weight: 500; color: var(--menu-fg-dim); margin-top: 8px; }
+.drop-qr-wrap svg { width: 84px; height: 84px; display: block; }
+.drop-qr-hint { font-size: 10.5px; font-weight: 500; color: var(--menu-fg-dim); margin-top: 6px; }
 .drop-url-row {
-  display: flex; align-items: center; gap: 6px; margin-top: 6px;
+  display: flex; align-items: center; gap: 6px; margin-top: 5px;
   background: color-mix(in srgb, var(--menu-fg) 8%, transparent);
-  padding: 3px 6px 3px 10px; border-radius: 8px; max-width: 250px;
+  padding: 2px 6px 2px 8px; border-radius: 7px; max-width: 240px;
 }
 .drop-url-txt {
   font-size: 10px; font-family: var(--font-mono); color: var(--menu-fg-dim);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 170px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 165px;
 }
 .copy-url-btn {
-  background: var(--mac-accent); color: #fff; border: 0; border-radius: 6px;
-  padding: 3px 8px; font-size: 10px; font-weight: 600; cursor: pointer;
+  background: var(--mac-accent); color: #fff; border: 0; border-radius: 5px;
+  padding: 2px 7px; font-size: 9.5px; font-weight: 600; cursor: pointer;
 }
 
 .drop-conn-card {

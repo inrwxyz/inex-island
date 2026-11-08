@@ -389,8 +389,8 @@ function startCompactTransferUI() {
   renderCenter();
 }
 
-function updateCompactTransferPct(pct) {
-  document.getElementById('c-transfer-pct').textContent = `${pct}%`;
+function updateCompactTransferPct(pct, speed) {
+  document.getElementById('c-transfer-pct').textContent = speed ? `${pct}% • ${speed}` : `${pct}%`;
   const box = document.getElementById('c-transfer-anim');
   if (box && pct > 0) box.classList.remove('indeterminate');
   setXferDirectionUI();

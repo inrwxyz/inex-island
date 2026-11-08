@@ -18,7 +18,7 @@ export const DEFAULTS = {
   },
   weather: { enabled: true, unit: 'C' },
   widgets: { left: 'weather', right: 'ram' },
-  slots: { a: 'wifi', b: 'bt' },
+  slots: { a: 'wifi', b: 'drop', c: 'bt', d: 'tray' },
   menu: {
     actionTiles: ['awake', 'snip', 'calendar', 'timer', 'clipboard', 'lock', 'settings']
   },
@@ -52,8 +52,9 @@ export const SLOT_OPTIONS = [
   ['wifi', 'Wi-Fi'],
   ['drop', 'Inex Drop'],
   ['bt', 'Bluetooth'],
+  ['tray', 'File Tray'],
   ['notepad', 'Quick Notes'],
-  ['mic', 'Microphone mute']
+  ['mic', 'Microphone']
 ];
 
 const FONT_MAP = {
@@ -94,6 +95,21 @@ export function load() {
     base.menu.actionTiles = base.menu.actionTiles.filter((id) => ALL_ACTION_TILES[id]);
     if (base.menu.actionTiles.length === 0) {
       base.menu.actionTiles = [...DEFAULT_ACTION_TILES];
+    }
+    if (!base.slots) base.slots = { a: 'wifi', b: 'drop', c: 'bt', d: 'tray' };
+    if (!base.slots.a) base.slots.a = 'wifi';
+    if (!base.slots.b) base.slots.b = 'drop';
+    if (!base.slots.c) base.slots.c = 'bt';
+    if (!base.slots.d) base.slots.d = 'tray';
+    const usedSlots = new Set();
+    const validSlots = ['wifi', 'drop', 'bt', 'tray', 'notepad', 'mic'];
+    for (const k of ['a', 'b', 'c', 'd']) {
+      let val = base.slots[k];
+      if (!validSlots.includes(val) || usedSlots.has(val)) {
+        val = validSlots.find(opt => !usedSlots.has(opt)) || 'wifi';
+        base.slots[k] = val;
+      }
+      usedSlots.add(val);
     }
     if (!base.share.deviceName) base.share.deviceName = localStorage.getItem('island_pc_name') || '';
     if (!base.share.firebaseUrl) base.share.firebaseUrl = localStorage.getItem('island_firebase_url') || '';

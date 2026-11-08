@@ -122,39 +122,57 @@ const SLOT_DEFS = {
       if (typeof toggleInexDrop === 'function') toggleInexDrop();
       else switchView('view-p2p', 'state-sub', 316, 248);
     }
+  },
+  tray: {
+    el: 'tile-tray',
+    start: () => { if (typeof updateTrayUI === 'function') updateTrayUI(); },
+    stop: () => {},
+    click: () => { if (typeof openTrayView === 'function') openTrayView(); }
   }
 };
 
 function applySlots() {
   let a = SET.slots && SET.slots.a;
   let b = SET.slots && SET.slots.b;
+  let c = SET.slots && SET.slots.c;
+  let d = SET.slots && SET.slots.d;
   if (!SLOT_DEFS[a]) a = 'wifi';
-  if (!SLOT_DEFS[b]) b = 'bt';
-  if (a === b) b = a === 'bt' ? 'wifi' : 'bt';
-  const want = new Set([a, b]);
+  if (!SLOT_DEFS[b]) b = 'drop';
+  if (!SLOT_DEFS[c]) c = 'bt';
+  if (!SLOT_DEFS[d]) d = 'tray';
 
-  // grid order: slot A (1), Inex Drop (2), slot B (3), Tray (4)
-  const dropTile = document.getElementById('tile-drop') || document.getElementById('tile-p2p');
-  const trayTile = document.getElementById('tile-tray');
-  if (trayTile) {
-    trayTile.style.order = 4;
-    trayTile.classList.remove('hidden');
+  const used = new Set();
+  const allDefs = Object.keys(SLOT_DEFS);
+  const slots = [a, b, c, d];
+  for (let i = 0; i < 4; i++) {
+    if (used.has(slots[i])) {
+      const alt = allDefs.find(k => !used.has(k)) || 'wifi';
+      slots[i] = alt;
+    }
+    used.add(slots[i]);
   }
+  [a, b, c, d] = slots;
 
-  if (dropTile) {
-    dropTile.classList.remove('hidden');
-    dropTile.style.order = a === 'drop' ? 1 : (b === 'drop' ? 3 : 2);
-  }
+  const slotMap = { [a]: 1, [b]: 2, [c]: 3, [d]: 4 };
+  const want = new Set([a, b, c, d]);
 
   Object.entries(SLOT_DEFS).forEach(([id, def]) => {
-    if (id === 'drop') return;
     const tile = document.getElementById(def.el);
     if (!tile) return;
     const on = want.has(id);
     tile.classList.toggle('hidden', !on);
-    if (on) tile.style.order = id === a ? 1 : 3;
-    if (on && !slotRunning.has(id)) { slotRunning.add(id); def.start(); }
-    if (!on && slotRunning.has(id)) { slotRunning.delete(id); def.stop(); }
+    if (on) {
+      tile.style.order = slotMap[id];
+      if (!slotRunning.has(id)) {
+        slotRunning.add(id);
+        def.start();
+      }
+    } else {
+      if (slotRunning.has(id)) {
+        slotRunning.delete(id);
+        def.stop();
+      }
+    }
   });
 }
 
@@ -3136,7 +3154,19 @@ onTauriEvent('inexdrop-event', (event) => {
   } else if (p.type === 'stopped') {
     dropActive = false;
     dropConnected = false;
+    const rxBox = document.getElementById('drop-rx-progress');
+    if (rxBox) rxBox.classList.add('hidden');
+    if (typeof finishCompactTransferUI === 'function') {
+      finishCompactTransferUI();
+    }
     refreshDropUI();
+  } else if (p.type === 'upload_cancelled') {
+    const rxBox = document.getElementById('drop-rx-progress');
+    if (rxBox) rxBox.classList.add('hidden');
+    if (typeof finishCompactTransferUI === 'function') {
+      finishCompactTransferUI();
+    }
+    showToast('unlock', 'Transfer cancelled (Inex Drop turned off)', 2000);
   } else if (p.type === 'upload_start') {
     const rxBox = document.getElementById('drop-rx-progress');
     const rxName = document.getElementById('drop-rx-name');
@@ -3155,17 +3185,17 @@ onTauriEvent('inexdrop-event', (event) => {
   } else if (p.type === 'progress') {
     const rxPct = document.getElementById('drop-rx-pct');
     const rxBar = document.getElementById('drop-rx-bar');
-    if (rxPct) rxPct.textContent = `${p.pct}%`;
+    if (rxPct) rxPct.textContent = p.speed ? `${p.speed} • ${p.pct}%` : `${p.pct}%`;
     if (rxBar) rxBar.style.width = `${p.pct}%`;
 
     if (typeof updateCompactTransferPct === 'function') {
-      updateCompactTransferPct(p.pct);
+      updateCompactTransferPct(p.pct, p.speed);
     }
   } else if (p.type === 'upload_done') {
     const rxPct = document.getElementById('drop-rx-pct');
     const rxBar = document.getElementById('drop-rx-bar');
     const rxBox = document.getElementById('drop-rx-progress');
-    if (rxPct) rxPct.textContent = '100%';
+    if (rxPct) rxPct.textContent = p.speed ? `100% • ${p.speed}` : '100%';
     if (rxBar) rxBar.style.width = '100%';
 
     if (typeof finishCompactTransferUI === 'function') {
@@ -3179,7 +3209,7 @@ onTauriEvent('inexdrop-event', (event) => {
         plain: true,
         accent: 'ok',
         name: p.name || 'File received',
-        tag: 'Saved to Downloads',
+        tag: p.speed ? `Saved to Downloads • ${p.speed}` : 'Saved to Downloads',
         ms: 3500
       });
     }
@@ -4157,8 +4187,8 @@ function startCompactTransferUI() {
   renderCenter();
 }
 
-function updateCompactTransferPct(pct) {
-  document.getElementById('c-transfer-pct').textContent = `${pct}%`;
+function updateCompactTransferPct(pct, speed) {
+  document.getElementById('c-transfer-pct').textContent = speed ? `${pct}% • ${speed}` : `${pct}%`;
   const box = document.getElementById('c-transfer-anim');
   if (box && pct > 0) box.classList.remove('indeterminate');
   setXferDirectionUI();

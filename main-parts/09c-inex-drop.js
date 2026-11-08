@@ -172,7 +172,19 @@ onTauriEvent('inexdrop-event', (event) => {
   } else if (p.type === 'stopped') {
     dropActive = false;
     dropConnected = false;
+    const rxBox = document.getElementById('drop-rx-progress');
+    if (rxBox) rxBox.classList.add('hidden');
+    if (typeof finishCompactTransferUI === 'function') {
+      finishCompactTransferUI();
+    }
     refreshDropUI();
+  } else if (p.type === 'upload_cancelled') {
+    const rxBox = document.getElementById('drop-rx-progress');
+    if (rxBox) rxBox.classList.add('hidden');
+    if (typeof finishCompactTransferUI === 'function') {
+      finishCompactTransferUI();
+    }
+    showToast('unlock', 'Transfer cancelled (Inex Drop turned off)', 2000);
   } else if (p.type === 'upload_start') {
     const rxBox = document.getElementById('drop-rx-progress');
     const rxName = document.getElementById('drop-rx-name');
@@ -191,17 +203,17 @@ onTauriEvent('inexdrop-event', (event) => {
   } else if (p.type === 'progress') {
     const rxPct = document.getElementById('drop-rx-pct');
     const rxBar = document.getElementById('drop-rx-bar');
-    if (rxPct) rxPct.textContent = `${p.pct}%`;
+    if (rxPct) rxPct.textContent = p.speed ? `${p.speed} • ${p.pct}%` : `${p.pct}%`;
     if (rxBar) rxBar.style.width = `${p.pct}%`;
 
     if (typeof updateCompactTransferPct === 'function') {
-      updateCompactTransferPct(p.pct);
+      updateCompactTransferPct(p.pct, p.speed);
     }
   } else if (p.type === 'upload_done') {
     const rxPct = document.getElementById('drop-rx-pct');
     const rxBar = document.getElementById('drop-rx-bar');
     const rxBox = document.getElementById('drop-rx-progress');
-    if (rxPct) rxPct.textContent = '100%';
+    if (rxPct) rxPct.textContent = p.speed ? `100% • ${p.speed}` : '100%';
     if (rxBar) rxBar.style.width = '100%';
 
     if (typeof finishCompactTransferUI === 'function') {
@@ -215,7 +227,7 @@ onTauriEvent('inexdrop-event', (event) => {
         plain: true,
         accent: 'ok',
         name: p.name || 'File received',
-        tag: 'Saved to Downloads',
+        tag: p.speed ? `Saved to Downloads • ${p.speed}` : 'Saved to Downloads',
         ms: 3500
       });
     }
