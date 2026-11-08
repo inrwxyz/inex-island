@@ -3049,6 +3049,20 @@ async function refreshDropUI() {
   const boxIdle = document.getElementById('drop-state-idle');
   const boxWait = document.getElementById('drop-state-waiting');
   const boxConn = document.getElementById('drop-state-connected');
+  const boxPrompt = document.getElementById('drop-state-prompt');
+
+  // If a transfer authorization prompt is active, ONLY show prompt and never overlap
+  if (currentPromptId) {
+    if (pill) { pill.textContent = 'Incoming...'; pill.className = 'status-tag warn'; }
+    if (cdBadge) cdBadge.classList.add('hidden');
+    if (btnDisc) btnDisc.classList.add('hidden');
+    if (boxIdle) boxIdle.classList.add('hidden');
+    if (boxWait) boxWait.classList.add('hidden');
+    if (boxConn) boxConn.classList.add('hidden');
+    if (boxPrompt) boxPrompt.classList.remove('hidden');
+    return;
+  }
+  if (boxPrompt) boxPrompt.classList.add('hidden');
 
   if (!dropActive) {
     if (pill) { pill.textContent = 'Off'; pill.className = 'status-tag'; }
@@ -3089,8 +3103,6 @@ async function refreshDropUI() {
     if (boxConn) boxConn.classList.add('hidden');
 
     renderDropQR(dropCurrentUrl);
-    const urlTxt = document.getElementById('drop-url-text');
-    if (urlTxt) urlTxt.textContent = dropCurrentUrl;
   }
 }
 
@@ -3191,25 +3203,16 @@ onTauriEvent('inexdrop-event', (event) => {
   } else if (p.type === 'transfer_prompt') {
     currentPromptId = p.id;
     openDropView();
-    const boxPrompt = document.getElementById('drop-state-prompt');
-    const boxWait = document.getElementById('drop-state-waiting');
-    const boxConn = document.getElementById('drop-state-connected');
-    const boxIdle = document.getElementById('drop-state-idle');
-    if (boxIdle) boxIdle.classList.add('hidden');
-    if (boxWait) boxWait.classList.add('hidden');
-    if (boxConn) boxConn.classList.add('hidden');
-    if (boxPrompt) {
-      boxPrompt.classList.remove('hidden');
-      const devEl = document.getElementById('prompt-sender-name');
-      const fileEl = document.getElementById('prompt-file-name');
-      const sizeEl = document.getElementById('prompt-file-size');
-      if (devEl) devEl.textContent = p.device || 'Phone';
-      if (fileEl) fileEl.textContent = p.name || 'File';
-      if (sizeEl) {
-        const mb = (p.size / (1024 * 1024)).toFixed(1);
-        sizeEl.textContent = `${mb} MB`;
-      }
+    const devEl = document.getElementById('prompt-sender-name');
+    const fileEl = document.getElementById('prompt-file-name');
+    const sizeEl = document.getElementById('prompt-file-size');
+    if (devEl) devEl.textContent = p.device || 'Android Phone';
+    if (fileEl) fileEl.textContent = p.name || 'File';
+    if (sizeEl) {
+      const mb = (p.size / (1024 * 1024)).toFixed(1);
+      sizeEl.textContent = `${mb} MB`;
     }
+    refreshDropUI();
   } else if (p.type === 'upload_cancelled') {
     const rxBox = document.getElementById('drop-rx-progress');
     if (rxBox) rxBox.classList.add('hidden');
@@ -3328,48 +3331,19 @@ function initInexDrop() {
   // Accept / Decline handlers
   document.getElementById('btn-prompt-accept')?.addEventListener('click', async () => {
     if (currentPromptId) {
-      await invokeTauri('respond_inex_transfer', { id: currentPromptId, accept: true });
-      document.getElementById('drop-state-prompt')?.classList.add('hidden');
-      document.getElementById('drop-state-connected')?.classList.remove('hidden');
+      const pid = currentPromptId;
+      currentPromptId = null;
+      await invokeTauri('respond_inex_transfer', { id: pid, accept: true });
+      refreshDropUI();
     }
   });
   document.getElementById('btn-prompt-decline')?.addEventListener('click', async () => {
     if (currentPromptId) {
-      await invokeTauri('respond_inex_transfer', { id: currentPromptId, accept: false });
-      document.getElementById('drop-state-prompt')?.classList.add('hidden');
-      document.getElementById('drop-state-connected')?.classList.remove('hidden');
+      const pid = currentPromptId;
+      currentPromptId = null;
+      await invokeTauri('respond_inex_transfer', { id: pid, accept: false });
+      refreshDropUI();
       showToast('unphone', 'Transfer declined', 1800);
-    }
-  });
-
-  // Browser vs App tab toggle
-  document.getElementById('btn-drop-mode-web')?.addEventListener('click', () => {
-    document.getElementById('btn-drop-mode-web')?.classList.add('active');
-    document.getElementById('btn-drop-mode-app')?.classList.remove('active');
-    const hint = document.getElementById('drop-qr-hint');
-    if (hint) hint.textContent = 'Scan with phone camera to connect';
-    document.getElementById('drop-url-row')?.classList.remove('hidden');
-    document.getElementById('drop-app-row')?.classList.add('hidden');
-    renderDropQR(dropCurrentUrl);
-  });
-  document.getElementById('btn-drop-mode-app')?.addEventListener('click', () => {
-    document.getElementById('btn-drop-mode-app')?.classList.add('active');
-    document.getElementById('btn-drop-mode-web')?.classList.remove('active');
-    const hint = document.getElementById('drop-qr-hint');
-    if (hint) hint.textContent = 'Scan with Inex Drop App to connect';
-    document.getElementById('drop-app-row')?.classList.remove('hidden');
-    renderDropQR(dropCurrentUrl);
-  });
-
-  document.getElementById('btn-copy-apk-url')?.addEventListener('click', () => {
-    if (dropCurrentUrl) {
-      try {
-        const u = new URL(dropCurrentUrl);
-        const apkUrl = `${u.protocol}//${u.host}/inex-drop.apk`;
-        navigator.clipboard.writeText(apkUrl).then(() => {
-          showToast('done', 'APK download link copied!', 1500);
-        });
-      } catch (_) {}
     }
   });
 }

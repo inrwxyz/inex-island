@@ -33,6 +33,7 @@ pub enum TransferApproval {
     Declined,
 }
 
+#[allow(dead_code)]
 #[derive(Clone, Debug)]
 pub struct PendingTransfer {
     pub id: String,
@@ -328,7 +329,6 @@ fn handle_client(mut stream: TcpStream, app: &AppHandle, valid_pin: &str) {
                 let mut out_file = BufWriter::with_capacity(512 * 1024, raw_file);
                 let mut buf = vec![0u8; 512 * 1024];
                 let mut received: usize = 0;
-                let mut last_reported_pct: usize = 0;
                 let transfer_start = std::time::Instant::now();
                 let mut last_emit_time = std::time::Instant::now();
                 let mut last_speed_time = std::time::Instant::now();
@@ -370,7 +370,6 @@ fn handle_client(mut stream: TcpStream, app: &AppHandle, valid_pin: &str) {
                             // High performance throttled IPC emission
                             if last_emit_time.elapsed().as_millis() >= 150 || pct == 100 {
                                 last_emit_time = std::time::Instant::now();
-                                last_reported_pct = pct;
                                 let _ = app.emit("inexdrop-event", serde_json::json!({
                                     "type": "progress",
                                     "pct": pct,
@@ -405,34 +404,6 @@ fn handle_client(mut stream: TcpStream, app: &AppHandle, valid_pin: &str) {
             } else {
                 let _ = stream.write_all(b"HTTP/1.1 500 Internal Error\r\nConnection: close\r\n\r\n");
             }
-        }
-        ("GET", "/inex-drop.apk") => {
-            let candidates = [
-                std::env::current_exe().ok().and_then(|p| p.parent().map(|d| d.join("inex-drop.apk"))).unwrap_or_default(),
-                PathBuf::from("E:\\one inex\\working experimental\\inex-island\\android\\app\\build\\outputs\\apk\\debug\\app-debug.apk"),
-                PathBuf::from("E:\\one inex\\working experimental\\inex-island\\inex-drop.apk"),
-                PathBuf::from("C:\\Users\\inrwx\\AppData\\Local\\Inex Island\\inex-drop.apk"),
-            ];
-            let found = candidates.into_iter().find(|p| p.exists() && p.is_file());
-            if let Some(apk) = found {
-                if let Ok(mut f) = File::open(&apk) {
-                    let size = f.metadata().map(|m| m.len()).unwrap_or(0);
-                    let header = format!(
-                        "HTTP/1.1 200 OK\r\nContent-Type: application/vnd.android.package-archive\r\nContent-Disposition: attachment; filename=\"InexDrop.apk\"\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-                        size
-                    );
-                    if stream.write_all(header.as_bytes()).is_ok() {
-                        let _ = stream.set_nodelay(true);
-                        let mut buf = vec![0u8; 256 * 1024];
-                        while let Ok(n) = f.read(&mut buf) {
-                            if n == 0 { break; }
-                            if stream.write_all(&buf[..n]).is_err() { break; }
-                        }
-                    }
-                    return;
-                }
-            }
-            let _ = stream.write_all(b"HTTP/1.1 404 Not Found\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nAPK is building or not ready yet.");
         }
         ("GET", "/files") => {
             let files_json = {

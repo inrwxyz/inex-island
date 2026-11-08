@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <style name="Theme.InexDrop" parent="Theme.Material3.Dark.NoActionBar">
-        <item name="android:statusBarColor">#0B0B0F</item>
-        <item name="android:navigationBarColor">#0B0B0F</item>
-        <item name="android:windowBackground">@color/bg_black</item>
-        <item name="colorPrimary">@color/accent_blue</item>
-    </style>
-</resources>
