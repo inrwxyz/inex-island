@@ -1512,6 +1512,13 @@ const BATT_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" str
 
 function hudIsFloating() { return !!(SET.notch && SET.notch.style === 'floating'); }
 function hudCanShow() { return appState.currentView === 'view-compact'; }   // never fight an open menu
+// The island is zoomed by Settings > UI Scale, so the window has to grow with it, plus room for the spring overshoot.
+// Too small a window cuts the bottom of the pill off (the text line under the name vanishes).
+function hudUiScale() { return Math.max(0.8, ((SET.appearance && SET.appearance.scale) || 100) / 100); }
+function hudWindowSize() {
+  const k = hudUiScale();
+  return { width: Math.ceil(256 * k) + 8, height: Math.ceil((hudIsFloating() ? 64 : 54) * k) };
+}
 function hudRestoreWindow() {
   if (!hudCanShow() || appState.alarmActive) return;   // the timer-end card keeps its own window size
   tryInvoke('resize_island', { width: 265, height: hudIsFloating() ? 48 : 36 });
@@ -1528,6 +1535,7 @@ function showDeviceHud(o) {
   const battTxt = document.getElementById('bt-hud-batt-pct');
   if (!hud || !ico || !nameEl) return;
 
+  const alreadyOpen = island.classList.contains('bt-hud-active') && !island.classList.contains('hud-out') && !hud.classList.contains('hidden');
   clearTimeout(btHudTimer); clearTimeout(btHudStartT); clearTimeout(btHudBackT); clearTimeout(btHudEndT);
   btHudPrompt = !!o.actions;
   // another HUD may be open: close it instantly
@@ -1586,14 +1594,23 @@ function showDeviceHud(o) {
     requestAnimationFrame(tick);
   }
 
-  hud.classList.remove('hidden');
-  // 1) window big enough, 2) old content blurs away, 3) island springs open
-  tryInvoke('resize_island', { width: 256, height: 56 });  // a bit wider than the 220px HUD so the spring overshoot is never clipped
-  island.classList.add('hud-pre');
-  btHudStartT = setTimeout(() => {
-    island.classList.remove('hud-pre');
-    island.classList.add('bt-hud-active');
-  }, 110);
+  const win = hudWindowSize();
+  if (alreadyOpen) {
+    // the pill is already out (e.g. next file request right after "saved"): keep it open, only swap the content
+    tryInvoke('resize_island', win);
+    hud.classList.add('hidden');
+    void hud.offsetWidth;              // restarts the content animation
+    hud.classList.remove('hidden');
+  } else {
+    hud.classList.remove('hidden');
+    // 1) window big enough, 2) old content blurs away, 3) island springs open
+    tryInvoke('resize_island', win);   // wider/taller than the HUD so the spring overshoot is never clipped
+    island.classList.add('hud-pre');
+    btHudStartT = setTimeout(() => {
+      island.classList.remove('hud-pre');
+      island.classList.add('bt-hud-active');
+    }, 110);
+  }
 
   btHudTimer = setTimeout(() => hideDeviceHud(), o.ms || 3200);
 }
@@ -2011,6 +2028,20 @@ async function addDroppedPaths(paths) {
   openTrayView();
 }
 
+// Only the files ticked in the tray go to the phone (nothing ticked = all of them, like P2P)
+function getSelectedTrayFiles() {
+  const all = appState.trayFiles || [];
+  const picked = all.filter((f) => appState.traySelectedIds && appState.traySelectedIds.has(f.id));
+  return picked.length ? picked : [...all];
+}
+
+async function stageTrayFilesForPhone() {
+  const files = getSelectedTrayFiles().filter((f) => f.path);
+  await invokeTauri('clear_staged_files');      // whatever was pushed before must not tag along
+  for (const f of files) await invokeTauri('stage_file_for_phone', { path: f.path });
+  return files.length;
+}
+
 let dropLeaveTimeout = null;
 
 function onNativeDrop(p) {
@@ -2252,9 +2283,7 @@ document.getElementById('btn-clear-tray').addEventListener('click', () => {
 
 document.getElementById('btn-tray-inexdrop')?.addEventListener('click', async () => {
   if (appState.trayFiles && appState.trayFiles.length > 0) {
-    for (const f of appState.trayFiles) {
-      if (f.path) await invokeTauri('stage_file_for_phone', { path: f.path });
-    }
+    await stageTrayFilesForPhone();
   }
   if (typeof openDropView === 'function') openDropView();
 });
@@ -3068,6 +3097,7 @@ let dropConnected = false;
 let dropCurrentUrl = '';
 let currentPromptId = null;
 let promptExpireTimer = null;
+let promptQueue = [];   // more requests waiting behind the one on screen: every file needs its own Accept
 
 function fileCategory(name) {
   const ext = (name || '').split('.').pop().toLowerCase();
@@ -3132,8 +3162,45 @@ function closePromptHud(instant) {
 // Drops any open request (phone left, Inex Drop stopped, request expired)
 function clearPrompt() {
   currentPromptId = null;
+  promptQueue = [];
   clearTimeout(promptExpireTimer);
   closePromptHud(true);
+}
+
+// Shows the next waiting request (if any) once the previous one has been answered
+function showNextPrompt(delay = 450) {
+  if (currentPromptId || promptQueue.length === 0) return;
+  setTimeout(() => {
+    if (currentPromptId || promptQueue.length === 0) return;
+    activatePrompt(promptQueue.shift());
+  }, delay);
+}
+
+function activatePrompt(p) {
+  currentPromptId = p.id;
+  clearTimeout(promptExpireTimer);
+  // the request expires after 1 minute (the phone stops waiting then too)
+  promptExpireTimer = setTimeout(() => {
+    if (currentPromptId === p.id) {
+      declineTransferPrompt(true);
+    }
+  }, 60000);
+
+  // fill the Inex Drop menu card (used when the menu is open, or opened later)
+  const devEl = document.getElementById('prompt-sender-name');
+  const fileEl = document.getElementById('prompt-file-name');
+  const sizeEl = document.getElementById('prompt-file-size');
+  const iconEl = document.getElementById('prompt-file-icon');
+  if (devEl) devEl.textContent = p.device || 'Android Phone';
+  if (fileEl) fileEl.textContent = promptTitle(p);
+  if (sizeEl) sizeEl.textContent = fmtBytes(p.size);
+  if (iconEl) iconEl.innerHTML = getBatchIcon(p.names || [p.name]);
+
+  if (appState.currentView === 'view-inexdrop') {
+    refreshDropUI();
+  } else {
+    showPromptHud(p);
+  }
 }
 
 async function acceptTransferPrompt() {
@@ -3144,6 +3211,7 @@ async function acceptTransferPrompt() {
   closePromptHud();
   await invokeTauri('respond_inex_transfer', { id: pid, accept: true });
   refreshDropUI();
+  showNextPrompt();
 }
 
 async function declineTransferPrompt(silent = false) {
@@ -3157,6 +3225,7 @@ async function declineTransferPrompt(silent = false) {
   if (!silent) {
     showToast('unphone', 'Transfer declined', 1800);
   }
+  showNextPrompt(silent ? 450 : 1900);
 }
 
 function openDropView() {
@@ -3372,29 +3441,11 @@ onTauriEvent('inexdrop-event', (event) => {
     }
     refreshDropUI();
   } else if (p.type === 'transfer_prompt') {
-    currentPromptId = p.id;
-    clearTimeout(promptExpireTimer);
-    // the request expires after 1 minute (the phone stops waiting then too)
-    promptExpireTimer = setTimeout(() => {
-      if (currentPromptId === p.id) {
-        declineTransferPrompt(true);
-      }
-    }, 60000);
-
-    // fill the Inex Drop menu card (used when the menu is open, or opened later)
-    const devEl = document.getElementById('prompt-sender-name');
-    const fileEl = document.getElementById('prompt-file-name');
-    const sizeEl = document.getElementById('prompt-file-size');
-    const iconEl = document.getElementById('prompt-file-icon');
-    if (devEl) devEl.textContent = p.device || 'Android Phone';
-    if (fileEl) fileEl.textContent = promptTitle(p);
-    if (sizeEl) sizeEl.textContent = fmtBytes(p.size);
-    if (iconEl) iconEl.innerHTML = getBatchIcon(p.names || [p.name]);
-
-    if (appState.currentView === 'view-inexdrop') {
-      refreshDropUI();
+    // one request per file; a request that arrives while another is open waits its turn
+    if (currentPromptId && currentPromptId !== p.id) {
+      if (!promptQueue.some((q) => q.id === p.id)) promptQueue.push(p);
     } else {
-      showPromptHud(p);
+      activatePrompt(p);
     }
   } else if (p.type === 'upload_cancelled') {
     const rxBox = document.getElementById('drop-rx-progress');
@@ -3451,18 +3502,7 @@ onTauriEvent('inexdrop-event', (event) => {
       });
     }
 
-    // P2P-style: copy path to clipboard and add to File Tray!
-    if (p.path) {
-      try {
-        navigator.clipboard.writeText(p.path);
-      } catch (_) {}
-      if (typeof addTrayItem === 'function') {
-        addTrayItem(p.path);
-      } else if (appState.trayFiles && !appState.trayFiles.some(f => f.path === p.path)) {
-        appState.trayFiles.unshift({ path: p.path, name: p.name, size: p.size });
-        if (typeof renderTrayList === 'function') renderTrayList();
-      }
-    }
+    // Files from the phone only land in Downloads: no clipboard copy, nothing is added to the tray.
 
     setTimeout(() => {
       if (rxBox) rxBox.classList.add('hidden');
@@ -3518,12 +3558,8 @@ function initInexDrop() {
         showToast('info', 'Drop files into Tray first');
         return;
       }
-      for (const f of appState.trayFiles) {
-        if (f.path) {
-          await invokeTauri('stage_file_for_phone', { path: f.path });
-        }
-      }
-      showToast('phone', 'Files pushed to Phone! (Expires in 1 min)', 2500);
+      const n = await stageTrayFilesForPhone();
+      showToast('phone', `${n} file${n === 1 ? '' : 's'} pushed to Phone! (Expires in 1 min)`, 2500);
     });
   }
 
@@ -5544,28 +5580,42 @@ document.getElementById('island')?.addEventListener('mouseenter', checkSystemCli
 const CLIP_HUD_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/><path class="clip-tick" d="M8.5 14.5l2.5 2.5 4.5-5"/></svg>';
 let clipHudAt = 0;
 
-onTauriEvent('clipboard-copied', async () => {
-  if (SET.general && SET.general.copyToast === false) return; // Strict toggle: OFF means do NOTHING!
-  let text = await tryInvoke('get_clipboard_text', {});
-  if (!text || typeof text !== 'string') {
-    try {
-      if (navigator.clipboard && navigator.clipboard.readText) {
-        text = await navigator.clipboard.readText();
-      }
-    } catch (_) {}
+// Windows fires "clipboard changed" while the copying app can still be holding the clipboard open, so a single
+// read often comes back empty and the popup was silently skipped. Read again a few times before giving up.
+async function readClipboardWithRetry() {
+  const waits = [0, 50, 120, 250, 450];
+  for (const w of waits) {
+    if (w) await new Promise((r) => setTimeout(r, w));
+    const t = await tryInvoke('get_clipboard_text', {});
+    if (t && typeof t === 'string' && t.trim()) return t;
   }
-  if (!text || typeof text !== 'string' || !text.trim()) return;
-  addClipboardText(text);
+  try {
+    if (navigator.clipboard && navigator.clipboard.readText) {
+      const t = await navigator.clipboard.readText();
+      if (t && t.trim()) return t;
+    }
+  } catch (_) {}
+  return '';
+}
+
+let clipCopySeq = 0;
+onTauriEvent('clipboard-copied', async () => {
+  if (SET.general && SET.general.copyToast === false) return; // toggle OFF: do nothing
+  const mySeq = ++clipCopySeq;
+  const text = await readClipboardWithRetry();
+  if (mySeq !== clipCopySeq) return;   // a newer copy arrived while waiting: that one shows the popup
+  if (text) addClipboardText(text);
 
   // our own copy buttons already show a toast; do not stack a second popup
-  if (appState.toast || !(SET.general.copyToast !== false)) return;
+  if (appState.toast) return;
   const now = Date.now();
-  if (now - clipHudAt < 1200) return;
+  if (now - clipHudAt < 500) return;
   clipHudAt = now;
-  const one = text.replace(/\s+/g, ' ').trim();
+  const one = text ? text.replace(/\s+/g, ' ').trim() : '';
   showDeviceHud({
     iconHTML: CLIP_HUD_SVG, plain: true,
     name: 'Copied',
+    // nothing readable as text = a file / image was copied
     tag: one ? (one.length > 24 ? one.slice(0, 24) + '\u2026' : one) : 'Copied to Clipboard',
     ms: 1700
   });

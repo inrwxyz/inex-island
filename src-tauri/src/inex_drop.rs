@@ -729,8 +729,18 @@ pub fn get_inex_drop_status() -> DropStatus {
     }
 }
 
+// Each staging gets a generation number, so a file that is staged again later is not removed
+// by the 60 s expiry timer of an older staging.
+static STAGE_GEN: OnceLock<Mutex<HashMap<String, u64>>> = OnceLock::new();
+
 #[tauri::command]
 pub fn stage_file_for_phone(path: String) -> Result<bool, String> {
+    let stamp = {
+        let mut gens = STAGE_GEN.get_or_init(|| Mutex::new(HashMap::new())).lock().unwrap();
+        let g = gens.get(&path).copied().unwrap_or(0) + 1;
+        gens.insert(path.clone(), g);
+        g
+    };
     {
         let mut state = get_state().lock().unwrap();
         if !state.staged_files.contains(&path) {
@@ -741,6 +751,16 @@ pub fn stage_file_for_phone(path: String) -> Result<bool, String> {
     let p_clone = path;
     std::thread::spawn(move || {
         std::thread::sleep(std::time::Duration::from_secs(60));
+        let latest = STAGE_GEN
+            .get_or_init(|| Mutex::new(HashMap::new()))
+            .lock()
+            .unwrap()
+            .get(&p_clone)
+            .copied()
+            .unwrap_or(0);
+        if latest != stamp {
+            return; // staged again since, a newer timer owns it
+        }
         let mut state = get_state().lock().unwrap();
         state.staged_files.retain(|f| f != &p_clone);
     });

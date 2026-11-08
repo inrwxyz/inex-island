@@ -73,13 +73,13 @@ const FONT_OPTS = [
 const PAGES = [
   { id: 'notch', label: 'Notch', icon: 'notch', sections: [
     { title: 'Design & Shape', rows: [
-      { path: 'notch.style', type: 'seg', icon: 'notch', t: 'Notch Style', d: 'Bezel Notch touches the top edge; Floating Island floats below with all rounded corners', options: [['attached', 'Bezel Notch'], ['floating', 'Floating Island']] },
+      { path: 'notch.style', type: 'seg', icon: 'notch', t: 'Notch Style', d: 'Bezel Notch touches the top edge; Floating Island floats below as a fixed fully-round pill (no roundness setting)', options: [['attached', 'Bezel Notch'], ['floating', 'Floating Island']] },
       { path: 'notch.mode', type: 'seg', icon: 'notch', t: 'Behavior', d: 'Smart hides on fullscreen, Fixed stays, Ghost is glass outline', options: [['smart', 'Smart'], ['fixed', 'Fixed'], ['ghost', 'Ghost']] },
       { path: 'appearance.notchColor', type: 'color', icon: 'palette', t: 'Color', d: 'Background colour of the collapsed notch' },
       { path: 'appearance.notchOpacity', type: 'range', icon: 'drop', t: 'Opacity', d: 'Solid or translucent notch', min: 30, max: 100, step: 5, unit: '%' },
       { path: 'appearance.notchBorderColor', type: 'color', icon: 'border', t: 'Border Color', d: 'Outline border color of the collapsed notch' },
       { path: 'appearance.notchBorderOpacity', type: 'range', icon: 'drop', t: 'Border Strength', d: 'Outline visibility of the notch', min: 0, max: 100, step: 5, unit: '%' },
-      { path: 'appearance.cornerRadius', type: 'range', icon: 'corner', t: 'Corner Roundness', d: 'Curvature of the notch and menus', min: 0, max: 28, step: 1, unit: 'px' }
+      { path: 'appearance.cornerRadius', type: 'range', icon: 'corner', t: 'Corner Roundness', d: 'Curvature of the notch and menus', min: 0, max: 28, step: 1, unit: 'px', showIf: (s) => s.notch.style !== 'floating' }
     ] },
     { title: 'Typography & Scale', rows: [
       { path: 'appearance.fontStyle', type: 'select', icon: 'font', t: 'Font Family', d: 'Curated modern typefaces applied across the island', options: FONT_OPTS },

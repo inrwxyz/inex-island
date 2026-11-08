@@ -281,8 +281,8 @@ function pollFiles() {
               <div class="q-name">${esc(f.name)}</div>
               <div class="q-sub">${fmtBytes(f.size)}</div>
             </div>
-            <a href="/download/${enc(f.name)}?pin=${enc(pin)}" download="${esc(f.name)}" onclick="onFileDownloadClick(this.getAttribute('download'))" class="btn btn-green">Accept</a>
-          </div>`).join('');
+          </div>`).join('') + `
+          <button class="btn btn-green" style="width:100%;margin-top:8px;" onclick="acceptAllFiles()">Accept ${pending.length > 1 ? 'all ' + pending.length + ' files' : 'file'}</button>`;
       } else {
         lastFileCount = 0;
         clearInterval(expireInterval);
@@ -298,6 +298,29 @@ function pollFiles() {
 }
 setInterval(pollFiles, 2500);
 pollFiles();
+
+let acceptingAll = false;
+async function acceptAllFiles() {
+  if (acceptingAll) return;
+  acceptingAll = true;
+  try {
+    const data = await fetch('/files?pin=' + enc(pin)).then((r) => r.json());
+    const names = (data || []).map((f) => f.name).filter((n) => !downloadedSet.has(n));
+    for (const name of names) {
+      downloadedSet.add(name);
+      const a = document.createElement('a');
+      a.href = '/download/' + enc(name) + '?pin=' + enc(pin);
+      a.download = name;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      showMobileToast('Downloading ' + name);
+      await sleep(700);        // small gap so the browser accepts every download
+    }
+  } catch (_) {}
+  acceptingAll = false;
+  setTimeout(pollFiles, 1000);
+}
 
 function onFileDownloadClick(fileName) {
   downloadedSet.add(fileName);

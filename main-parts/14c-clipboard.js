@@ -167,28 +167,42 @@ document.getElementById('island')?.addEventListener('mouseenter', checkSystemCli
 const CLIP_HUD_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/><path class="clip-tick" d="M8.5 14.5l2.5 2.5 4.5-5"/></svg>';
 let clipHudAt = 0;
 
-onTauriEvent('clipboard-copied', async () => {
-  if (SET.general && SET.general.copyToast === false) return; // Strict toggle: OFF means do NOTHING!
-  let text = await tryInvoke('get_clipboard_text', {});
-  if (!text || typeof text !== 'string') {
-    try {
-      if (navigator.clipboard && navigator.clipboard.readText) {
-        text = await navigator.clipboard.readText();
-      }
-    } catch (_) {}
+// Windows fires "clipboard changed" while the copying app can still be holding the clipboard open, so a single
+// read often comes back empty and the popup was silently skipped. Read again a few times before giving up.
+async function readClipboardWithRetry() {
+  const waits = [0, 50, 120, 250, 450];
+  for (const w of waits) {
+    if (w) await new Promise((r) => setTimeout(r, w));
+    const t = await tryInvoke('get_clipboard_text', {});
+    if (t && typeof t === 'string' && t.trim()) return t;
   }
-  if (!text || typeof text !== 'string' || !text.trim()) return;
-  addClipboardText(text);
+  try {
+    if (navigator.clipboard && navigator.clipboard.readText) {
+      const t = await navigator.clipboard.readText();
+      if (t && t.trim()) return t;
+    }
+  } catch (_) {}
+  return '';
+}
+
+let clipCopySeq = 0;
+onTauriEvent('clipboard-copied', async () => {
+  if (SET.general && SET.general.copyToast === false) return; // toggle OFF: do nothing
+  const mySeq = ++clipCopySeq;
+  const text = await readClipboardWithRetry();
+  if (mySeq !== clipCopySeq) return;   // a newer copy arrived while waiting: that one shows the popup
+  if (text) addClipboardText(text);
 
   // our own copy buttons already show a toast; do not stack a second popup
-  if (appState.toast || !(SET.general.copyToast !== false)) return;
+  if (appState.toast) return;
   const now = Date.now();
-  if (now - clipHudAt < 1200) return;
+  if (now - clipHudAt < 500) return;
   clipHudAt = now;
-  const one = text.replace(/\s+/g, ' ').trim();
+  const one = text ? text.replace(/\s+/g, ' ').trim() : '';
   showDeviceHud({
     iconHTML: CLIP_HUD_SVG, plain: true,
     name: 'Copied',
+    // nothing readable as text = a file / image was copied
     tag: one ? (one.length > 24 ? one.slice(0, 24) + '\u2026' : one) : 'Copied to Clipboard',
     ms: 1700
   });

@@ -327,6 +327,13 @@ const BATT_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" str
 
 function hudIsFloating() { return !!(SET.notch && SET.notch.style === 'floating'); }
 function hudCanShow() { return appState.currentView === 'view-compact'; }   // never fight an open menu
+// The island is zoomed by Settings > UI Scale, so the window has to grow with it, plus room for the spring overshoot.
+// Too small a window cuts the bottom of the pill off (the text line under the name vanishes).
+function hudUiScale() { return Math.max(0.8, ((SET.appearance && SET.appearance.scale) || 100) / 100); }
+function hudWindowSize() {
+  const k = hudUiScale();
+  return { width: Math.ceil(256 * k) + 8, height: Math.ceil((hudIsFloating() ? 64 : 54) * k) };
+}
 function hudRestoreWindow() {
   if (!hudCanShow() || appState.alarmActive) return;   // the timer-end card keeps its own window size
   tryInvoke('resize_island', { width: 265, height: hudIsFloating() ? 48 : 36 });
@@ -343,6 +350,7 @@ function showDeviceHud(o) {
   const battTxt = document.getElementById('bt-hud-batt-pct');
   if (!hud || !ico || !nameEl) return;
 
+  const alreadyOpen = island.classList.contains('bt-hud-active') && !island.classList.contains('hud-out') && !hud.classList.contains('hidden');
   clearTimeout(btHudTimer); clearTimeout(btHudStartT); clearTimeout(btHudBackT); clearTimeout(btHudEndT);
   btHudPrompt = !!o.actions;
   // another HUD may be open: close it instantly
@@ -401,14 +409,23 @@ function showDeviceHud(o) {
     requestAnimationFrame(tick);
   }
 
-  hud.classList.remove('hidden');
-  // 1) window big enough, 2) old content blurs away, 3) island springs open
-  tryInvoke('resize_island', { width: 256, height: 56 });  // a bit wider than the 220px HUD so the spring overshoot is never clipped
-  island.classList.add('hud-pre');
-  btHudStartT = setTimeout(() => {
-    island.classList.remove('hud-pre');
-    island.classList.add('bt-hud-active');
-  }, 110);
+  const win = hudWindowSize();
+  if (alreadyOpen) {
+    // the pill is already out (e.g. next file request right after "saved"): keep it open, only swap the content
+    tryInvoke('resize_island', win);
+    hud.classList.add('hidden');
+    void hud.offsetWidth;              // restarts the content animation
+    hud.classList.remove('hidden');
+  } else {
+    hud.classList.remove('hidden');
+    // 1) window big enough, 2) old content blurs away, 3) island springs open
+    tryInvoke('resize_island', win);   // wider/taller than the HUD so the spring overshoot is never clipped
+    island.classList.add('hud-pre');
+    btHudStartT = setTimeout(() => {
+      island.classList.remove('hud-pre');
+      island.classList.add('bt-hud-active');
+    }, 110);
+  }
 
   btHudTimer = setTimeout(() => hideDeviceHud(), o.ms || 3200);
 }

@@ -21,6 +21,20 @@ async function addDroppedPaths(paths) {
   openTrayView();
 }
 
+// Only the files ticked in the tray go to the phone (nothing ticked = all of them, like P2P)
+function getSelectedTrayFiles() {
+  const all = appState.trayFiles || [];
+  const picked = all.filter((f) => appState.traySelectedIds && appState.traySelectedIds.has(f.id));
+  return picked.length ? picked : [...all];
+}
+
+async function stageTrayFilesForPhone() {
+  const files = getSelectedTrayFiles().filter((f) => f.path);
+  await invokeTauri('clear_staged_files');      // whatever was pushed before must not tag along
+  for (const f of files) await invokeTauri('stage_file_for_phone', { path: f.path });
+  return files.length;
+}
+
 let dropLeaveTimeout = null;
 
 function onNativeDrop(p) {
@@ -262,9 +276,7 @@ document.getElementById('btn-clear-tray').addEventListener('click', () => {
 
 document.getElementById('btn-tray-inexdrop')?.addEventListener('click', async () => {
   if (appState.trayFiles && appState.trayFiles.length > 0) {
-    for (const f of appState.trayFiles) {
-      if (f.path) await invokeTauri('stage_file_for_phone', { path: f.path });
-    }
+    await stageTrayFilesForPhone();
   }
   if (typeof openDropView === 'function') openDropView();
 });

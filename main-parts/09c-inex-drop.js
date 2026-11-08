@@ -7,6 +7,7 @@ let dropConnected = false;
 let dropCurrentUrl = '';
 let currentPromptId = null;
 let promptExpireTimer = null;
+let promptQueue = [];   // more requests waiting behind the one on screen: every file needs its own Accept
 
 function fileCategory(name) {
   const ext = (name || '').split('.').pop().toLowerCase();
@@ -71,8 +72,45 @@ function closePromptHud(instant) {
 // Drops any open request (phone left, Inex Drop stopped, request expired)
 function clearPrompt() {
   currentPromptId = null;
+  promptQueue = [];
   clearTimeout(promptExpireTimer);
   closePromptHud(true);
+}
+
+// Shows the next waiting request (if any) once the previous one has been answered
+function showNextPrompt(delay = 450) {
+  if (currentPromptId || promptQueue.length === 0) return;
+  setTimeout(() => {
+    if (currentPromptId || promptQueue.length === 0) return;
+    activatePrompt(promptQueue.shift());
+  }, delay);
+}
+
+function activatePrompt(p) {
+  currentPromptId = p.id;
+  clearTimeout(promptExpireTimer);
+  // the request expires after 1 minute (the phone stops waiting then too)
+  promptExpireTimer = setTimeout(() => {
+    if (currentPromptId === p.id) {
+      declineTransferPrompt(true);
+    }
+  }, 60000);
+
+  // fill the Inex Drop menu card (used when the menu is open, or opened later)
+  const devEl = document.getElementById('prompt-sender-name');
+  const fileEl = document.getElementById('prompt-file-name');
+  const sizeEl = document.getElementById('prompt-file-size');
+  const iconEl = document.getElementById('prompt-file-icon');
+  if (devEl) devEl.textContent = p.device || 'Android Phone';
+  if (fileEl) fileEl.textContent = promptTitle(p);
+  if (sizeEl) sizeEl.textContent = fmtBytes(p.size);
+  if (iconEl) iconEl.innerHTML = getBatchIcon(p.names || [p.name]);
+
+  if (appState.currentView === 'view-inexdrop') {
+    refreshDropUI();
+  } else {
+    showPromptHud(p);
+  }
 }
 
 async function acceptTransferPrompt() {
@@ -83,6 +121,7 @@ async function acceptTransferPrompt() {
   closePromptHud();
   await invokeTauri('respond_inex_transfer', { id: pid, accept: true });
   refreshDropUI();
+  showNextPrompt();
 }
 
 async function declineTransferPrompt(silent = false) {
@@ -96,6 +135,7 @@ async function declineTransferPrompt(silent = false) {
   if (!silent) {
     showToast('unphone', 'Transfer declined', 1800);
   }
+  showNextPrompt(silent ? 450 : 1900);
 }
 
 function openDropView() {
@@ -311,29 +351,11 @@ onTauriEvent('inexdrop-event', (event) => {
     }
     refreshDropUI();
   } else if (p.type === 'transfer_prompt') {
-    currentPromptId = p.id;
-    clearTimeout(promptExpireTimer);
-    // the request expires after 1 minute (the phone stops waiting then too)
-    promptExpireTimer = setTimeout(() => {
-      if (currentPromptId === p.id) {
-        declineTransferPrompt(true);
-      }
-    }, 60000);
-
-    // fill the Inex Drop menu card (used when the menu is open, or opened later)
-    const devEl = document.getElementById('prompt-sender-name');
-    const fileEl = document.getElementById('prompt-file-name');
-    const sizeEl = document.getElementById('prompt-file-size');
-    const iconEl = document.getElementById('prompt-file-icon');
-    if (devEl) devEl.textContent = p.device || 'Android Phone';
-    if (fileEl) fileEl.textContent = promptTitle(p);
-    if (sizeEl) sizeEl.textContent = fmtBytes(p.size);
-    if (iconEl) iconEl.innerHTML = getBatchIcon(p.names || [p.name]);
-
-    if (appState.currentView === 'view-inexdrop') {
-      refreshDropUI();
+    // one request per file; a request that arrives while another is open waits its turn
+    if (currentPromptId && currentPromptId !== p.id) {
+      if (!promptQueue.some((q) => q.id === p.id)) promptQueue.push(p);
     } else {
-      showPromptHud(p);
+      activatePrompt(p);
     }
   } else if (p.type === 'upload_cancelled') {
     const rxBox = document.getElementById('drop-rx-progress');
@@ -390,18 +412,7 @@ onTauriEvent('inexdrop-event', (event) => {
       });
     }
 
-    // P2P-style: copy path to clipboard and add to File Tray!
-    if (p.path) {
-      try {
-        navigator.clipboard.writeText(p.path);
-      } catch (_) {}
-      if (typeof addTrayItem === 'function') {
-        addTrayItem(p.path);
-      } else if (appState.trayFiles && !appState.trayFiles.some(f => f.path === p.path)) {
-        appState.trayFiles.unshift({ path: p.path, name: p.name, size: p.size });
-        if (typeof renderTrayList === 'function') renderTrayList();
-      }
-    }
+    // Files from the phone only land in Downloads: no clipboard copy, nothing is added to the tray.
 
     setTimeout(() => {
       if (rxBox) rxBox.classList.add('hidden');
@@ -457,12 +468,8 @@ function initInexDrop() {
         showToast('info', 'Drop files into Tray first');
         return;
       }
-      for (const f of appState.trayFiles) {
-        if (f.path) {
-          await invokeTauri('stage_file_for_phone', { path: f.path });
-        }
-      }
-      showToast('phone', 'Files pushed to Phone! (Expires in 1 min)', 2500);
+      const n = await stageTrayFilesForPhone();
+      showToast('phone', `${n} file${n === 1 ? '' : 's'} pushed to Phone! (Expires in 1 min)`, 2500);
     });
   }
 
