@@ -3423,7 +3423,6 @@ onTauriEvent('inexdrop-event', (event) => {
   } else if (p.type === 'pushed_file_downloaded') {
     showToast('done', `${p.name || 'File'} downloaded on Phone!`, 2200);
   }
-  }
 });
 
 // UI Event Listeners
