@@ -80,7 +80,7 @@ const PAGES = [
       { path: 'appearance.notchOpacity', type: 'range', icon: 'drop', t: 'Opacity', d: 'Solid or translucent notch', min: 30, max: 100, step: 5, unit: '%' },
       { path: 'appearance.notchBorderColor', type: 'color', icon: 'border', t: 'Border Color', d: 'Outline border color of the collapsed notch' },
       { path: 'appearance.notchBorderOpacity', type: 'range', icon: 'drop', t: 'Border Strength', d: 'Outline visibility of the notch', min: 0, max: 100, step: 5, unit: '%' },
-      { path: 'appearance.cornerRadius', type: 'range', icon: 'corner', t: 'Corner Roundness', d: 'Curvature of the notch and menus', min: 6, max: 26, step: 1, unit: 'px' }
+      { path: 'appearance.cornerRadius', type: 'range', icon: 'corner', t: 'Corner Roundness', d: 'Curvature of the notch and menus', min: 0, max: 28, step: 1, unit: 'px' }
     ] },
     { title: 'Typography & Scale', rows: [
       { path: 'appearance.fontStyle', type: 'select', icon: 'font', t: 'Font Family', d: 'Curated modern typefaces applied across the island', options: FONT_OPTS },

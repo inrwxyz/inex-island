@@ -112,8 +112,8 @@ body {
 /* Floating Island Style (Floats slightly below screen top with all rounded corners) */
 .island[data-style="floating"].state-compact {
   top: 7px !important;
-  border-radius: 22px !important;
-  border: 1px solid var(--line) !important;
+  border-radius: var(--radius) !important;
+  border: 1px solid var(--notch-line, var(--line)) !important;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12) !important;
 }
 .island[data-style="floating"]:not(.state-compact) {
@@ -228,9 +228,9 @@ body {
 .island.state-sub,
 .island.state-media,
 .island.state-calendar {
-  border-radius: 0 0 var(--radius-menu) var(--radius-menu);
-  border: 1px solid var(--line);
-  border-top: none;
+  border-radius: 0 0 var(--radius-menu) var(--radius-menu) !important;
+  border: 1px solid var(--line) !important;
+  border-top: none !important;
   box-shadow: none;
 }
 

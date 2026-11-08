@@ -461,7 +461,7 @@ fn handle_client(mut stream: TcpStream, app: &AppHandle, valid_pin: &str) {
                         _ => "application/octet-stream",
                     };
                     let header = format!(
-                        "HTTP/1.1 200 OK\r\nContent-Type: {}\r\nContent-Disposition: attachment; filename=\"{}\"\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                        "HTTP/1.1 200 OK\r\nContent-Type: {}\r\nContent-Disposition: attachment; filename=\"{}\"\r\nContent-Length: {}\r\nX-Content-Type-Options: nosniff\r\nCache-Control: no-cache\r\nConnection: close\r\n\r\n",
                         mime,
                         clean_filename(&file_name),
                         file_size

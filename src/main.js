@@ -669,10 +669,15 @@ function syncLoadTimer() {
 }
 document.addEventListener('visibilitychange', syncLoadTimer);
 function onTauriEvent(name, fn) {
-  try {
-    const r = window.__TAURI__.event.listen(name, fn);
-    if (r && r.catch) r.catch((e) => console.warn('event listen failed:', name, e));
-  } catch (_) {}
+  const tryListen = () => {
+    if (window.__TAURI__ && window.__TAURI__.event && typeof window.__TAURI__.event.listen === 'function') {
+      const r = window.__TAURI__.event.listen(name, fn);
+      if (r && r.catch) r.catch((e) => console.warn('event listen failed:', name, e));
+    } else {
+      setTimeout(tryListen, 80);
+    }
+  };
+  tryListen();
 }
 let mediaEvT = null, radioEvT = null;
 onTauriEvent('media-changed', () => {
