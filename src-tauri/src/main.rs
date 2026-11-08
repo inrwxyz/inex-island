@@ -132,21 +132,26 @@ fn get_clipboard_text() -> String {
         use windows::Win32::System::Memory::{GlobalLock, GlobalUnlock};
         use windows::Win32::Foundation::{HGLOBAL, HWND};
         const CF_UNICODETEXT: u32 = 13;
-        if OpenClipboard(HWND::default()).is_ok() {
-            let mut result = String::new();
-            if let Ok(h) = GetClipboardData(CF_UNICODETEXT) {
-                if !h.0.is_null() {
-                    let ptr = GlobalLock(HGLOBAL(h.0)) as *const u16;
-                    if !ptr.is_null() {
-                        let len = (0..).take_while(|&i| *ptr.add(i) != 0).count();
-                        let slice = std::slice::from_raw_parts(ptr, len);
-                        result = String::from_utf16_lossy(slice);
-                        let _ = GlobalUnlock(HGLOBAL(h.0));
+        for _ in 0..5 {
+            if OpenClipboard(HWND::default()).is_ok() {
+                let mut result = String::new();
+                if let Ok(h) = GetClipboardData(CF_UNICODETEXT) {
+                    if !h.0.is_null() {
+                        let ptr = GlobalLock(HGLOBAL(h.0)) as *const u16;
+                        if !ptr.is_null() {
+                            let len = (0..).take_while(|&i| *ptr.add(i) != 0).count();
+                            let slice = std::slice::from_raw_parts(ptr, len);
+                            result = String::from_utf16_lossy(slice);
+                            let _ = GlobalUnlock(HGLOBAL(h.0));
+                        }
                     }
                 }
+                let _ = CloseClipboard();
+                if !result.is_empty() {
+                    return result;
+                }
             }
-            let _ = CloseClipboard();
-            return result;
+            std::thread::sleep(std::time::Duration::from_millis(25));
         }
     }
     String::new()

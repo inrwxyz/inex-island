@@ -426,18 +426,25 @@ onTauriEvent('native-prompt-changed', (event) => {
 
 // Windows lock screen (Win+L, Dynamic Lock, idle lock): when the PC is unlocked (password, PIN, fingerprint, face),
 // Windows kernel notifies us natively via WTSRegisterSessionNotification (0% polling).
-let lockPrev = null;
+let lockPrev = false;
 let lockUnlockT = null;
 onTauriEvent('session-lock-changed', (event) => {
-  if (SET.general && !SET.general.lockToast) { lockPrev = null; return; }
+  if (SET.general && !SET.general.lockToast) { lockPrev = false; return; }
   const locked = event && event.payload && event.payload.locked;
   if (typeof locked !== 'boolean') return;
-  if (lockPrev === true && locked === false && SET.general && SET.general.lockToast) {
-    // let the desktop finish appearing before the island starts to move
-    clearTimeout(lockUnlockT);
-    lockUnlockT = setTimeout(() => triggerBiometricMorph('scan', 'Unlocked'), 450);
+  if (locked === true) {
+    lockPrev = true;
+    if (typeof goCompact === 'function') goCompact();
+    return;
   }
-  lockPrev = locked;
+  if (locked === false) {
+    if (lockPrev === true && SET.general && SET.general.lockToast) {
+      // let the desktop finish appearing before the island starts to move
+      clearTimeout(lockUnlockT);
+      lockUnlockT = setTimeout(() => triggerBiometricMorph('scan', 'Unlocked'), 450);
+    }
+    lockPrev = false;
+  }
 });
 
 

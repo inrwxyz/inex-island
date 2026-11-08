@@ -52,12 +52,61 @@ struct DropServerState {
     device: String,
     remaining: u32,
     staged_files: Vec<String>,
+    peer_ip: String,   // the one device (IP) that connected; nobody else is served while it is connected
+    bad_pins: u32,     // wrong-PIN requests since start
     pending_transfers: HashMap<String, PendingTransfer>,
 }
 
 static SERVER_STATE: OnceLock<Mutex<DropServerState>> = OnceLock::new();
 static STOP_FLAG: OnceLock<Arc<AtomicBool>> = OnceLock::new();
 static COUNTDOWN: OnceLock<Arc<AtomicU32>> = OnceLock::new();
+
+// Session key in the QR link. std-only randomness (RandomState is seeded by the OS), 12 chars, no look-alike letters.
+fn random_pin() -> String {
+    use std::collections::hash_map::RandomState;
+    use std::hash::{BuildHasher, Hasher};
+    const CH: &[u8] = b"abcdefghjkmnpqrstuvwxyz23456789";
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    let mut out = String::new();
+    let mut i: u64 = 0;
+    while out.len() < 12 {
+        let mut h = RandomState::new().build_hasher();
+        h.write_u64(i);
+        h.write_u128(nanos);
+        i += 1;
+        out.push(CH[(h.finish() % CH.len() as u64) as usize] as char);
+    }
+    out
+}
+
+// Compare without stopping at the first different character
+fn pin_matches(a: &str, b: &str) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+    a.bytes().zip(b.bytes()).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
+}
+
+// Never overwrite a file that is already in Downloads: "name.ext" -> "name (1).ext"
+fn unique_path(dir: &PathBuf, name: &str) -> PathBuf {
+    let first = dir.join(name);
+    if !first.exists() {
+        return first;
+    }
+    let p = std::path::Path::new(name);
+    let stem = p.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| name.to_string());
+    let ext = p.extension().map(|e| format!(".{}", e.to_string_lossy())).unwrap_or_default();
+    for n in 1..1000 {
+        let cand = dir.join(format!("{} ({}){}", stem, n, ext));
+        if !cand.exists() {
+            return cand;
+        }
+    }
+    first
+}
 
 fn get_state() -> &'static Mutex<DropServerState> {
     SERVER_STATE.get_or_init(|| {
@@ -70,6 +119,8 @@ fn get_state() -> &'static Mutex<DropServerState> {
             device: String::new(),
             remaining: 60,
             staged_files: Vec::new(),
+            peer_ip: String::new(),
+            bad_pins: 0,
             pending_transfers: HashMap::new(),
         })
     })
@@ -130,6 +181,8 @@ fn handle_client(mut stream: TcpStream, app: &AppHandle, valid_pin: &str) {
         return;
     }
 
+    // a connection that goes silent must not hang a worker thread forever
+    let _ = stream.set_read_timeout(Some(Duration::from_secs(30)));
     let mut reader = BufReader::new(&stream);
     let mut req_line = String::new();
     if reader.read_line(&mut req_line).is_err() || req_line.is_empty() {
@@ -178,13 +231,43 @@ fn handle_client(mut stream: TcpStream, app: &AppHandle, valid_pin: &str) {
     let pin_ok = if valid_pin.is_empty() {
         true
     } else {
-        query_params.get("pin").map(|&p| p == valid_pin).unwrap_or(false)
+        query_params.get("pin").map(|&p| pin_matches(p, valid_pin)).unwrap_or(false)
     };
+
+    // Every route except the page itself needs the session key, and (once a phone is connected) only that phone is served.
+    if path != "/" {
+        if !pin_ok {
+            // only a WRONG key counts (browsers also ask for /favicon.ico without any key)
+            let tried_a_key = query_params.contains_key("pin");
+            if tried_a_key {
+                thread::sleep(Duration::from_millis(300));   // slows guessing down
+            }
+            let too_many = tried_a_key && {
+                let mut st = get_state().lock().unwrap();
+                st.bad_pins += 1;
+                st.bad_pins >= 8
+            };
+            let _ = stream.write_all(b"HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n");
+            if too_many {
+                let _ = stop_inex_drop_internal(app);   // too many wrong keys: shut the session down
+            }
+            return;
+        }
+        let peer_ip = stream.peer_addr().map(|a| a.ip().to_string()).unwrap_or_default();
+        let allowed = {
+            let st = get_state().lock().unwrap();
+            st.peer_ip.is_empty() || st.peer_ip == peer_ip
+        };
+        if !allowed {
+            let _ = stream.write_all(b"HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n");
+            return;
+        }
+    }
 
     match (method, path) {
         ("GET", "/") => {
             let res = format!(
-                "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nCache-Control: no-store\r\nReferrer-Policy: no-referrer\r\nX-Content-Type-Options: nosniff\r\nX-Frame-Options: DENY\r\nContent-Security-Policy: default-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; frame-ancestors 'none'\r\nConnection: close\r\n\r\n{}",
                 MOBILE_PAGE.len(),
                 MOBILE_PAGE
             );
@@ -209,6 +292,7 @@ fn handle_client(mut stream: TcpStream, app: &AppHandle, valid_pin: &str) {
                 let mut state = get_state().lock().unwrap();
                 state.connected = true;
                 state.device = dev_name.clone();
+                state.peer_ip = ip.clone();
             }
 
             let _ = app.emit("inexdrop-event", serde_json::json!({
@@ -335,7 +419,7 @@ fn handle_client(mut stream: TcpStream, app: &AppHandle, valid_pin: &str) {
             let raw_name = query_params.get("name").copied().unwrap_or("received_file");
             let decoded_name = urlencoding_decode(raw_name);
             let name = clean_filename(&decoded_name);
-            let save_path = downloads_dir().join(&name);
+            let save_path = unique_path(&downloads_dir(), &name);
 
             let _ = app.emit("inexdrop-event", serde_json::json!({
                 "type": "upload_start",
@@ -425,6 +509,10 @@ fn handle_client(mut stream: TcpStream, app: &AppHandle, valid_pin: &str) {
             }
         }
         ("GET", "/files") => {
+            if !pin_ok {
+                let _ = stream.write_all(b"HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n");
+                return;
+            }
             let files_json = {
                 let state = get_state().lock().unwrap();
                 let items: Vec<serde_json::Value> = state.staged_files.iter().filter_map(|p| {
@@ -555,6 +643,7 @@ fn handle_client(mut stream: TcpStream, app: &AppHandle, valid_pin: &str) {
                 let mut state = get_state().lock().unwrap();
                 state.connected = false;
                 state.device.clear();
+                state.peer_ip.clear();
             }
             let _ = app.emit("inexdrop-event", serde_json::json!({ "type": "disconnected" }));
             let _ = stream.write_all(b"HTTP/1.1 200 OK\r\nConnection: close\r\n\r\n");
@@ -606,7 +695,8 @@ pub fn start_inex_drop(app: AppHandle) -> Result<DropStatus, String> {
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
         .as_millis();
-    let pin: String = format!("{:04}", (now % 9000) + 1000);
+    let _ = now;
+    let pin: String = random_pin();
 
     let listener = match TcpListener::bind(format!("0.0.0.0:{}", port)) {
         Ok(l) => l,
@@ -628,6 +718,8 @@ pub fn start_inex_drop(app: AppHandle) -> Result<DropStatus, String> {
     state.port = actual_port;
     state.pin = pin.clone();
     state.device.clear();
+    state.peer_ip.clear();
+    state.bad_pins = 0;
     state.remaining = 60;
 
     let url = format!("http://{}:{}/?pin={}", ip, actual_port, pin);
@@ -722,6 +814,8 @@ fn stop_inex_drop_internal(app: &AppHandle) -> Result<(), String> {
         state.remaining = 60;
         state.staged_files.clear();
         state.pending_transfers.clear();
+        state.peer_ip.clear();
+        state.bad_pins = 0;
         state.port
     };
 

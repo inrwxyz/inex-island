@@ -338,6 +338,34 @@ unsafe fn check_is_credential_prompt(hwnd: HWND) -> bool {
         || class.contains("credential dialog")
 }
 
+static ATTACHED_SUBCLASS: AtomicBool = AtomicBool::new(false);
+
+fn attach_main_window_subclass(app: &AppHandle) -> bool {
+    if ATTACHED_SUBCLASS.load(Ordering::Relaxed) {
+        return true;
+    }
+    if let Some(window) = app.get_webview_window("main") {
+        if let Ok(raw) = window.hwnd() {
+            let hwnd_val = raw.0 as isize;
+            let hwnd = HWND(hwnd_val as _);
+            unsafe {
+                let _ = WTSRegisterSessionNotification(hwnd_val, NOTIFY_FOR_THIS_SESSION);
+                let _ = AddClipboardFormatListener(hwnd_val);
+                let ok = SetWindowSubclass(hwnd, main_window_subclass, 1001, 0);
+                for g in [GUID_BATTERY_PERCENT, GUID_ACDC_SOURCE] {
+                    let guid = windows::core::GUID::from_u128(g);
+                    let _ = RegisterPowerSettingNotification(hwnd_val, &guid, DEVICE_NOTIFY_WINDOW_HANDLE);
+                }
+                if ok.as_bool() {
+                    ATTACHED_SUBCLASS.store(true, Ordering::Relaxed);
+                    return true;
+                }
+            }
+        }
+    }
+    false
+}
+
 pub fn setup_native_events(app: AppHandle) {
     if let Ok(mut guard) = GLOBAL_APP.lock() {
         *guard = Some(app.clone());
@@ -350,26 +378,23 @@ pub fn setup_native_events(app: AppHandle) {
     }
     LAST_FS.store(crate::foreground_is_fullscreen(), Ordering::Relaxed);
 
-    // Attach Subclass to Main Window for WTS & Clipboard messages
+    // Attach Subclass to Main Window for WTS & Clipboard messages on the UI thread
+    let app_for_subclass = app.clone();
+    let _ = app.run_on_main_thread(move || {
+        attach_main_window_subclass(&app_for_subclass);
+    });
+
     let app_clone = app.clone();
     std::thread::spawn(move || {
-        // Wait briefly for main window to exist
+        // Wait briefly for main window to exist if not already attached
         for _ in 0..30 {
-            if let Some(window) = app_clone.get_webview_window("main") {
-                if let Ok(raw) = window.hwnd() {
-                    let hwnd = HWND(raw.0 as _);
-                    unsafe {
-                        let _ = WTSRegisterSessionNotification(raw.0 as isize, NOTIFY_FOR_THIS_SESSION);
-                        let _ = AddClipboardFormatListener(raw.0 as isize);
-                        let _ = SetWindowSubclass(hwnd, main_window_subclass, 1001, 0);
-                        for g in [GUID_BATTERY_PERCENT, GUID_ACDC_SOURCE] {
-                            let guid = windows::core::GUID::from_u128(g);
-                            let _ = RegisterPowerSettingNotification(raw.0 as isize, &guid, DEVICE_NOTIFY_WINDOW_HANDLE);
-                        }
-                    }
-                    break;
-                }
+            if ATTACHED_SUBCLASS.load(Ordering::Relaxed) {
+                break;
             }
+            let app_retry = app_clone.clone();
+            let _ = app_clone.run_on_main_thread(move || {
+                attach_main_window_subclass(&app_retry);
+            });
             std::thread::sleep(std::time::Duration::from_millis(100));
         }
     });
