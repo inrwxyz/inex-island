@@ -113,6 +113,15 @@ const SLOT_DEFS = {
       switchView('view-notepad', 'state-sub', 316, 240);
       if (typeof focusNotepad === 'function') focusNotepad();
     }
+  },
+  drop: {
+    el: 'tile-drop',
+    start: () => {},
+    stop: () => {},
+    click: () => {
+      if (typeof toggleInexDrop === 'function') toggleInexDrop();
+      else switchView('view-p2p', 'state-sub', 316, 248);
+    }
   }
 };
 
@@ -123,13 +132,24 @@ function applySlots() {
   if (!SLOT_DEFS[b]) b = 'bt';
   if (a === b) b = a === 'bt' ? 'wifi' : 'bt';
   const want = new Set([a, b]);
-  // grid order: slot A, Inex Drop, slot B, Tray (2x2 layout)
+
+  // grid order: slot A (1), Inex Drop (2), slot B (3), Tray (4)
   const dropTile = document.getElementById('tile-drop') || document.getElementById('tile-p2p');
-  if (dropTile) dropTile.style.order = 2;
   const trayTile = document.getElementById('tile-tray');
-  if (trayTile) trayTile.style.order = 4;
+  if (trayTile) {
+    trayTile.style.order = 4;
+    trayTile.classList.remove('hidden');
+  }
+
+  if (dropTile) {
+    dropTile.classList.remove('hidden');
+    dropTile.style.order = a === 'drop' ? 1 : (b === 'drop' ? 3 : 2);
+  }
+
   Object.entries(SLOT_DEFS).forEach(([id, def]) => {
+    if (id === 'drop') return;
     const tile = document.getElementById(def.el);
+    if (!tile) return;
     const on = want.has(id);
     tile.classList.toggle('hidden', !on);
     if (on) tile.style.order = id === a ? 1 : 3;
@@ -1584,8 +1604,12 @@ document.getElementById('tile-bt').addEventListener('contextmenu', (e) => {
 document.getElementById('btn-refresh-bt').addEventListener('click', () => { invokeTauri('bt_discovery', { on: true }); loadBtList(); });
 document.getElementById('btn-more-bt').addEventListener('click', () => invokeTauri('open_bt_settings'));
 
-document.getElementById('tile-p2p').addEventListener('click', () => {
-  switchView('view-p2p', 'state-sub', 316, 208);
+document.getElementById('tile-p2p')?.addEventListener('click', () => {
+  switchView('view-p2p', 'state-sub', 316, 248);
+});
+document.getElementById('tile-drop')?.addEventListener('click', () => {
+  if (typeof toggleInexDrop === 'function') toggleInexDrop();
+  else switchView('view-p2p', 'state-sub', 316, 248);
 });
 document.getElementById('tile-tray').addEventListener('click', openTrayView);
 
@@ -3167,7 +3191,7 @@ onTauriEvent('inexdrop-event', (event) => {
 });
 
 // UI Event Listeners
-document.addEventListener('DOMContentLoaded', () => {
+function initInexDrop() {
   const tileDrop = document.getElementById('tile-drop');
   if (tileDrop) {
     tileDrop.addEventListener('click', (e) => {
@@ -3220,7 +3244,13 @@ document.addEventListener('DOMContentLoaded', () => {
       showToast('unlock', 'Files pushed to Phone!', 1800);
     });
   }
-});
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initInexDrop);
+} else {
+  initInexDrop();
+}
 // ==================== P2P FILE TRANSFER (offer lives in P2P list, streamed to disk, no RAM blow-up) ====================
 const CHUNK = 128 * 1024;           // one WebRTC message
 const READ_BLOCK = 4 * 1024 * 1024; // read from disk in big blocks
@@ -3575,7 +3605,8 @@ function updateOfferGlow() {
   let pending = false;
   for (const e of rtcPeers.values()) if (e.recv && !e.recv.accepted) pending = true;
   document.getElementById('c-peer-badge').classList.toggle('offer', pending);
-  document.getElementById('tile-p2p').classList.toggle('offer', pending);
+  document.getElementById('tile-p2p')?.classList.toggle('offer', pending);
+  document.getElementById('tile-drop')?.classList.toggle('offer', pending);
 }
 
 function refreshStatusPill() {
@@ -3616,11 +3647,13 @@ function renderPeersUI() {
   const listEl = document.getElementById('p2p-peers-list');
   const badge = document.getElementById('c-peer-badge');
   const countSpan = document.getElementById('c-peer-count');
-  const tileP2P = document.getElementById('tile-p2p');
+  const tileP2P = document.getElementById('tile-p2p') || document.getElementById('tile-drop');
 
-  document.getElementById('tile-p2p-sub').textContent = count > 0 ? (rtcPeers.has('direct-peer') ? 'Direct 1:1' : `${count}/5 Peers`) : 'P2P Link';
-  document.getElementById('p2p-cap').textContent = count > 0 ? (rtcPeers.has('direct-peer') ? '1 direct peer' : `${count} peer${count > 1 ? 's' : ''}`) : '';
-  tileP2P.classList.toggle('active', count > 0);
+  const p2pSub = document.getElementById('tile-p2p-sub') || document.getElementById('tile-drop-sub');
+  if (p2pSub && !dropActive) p2pSub.textContent = count > 0 ? (rtcPeers.has('direct-peer') ? 'Direct 1:1' : `${count}/5 Peers`) : 'Off';
+  const p2pCap = document.getElementById('p2p-cap') || document.getElementById('drop-cap');
+  if (p2pCap) p2pCap.textContent = count > 0 ? (rtcPeers.has('direct-peer') ? '1 direct peer' : `${count} peer${count > 1 ? 's' : ''}`) : '';
+  if (tileP2P && !dropActive) tileP2P.classList.toggle('active', count > 0);
 
   if (count > 0) {
     badge.classList.remove('hidden');

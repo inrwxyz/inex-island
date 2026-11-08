@@ -227,7 +227,7 @@ onTauriEvent('inexdrop-event', (event) => {
 });
 
 // UI Event Listeners
-document.addEventListener('DOMContentLoaded', () => {
+function initInexDrop() {
   const tileDrop = document.getElementById('tile-drop');
   if (tileDrop) {
     tileDrop.addEventListener('click', (e) => {
@@ -280,4 +280,10 @@ document.addEventListener('DOMContentLoaded', () => {
       showToast('unlock', 'Files pushed to Phone!', 1800);
     });
   }
-});
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initInexDrop);
+} else {
+  initInexDrop();
+}

@@ -38,6 +38,15 @@ const SLOT_DEFS = {
       switchView('view-notepad', 'state-sub', 316, 240);
       if (typeof focusNotepad === 'function') focusNotepad();
     }
+  },
+  drop: {
+    el: 'tile-drop',
+    start: () => {},
+    stop: () => {},
+    click: () => {
+      if (typeof toggleInexDrop === 'function') toggleInexDrop();
+      else switchView('view-p2p', 'state-sub', 316, 248);
+    }
   }
 };
 
@@ -48,13 +57,24 @@ function applySlots() {
   if (!SLOT_DEFS[b]) b = 'bt';
   if (a === b) b = a === 'bt' ? 'wifi' : 'bt';
   const want = new Set([a, b]);
-  // grid order: slot A, Inex Drop, slot B, Tray (2x2 layout)
+
+  // grid order: slot A (1), Inex Drop (2), slot B (3), Tray (4)
   const dropTile = document.getElementById('tile-drop') || document.getElementById('tile-p2p');
-  if (dropTile) dropTile.style.order = 2;
   const trayTile = document.getElementById('tile-tray');
-  if (trayTile) trayTile.style.order = 4;
+  if (trayTile) {
+    trayTile.style.order = 4;
+    trayTile.classList.remove('hidden');
+  }
+
+  if (dropTile) {
+    dropTile.classList.remove('hidden');
+    dropTile.style.order = a === 'drop' ? 1 : (b === 'drop' ? 3 : 2);
+  }
+
   Object.entries(SLOT_DEFS).forEach(([id, def]) => {
+    if (id === 'drop') return;
     const tile = document.getElementById(def.el);
+    if (!tile) return;
     const on = want.has(id);
     tile.classList.toggle('hidden', !on);
     if (on) tile.style.order = id === a ? 1 : 3;

@@ -41,16 +41,19 @@ export const ALL_ACTION_TILES = {
   taskmgr: { id: 'taskmgr', label: 'Task Manager', desc: 'Process and performance monitor', icon: 'activity' },
   terminal: { id: 'terminal', label: 'Terminal', desc: 'Command Prompt / PowerShell', icon: 'terminal' },
   explorer: { id: 'explorer', label: 'File Explorer', desc: 'Browse folders & drives', icon: 'folder' },
-  restart: { id: 'restart', label: 'Restart Island', desc: 'Restart Inex Island engine', icon: 'refresh' }
+  restart: { id: 'restart', label: 'Restart Island', desc: 'Restart Inex Island engine', icon: 'refresh' },
+  notepad: { id: 'notepad', label: 'Quick Notes', desc: 'Floating note editor', icon: 'clipboard' },
+  drop: { id: 'drop', label: 'Inex Drop', desc: 'Local Wi-Fi file transfer', icon: 'folder' }
 };
 
 // Control-panel slots: id + label. The island (main.js) holds the behaviour of each id.
 // To add a new one: add it here and add a SLOT_DEFS entry (+ tile) in main.js.
 export const SLOT_OPTIONS = [
   ['wifi', 'Wi-Fi'],
+  ['drop', 'Inex Drop'],
   ['bt', 'Bluetooth'],
-  ['mic', 'Microphone mute'],
-  ['notepad', 'Quick Notes']
+  ['notepad', 'Quick Notes'],
+  ['mic', 'Microphone mute']
 ];
 
 const FONT_MAP = {

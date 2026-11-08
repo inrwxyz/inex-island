@@ -352,7 +352,8 @@ function updateOfferGlow() {
   let pending = false;
   for (const e of rtcPeers.values()) if (e.recv && !e.recv.accepted) pending = true;
   document.getElementById('c-peer-badge').classList.toggle('offer', pending);
-  document.getElementById('tile-p2p').classList.toggle('offer', pending);
+  document.getElementById('tile-p2p')?.classList.toggle('offer', pending);
+  document.getElementById('tile-drop')?.classList.toggle('offer', pending);
 }
 
 function refreshStatusPill() {
@@ -393,11 +394,13 @@ function renderPeersUI() {
   const listEl = document.getElementById('p2p-peers-list');
   const badge = document.getElementById('c-peer-badge');
   const countSpan = document.getElementById('c-peer-count');
-  const tileP2P = document.getElementById('tile-p2p');
+  const tileP2P = document.getElementById('tile-p2p') || document.getElementById('tile-drop');
 
-  document.getElementById('tile-p2p-sub').textContent = count > 0 ? (rtcPeers.has('direct-peer') ? 'Direct 1:1' : `${count}/5 Peers`) : 'P2P Link';
-  document.getElementById('p2p-cap').textContent = count > 0 ? (rtcPeers.has('direct-peer') ? '1 direct peer' : `${count} peer${count > 1 ? 's' : ''}`) : '';
-  tileP2P.classList.toggle('active', count > 0);
+  const p2pSub = document.getElementById('tile-p2p-sub') || document.getElementById('tile-drop-sub');
+  if (p2pSub && !dropActive) p2pSub.textContent = count > 0 ? (rtcPeers.has('direct-peer') ? 'Direct 1:1' : `${count}/5 Peers`) : 'Off';
+  const p2pCap = document.getElementById('p2p-cap') || document.getElementById('drop-cap');
+  if (p2pCap) p2pCap.textContent = count > 0 ? (rtcPeers.has('direct-peer') ? '1 direct peer' : `${count} peer${count > 1 ? 's' : ''}`) : '';
+  if (tileP2P && !dropActive) tileP2P.classList.toggle('active', count > 0);
 
   if (count > 0) {
     badge.classList.remove('hidden');

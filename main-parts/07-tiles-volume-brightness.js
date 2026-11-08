@@ -1,5 +1,9 @@
-document.getElementById('tile-p2p').addEventListener('click', () => {
-  switchView('view-p2p', 'state-sub', 316, 208);
+document.getElementById('tile-p2p')?.addEventListener('click', () => {
+  switchView('view-p2p', 'state-sub', 316, 248);
+});
+document.getElementById('tile-drop')?.addEventListener('click', () => {
+  if (typeof toggleInexDrop === 'function') toggleInexDrop();
+  else switchView('view-p2p', 'state-sub', 316, 248);
 });
 document.getElementById('tile-tray').addEventListener('click', openTrayView);
 
