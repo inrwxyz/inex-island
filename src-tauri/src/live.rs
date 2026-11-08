@@ -196,47 +196,14 @@ fn media_watcher(app: AppHandle) {
     }
 }
 
-#[cfg(target_os = "windows")]
-fn fullscreen_watcher(app: AppHandle) {
-    let mut prev_fs: Option<bool> = None;
-    loop {
-        let is_fs = crate::foreground_is_fullscreen();
-        if prev_fs != Some(is_fs) {
-            prev_fs = Some(is_fs);
-            let _ = app.emit("fullscreen-changed", serde_json::json!({ "is_fullscreen": is_fs }));
-        }
-        std::thread::sleep(std::time::Duration::from_millis(60));
-    }
-}
-
-#[cfg(target_os = "windows")]
-fn power_watcher(app: AppHandle) {
-    let mut prev_power: Option<(i32, bool)> = None;
-    loop {
-        let current = crate::battery_info();
-        if prev_power != Some(current) {
-            prev_power = Some(current);
-            let _ = app.emit("power-changed", serde_json::json!({
-                "battery_pct": current.0,
-                "charging": current.1
-            }));
-        }
-        std::thread::sleep(std::time::Duration::from_millis(200));
-    }
-}
-
 /// Start the watchers (Windows only). Called once from setup().
 pub fn start(app: AppHandle) {
     #[cfg(target_os = "windows")]
     {
         let a = app.clone();
         std::thread::spawn(move || radio_watcher(a));
-        let b = app.clone();
+        let b = app;
         std::thread::spawn(move || media_watcher(b));
-        let c = app.clone();
-        std::thread::spawn(move || fullscreen_watcher(c));
-        let d = app;
-        std::thread::spawn(move || power_watcher(d));
     }
     #[cfg(not(target_os = "windows"))]
     let _ = app;

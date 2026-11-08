@@ -410,37 +410,35 @@ function finishCompactTransferUI() {
 }
 
 // Windows password / PIN / credential prompts -> lock animation in the notch
-async function pollNativePrompt() {
-  const r = await tryInvoke('native_prompt', {});
-  const on = r === 'password';
+// Native Credential / PIN prompt event (from WinEventHook)
+onTauriEvent('native-prompt-changed', (event) => {
+  const on = !!(event && event.payload && event.payload.active);
   if (on !== appState.prompting) {
     appState.prompting = on;
     renderCenter();
     if (!on) {
       updateClocks();
       // the prompt closed (if an explicit locker-unlock toast is already showing, don't overwrite it)
-      if (SET.general.lockToast && !appState.toast && !appState.lockerPrompting) showToast('unlock', 'Done', 1500);
+      if (SET.general && SET.general.lockToast && !appState.toast && !appState.lockerPrompting) showToast('unlock', 'Done', 1500);
     }
   }
-}
-setInterval(pollNativePrompt, 400);
+});
 
-// Windows lock screen (Win+L, Dynamic Lock, idle lock): when the PC is unlocked (password, PIN, fingerprint, face,
-// phone proximity: Windows does not tell us which), play the plain scan unlock animation.
-// (is_session_locked in main.rs reads SessionFlags at offset 16; it used to read offset 12 and always said "locked".)
+// Windows lock screen (Win+L, Dynamic Lock, idle lock): when the PC is unlocked (password, PIN, fingerprint, face),
+// Windows kernel notifies us natively via WTSRegisterSessionNotification (0% polling).
 let lockPrev = null;
 let lockUnlockT = null;
-async function pollLock() {
-  const r = await tryInvoke('is_session_locked', {});
-  if (typeof r !== 'boolean') return;
-  if (lockPrev === true && r === false && SET.general.lockToast) {
+onTauriEvent('session-lock-changed', (event) => {
+  if (SET.general && !SET.general.lockToast) { lockPrev = null; return; }
+  const locked = event && event.payload && event.payload.locked;
+  if (typeof locked !== 'boolean') return;
+  if (lockPrev === true && locked === false && SET.general && SET.general.lockToast) {
     // let the desktop finish appearing before the island starts to move
     clearTimeout(lockUnlockT);
     lockUnlockT = setTimeout(() => triggerBiometricMorph('scan', 'Unlocked'), 450);
   }
-  lockPrev = r;
-}
-setInterval(pollLock, 800);
+  lockPrev = locked;
+});
 
 
 // 9. Media Transport Controls

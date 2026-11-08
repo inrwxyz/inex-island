@@ -127,6 +127,7 @@ function switchView(viewId, stateClass, winWidth, winHeight) {
 function openMedia() {
   switchView('view-media', 'state-media', 316, appState.volOpen ? MEDIA_H_VOL : MEDIA_H);
   island.classList.toggle('vol-open', appState.volOpen);
+  if (typeof renderMediaProgress === 'function') renderMediaProgress();
   invokeTauri('get_system_volume').then((v) => { if (typeof v === 'number') setVolumeUI(v); });
 }
 
@@ -152,13 +153,13 @@ function updateClocks() {
 
   if (!appState.timerRunning && !appState.transferring && !appState.prompting && !appState.lockerPrompting) {
     const cClock = document.getElementById('c-clock');
-    if (cClock) cClock.textContent = str;
+    if (cClock && cClock.textContent !== str) cClock.textContent = str;
   }
   const ctrlClock = document.getElementById('ctrl-clock-tab');
-  if (ctrlClock) ctrlClock.textContent = str;
+  if (ctrlClock && ctrlClock.textContent !== str) ctrlClock.textContent = str;
   const calClock = document.getElementById('cal-top-clock');
-  if (calClock) calClock.textContent = str;
+  if (calClock && calClock.textContent !== str) calClock.textContent = str;
   const timerClock = document.getElementById('timer-top-clock');
-  if (timerClock) timerClock.textContent = str;
+  if (timerClock && timerClock.textContent !== str) timerClock.textContent = str;
 }
 

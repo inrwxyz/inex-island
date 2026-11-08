@@ -113,3 +113,49 @@ pub fn open_download(name: String) {
     #[cfg(not(target_os = "windows"))]
     let _ = name;
 }
+
+pub fn start_downloads_watcher(app: tauri::AppHandle) {
+    #[cfg(target_os = "windows")]
+    {
+        use tauri::Emitter;
+        std::thread::spawn(move || {
+            use windows::core::HSTRING;
+            use windows::Win32::Storage::FileSystem::{
+                FindFirstChangeNotificationW, FindNextChangeNotification,
+                FILE_NOTIFY_CHANGE_FILE_NAME, FILE_NOTIFY_CHANGE_LAST_WRITE, FILE_NOTIFY_CHANGE_SIZE,
+            };
+            use windows::Win32::System::Threading::WaitForSingleObject;
+            use windows::Win32::Foundation::WAIT_OBJECT_0;
+
+            let dir = match downloads_dir() {
+                Some(d) => d,
+                None => return,
+            };
+            let dir_str = dir.to_string_lossy().to_string();
+            let h_path = HSTRING::from(dir_str);
+
+            unsafe {
+                let handle = match FindFirstChangeNotificationW(
+                    &h_path,
+                    false,
+                    FILE_NOTIFY_CHANGE_FILE_NAME | FILE_NOTIFY_CHANGE_LAST_WRITE | FILE_NOTIFY_CHANGE_SIZE,
+                ) {
+                    Ok(h) => h,
+                    Err(_) => return,
+                };
+
+                loop {
+                    let wait = WaitForSingleObject(handle, 3600_000);
+                    if wait == WAIT_OBJECT_0 {
+                        let scan = downloads_scan();
+                        let _ = app.emit("downloads-changed", scan);
+                        let _ = FindNextChangeNotification(handle);
+                        std::thread::sleep(std::time::Duration::from_millis(600));
+                    }
+                }
+            }
+        });
+    }
+    #[cfg(not(target_os = "windows"))]
+    let _ = app;
+}

@@ -202,6 +202,7 @@ function switchView(viewId, stateClass, winWidth, winHeight) {
 function openMedia() {
   switchView('view-media', 'state-media', 316, appState.volOpen ? MEDIA_H_VOL : MEDIA_H);
   island.classList.toggle('vol-open', appState.volOpen);
+  if (typeof renderMediaProgress === 'function') renderMediaProgress();
   invokeTauri('get_system_volume').then((v) => { if (typeof v === 'number') setVolumeUI(v); });
 }
 
@@ -227,14 +228,14 @@ function updateClocks() {
 
   if (!appState.timerRunning && !appState.transferring && !appState.prompting && !appState.lockerPrompting) {
     const cClock = document.getElementById('c-clock');
-    if (cClock) cClock.textContent = str;
+    if (cClock && cClock.textContent !== str) cClock.textContent = str;
   }
   const ctrlClock = document.getElementById('ctrl-clock-tab');
-  if (ctrlClock) ctrlClock.textContent = str;
+  if (ctrlClock && ctrlClock.textContent !== str) ctrlClock.textContent = str;
   const calClock = document.getElementById('cal-top-clock');
-  if (calClock) calClock.textContent = str;
+  if (calClock && calClock.textContent !== str) calClock.textContent = str;
   const timerClock = document.getElementById('timer-top-clock');
-  if (timerClock) timerClock.textContent = str;
+  if (timerClock && timerClock.textContent !== str) timerClock.textContent = str;
 }
 
 let mediaBackendPos = 0;
@@ -263,23 +264,36 @@ function renderMediaProgress(pos) {
   }
   const dur = appState.mediaDuration || 0;
   pos = Math.min(dur || pos, Math.max(0, pos));
+
+  if (appState.currentView !== 'view-media') return;
+
   const curTimeEl = document.getElementById('m-cur-time');
   const totTimeEl = document.getElementById('m-tot-time');
   const progFillEl = document.getElementById('m-prog-fill');
   const sliderEl = document.getElementById('m-seek-slider');
 
-  if (curTimeEl) curTimeEl.textContent = fmtTime(pos);
-  if (totTimeEl) totTimeEl.textContent = dur > 0 ? `-${fmtTime(dur - pos)}` : '--:--';
+  if (curTimeEl) {
+    const str = fmtTime(pos);
+    if (curTimeEl.textContent !== str) curTimeEl.textContent = str;
+  }
+  if (totTimeEl) {
+    const str = dur > 0 ? `-${fmtTime(dur - pos)}` : '--:--';
+    if (totTimeEl.textContent !== str) totTimeEl.textContent = str;
+  }
   const pct = dur > 0 ? Math.min(100, (pos / dur) * 100) : 0;
-  if (progFillEl) progFillEl.style.width = `${pct}%`;
+  if (progFillEl) {
+    const w = `${pct}%`;
+    if (progFillEl.style.width !== w) progFillEl.style.width = w;
+  }
   if (sliderEl && !appState.mediaSeeking) {
-    sliderEl.value = Math.round(pct * 10);
+    const v = Math.round(pct * 10);
+    if (sliderEl.value != v) sliderEl.value = v;
   }
 }
 
-// Tick media progress smoothly every 250ms (no backwards snapping)
+// Tick media progress smoothly every 250ms when expanded media player is open
 setInterval(() => {
-  if (appState.mediaPlaying && !appState.mediaSeeking && appState.mediaDuration > 0) {
+  if (appState.currentView === 'view-media' && appState.mediaPlaying && !appState.mediaSeeking && appState.mediaDuration > 0) {
     renderMediaProgress();
   }
 }, 250);
@@ -562,13 +576,15 @@ async function pollSystemAndMedia() {
 let pollBusy = false;
 async function pollLight() {
   if (document.hidden || pollBusy) return;
+  if (island.classList.contains('smart-hidden') || appState.currentView !== 'view-compact') return;
+  const wL = SET.widgets ? SET.widgets.left : null;
+  const wR = SET.widgets ? SET.widgets.right : null;
+  const needsStats = ['ram', 'cpu', 'gpu', 'disk', 'net'].some(k => wL === k || wR === k);
+  if (!needsStats) return;
   pollBusy = true;
   try { await refreshStats(); } finally { pollBusy = false; }
 }
-setInterval(pollLight, 3000);
-// safety nets only (the events below do the real work)
-setInterval(() => { if (!document.hidden) refreshRadios(); }, 30000);
-setInterval(() => { if (!document.hidden) refreshMedia(); }, 2500);
+setInterval(pollLight, 3500);
 function onTauriEvent(name, fn) {
   try {
     const r = window.__TAURI__.event.listen(name, fn);
@@ -3773,37 +3789,35 @@ function finishCompactTransferUI() {
 }
 
 // Windows password / PIN / credential prompts -> lock animation in the notch
-async function pollNativePrompt() {
-  const r = await tryInvoke('native_prompt', {});
-  const on = r === 'password';
+// Native Credential / PIN prompt event (from WinEventHook)
+onTauriEvent('native-prompt-changed', (event) => {
+  const on = !!(event && event.payload && event.payload.active);
   if (on !== appState.prompting) {
     appState.prompting = on;
     renderCenter();
     if (!on) {
       updateClocks();
       // the prompt closed (if an explicit locker-unlock toast is already showing, don't overwrite it)
-      if (SET.general.lockToast && !appState.toast && !appState.lockerPrompting) showToast('unlock', 'Done', 1500);
+      if (SET.general && SET.general.lockToast && !appState.toast && !appState.lockerPrompting) showToast('unlock', 'Done', 1500);
     }
   }
-}
-setInterval(pollNativePrompt, 400);
+});
 
-// Windows lock screen (Win+L, Dynamic Lock, idle lock): when the PC is unlocked (password, PIN, fingerprint, face,
-// phone proximity: Windows does not tell us which), play the plain scan unlock animation.
-// (is_session_locked in main.rs reads SessionFlags at offset 16; it used to read offset 12 and always said "locked".)
+// Windows lock screen (Win+L, Dynamic Lock, idle lock): when the PC is unlocked (password, PIN, fingerprint, face),
+// Windows kernel notifies us natively via WTSRegisterSessionNotification (0% polling).
 let lockPrev = null;
 let lockUnlockT = null;
-async function pollLock() {
-  const r = await tryInvoke('is_session_locked', {});
-  if (typeof r !== 'boolean') return;
-  if (lockPrev === true && r === false && SET.general.lockToast) {
+onTauriEvent('session-lock-changed', (event) => {
+  if (SET.general && !SET.general.lockToast) { lockPrev = null; return; }
+  const locked = event && event.payload && event.payload.locked;
+  if (typeof locked !== 'boolean') return;
+  if (lockPrev === true && locked === false && SET.general && SET.general.lockToast) {
     // let the desktop finish appearing before the island starts to move
     clearTimeout(lockUnlockT);
     lockUnlockT = setTimeout(() => triggerBiometricMorph('scan', 'Unlocked'), 450);
   }
-  lockPrev = r;
-}
-setInterval(pollLock, 800);
+  lockPrev = locked;
+});
 
 
 // 9. Media Transport Controls
@@ -3820,34 +3834,12 @@ document.getElementById('m-prev').addEventListener('click', async () => {
   setTimeout(pollSystemAndMedia, 250);
 });
 
-// 10. Focus Timer + Apple Crystal Alarm
+// 10. Focus Timer + Apple Crystal Alarm (100% Native Windows Sound, Zero Chromium AudioService)
 let alarmChimeInterval = null;
 let alarmAutoDismissTimeout = null;
 
 function playAlarmChime() {
-  try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const chord = [
-      { f: 523.25, d: 0.00, v: 0.28 }, // C5
-      { f: 659.25, d: 0.08, v: 0.26 }, // E5
-      { f: 783.99, d: 0.16, v: 0.24 }, // G5
-      { f: 1046.50, d: 0.24, v: 0.22 } // C6
-    ];
-    chord.forEach((n) => {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(n.f, ctx.currentTime);
-      const t0 = ctx.currentTime + n.d;
-      gain.gain.setValueAtTime(0.0001, t0);
-      gain.gain.exponentialRampToValueAtTime(n.v, t0 + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.7);
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start(t0);
-      osc.stop(t0 + 0.75);
-    });
-  } catch (_) {}
+  invokeTauri('play_alarm_sound').catch(() => {});
 }
 
 let alarmStartT = null;
@@ -4272,39 +4264,46 @@ function eqDraw() {
   const sens = (SET.notch.eqSensitivity || 100) / 100;
   const isPlaying = appState.mediaPlaying;
 
-  cEqBars.forEach((bar, i) => {
-    let target = 2;
-    if (isPlaying) {
-      if (SET.notch.eqSync) {
-        const val = lastFrequencies[i] ?? 0.18;
-        const bandBoost = i === 4 ? 1.55 : (i === 3 ? 1.35 : (i === 2 ? 1.12 : 1.0));
-        const norm = Math.max(0, (val - 0.18) / 0.82) * sens * bandBoost;
-        target = 2 + Math.min(1, norm) * 10;
-      } else {
-        const t = performance.now();
-        target = 2 + (0.55 + 0.35 * Math.sin(t / 260 + i * 1.5)) * 10;
+  const isCompact = appState.currentView === 'view-compact';
+  if (isCompact) {
+    cEqBars.forEach((bar, i) => {
+      let target = 2;
+      if (isPlaying) {
+        if (SET.notch.eqSync) {
+          const val = lastFrequencies[i] ?? 0.18;
+          const bandBoost = i === 4 ? 1.55 : (i === 3 ? 1.35 : (i === 2 ? 1.12 : 1.0));
+          const norm = Math.max(0, (val - 0.18) / 0.82) * sens * bandBoost;
+          target = 2 + Math.min(1, norm) * 10;
+        } else {
+          const t = performance.now();
+          target = 2 + (0.55 + 0.35 * Math.sin(t / 260 + i * 1.5)) * 10;
+        }
       }
-    }
-    currentHeightsC[i] += (target - currentHeightsC[i]) * 0.45;
-    bar.style.height = currentHeightsC[i].toFixed(1) + 'px';
-  });
+      currentHeightsC[i] += (target - currentHeightsC[i]) * 0.45;
+      const hStr = currentHeightsC[i].toFixed(1) + 'px';
+      if (bar.style.height !== hStr) bar.style.height = hStr;
+    });
+  }
 
-  mEqBars.forEach((bar, i) => {
-    let target = 2;
-    if (isPlaying) {
-      if (SET.notch.eqSync) {
-        const val = lastFrequencies[i] ?? 0.18;
-        const bandBoost = i === 4 ? 1.55 : (i === 3 ? 1.35 : (i === 2 ? 1.12 : 1.0));
-        const norm = Math.max(0, (val - 0.18) / 0.82) * sens * bandBoost;
-        target = 2 + Math.min(1, norm) * 18;
-      } else {
-        const t = performance.now();
-        target = 2 + (0.55 + 0.35 * Math.sin(t / 260 + i * 1.5)) * 18;
+  if (appState.currentView === 'view-media') {
+    mEqBars.forEach((bar, i) => {
+      let target = 2;
+      if (isPlaying) {
+        if (SET.notch.eqSync) {
+          const val = lastFrequencies[i] ?? 0.18;
+          const bandBoost = i === 4 ? 1.55 : (i === 3 ? 1.35 : (i === 2 ? 1.12 : 1.0));
+          const norm = Math.max(0, (val - 0.18) / 0.82) * sens * bandBoost;
+          target = 2 + Math.min(1, norm) * 18;
+        } else {
+          const t = performance.now();
+          target = 2 + (0.55 + 0.35 * Math.sin(t / 260 + i * 1.5)) * 18;
+        }
       }
-    }
-    currentHeightsM[i] += (target - currentHeightsM[i]) * 0.45;
-    bar.style.height = currentHeightsM[i].toFixed(1) + 'px';
-  });
+      currentHeightsM[i] += (target - currentHeightsM[i]) * 0.45;
+      const hStr = currentHeightsM[i].toFixed(1) + 'px';
+      if (bar.style.height !== hStr) bar.style.height = hStr;
+    });
+  }
 
   if (!isPlaying && currentHeightsC.every((h) => h < 2.1) && currentHeightsM.every((h) => h < 2.1)) {
     eqRaf = 0;
@@ -4326,19 +4325,12 @@ function syncEq() {
 }
 
 function chime() {
-  try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    [880, 1175, 1568].forEach((f, i) => {
-      const o = ctx.createOscillator(), g = ctx.createGain();
-      o.frequency.value = f; o.connect(g); g.connect(ctx.destination);
-      const t0 = ctx.currentTime + i * 0.18;
-      g.gain.setValueAtTime(0.0001, t0);
-      g.gain.exponentialRampToValueAtTime(0.25, t0 + 0.02);
-      g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.5);
-      o.start(t0); o.stop(t0 + 0.55);
-    });
-  } catch (_) {}
+  invokeTauri('play_alarm_sound').catch(() => {});
 }
+
+
+
+
 
 // Widgets (Reliable Weather with Open-Meteo + Fast IP Geolocation, RAM, CPU, Disk, Battery)
 const W_SVG = (inner) => `<svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:-1px;margin-right:2px;flex-shrink:0;">${inner}</svg>`;
@@ -4858,35 +4850,34 @@ document.getElementById('island')?.addEventListener('mouseenter', checkSystemCli
 
 // System-wide copy -> little "Copied" popup in the island (Windows tells us the clipboard changed, no matter which app copied)
 const CLIP_HUD_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/><path class="clip-tick" d="M8.5 14.5l2.5 2.5 4.5-5"/></svg>';
-let clipSeqPrev = null;
 let clipHudAt = 0;
-async function pollClipboardSeq() {
-  const seq = await tryInvoke('clipboard_seq', {});
-  if (typeof seq !== 'number' || seq === 0) return;
-  if (clipSeqPrev === null) { clipSeqPrev = seq; return; }
-  if (seq === clipSeqPrev) return;
-  clipSeqPrev = seq;
-  let text = '';
-  try {
-    if (document.hasFocus() && navigator.clipboard && navigator.clipboard.readText) {
-      text = await navigator.clipboard.readText();
-      if (text) addClipboardText(text);
-    }
-  } catch (_) {}
+
+onTauriEvent('clipboard-copied', async () => {
+  if (SET.general && SET.general.copyToast === false) return; // Strict toggle: OFF means do NOTHING!
+  let text = await tryInvoke('get_clipboard_text', {});
+  if (!text || typeof text !== 'string') {
+    try {
+      if (navigator.clipboard && navigator.clipboard.readText) {
+        text = await navigator.clipboard.readText();
+      }
+    } catch (_) {}
+  }
+  if (!text || typeof text !== 'string' || !text.trim()) return;
+  addClipboardText(text);
+
   // our own copy buttons already show a toast; do not stack a second popup
   if (appState.toast || !(SET.general.copyToast !== false)) return;
   const now = Date.now();
   if (now - clipHudAt < 1200) return;
   clipHudAt = now;
-  const one = (text || '').replace(/\s+/g, ' ').trim();
+  const one = text.replace(/\s+/g, ' ').trim();
   showDeviceHud({
     iconHTML: CLIP_HUD_SVG, plain: true,
     name: 'Copied',
     tag: one ? (one.length > 24 ? one.slice(0, 24) + '\u2026' : one) : 'Copied to Clipboard',
     ms: 1700
   });
-}
-setInterval(pollClipboardSeq, 600);
+});
 let resizeDebounce = null;
 
 function applySettings() {
@@ -4994,7 +4985,10 @@ let alarmPick = { h: 7, m: 30, daily: false };
 let alarmSnoozeAt = 0;          // ms timestamp, 0 = no snooze pending
 let alarmLastFired = '';        // "<id>@<yyyy-mm-dd hh:mm>": never ring twice in one minute
 
-function saveAlarms() { try { localStorage.setItem(ALARM_KEY, JSON.stringify(alarms)); } catch (_) {} }
+function saveAlarms() {
+  try { localStorage.setItem(ALARM_KEY, JSON.stringify(alarms)); } catch (_) {}
+  scheduleNextAlarm();
+}
 function pad2(n) { return String(n).padStart(2, '0'); }
 function fmtAlarmTime(h, m) {
   if (SET.general && SET.general.hour24) return `${pad2(h)}:${pad2(m)}`;
@@ -5097,91 +5091,109 @@ function ringClockAlarm(a, snoozed) {
 }
 function snoozeClockAlarm() {
   alarmSnoozeAt = Date.now() + ALARM_SNOOZE_MS;
+  scheduleNextAlarm();
 }
-let alarmLastCheck = Date.now();
-setInterval(() => {
-  const now = new Date();
-  const nowMs = now.getTime();
-  const elapsed = nowMs - alarmLastCheck;
-  alarmLastCheck = nowMs;
 
-  if (alarmSnoozeAt && nowMs >= alarmSnoozeAt) {
-    alarmSnoozeAt = 0;
-    ringClockAlarm(appState.lastRungAlarm, true);
+let alarmTimer = null;
+function scheduleNextAlarm() {
+  if (alarmTimer) {
+    clearTimeout(alarmTimer);
+    alarmTimer = null;
+  }
+  const now = Date.now();
+
+  if (alarmSnoozeAt && alarmSnoozeAt > now) {
+    const diff = Math.max(50, alarmSnoozeAt - now);
+    alarmTimer = setTimeout(() => {
+      alarmSnoozeAt = 0;
+      ringClockAlarm(appState.lastRungAlarm, true);
+      scheduleNextAlarm();
+    }, diff);
     return;
   }
 
-  const justWokeUp = elapsed > 4000;
+  const active = alarms.filter((a) => a.on);
+  if (!active.length) return; // 0 active alarms = 0 timers, 0% CPU!
+
+  const nowDate = new Date();
+  let minDiff = Infinity;
+  let target = null;
+  for (const a of active) {
+    const diff = nextAlarmMs(a, nowDate) - now;
+    if (diff > 0 && diff < minDiff) {
+      minDiff = diff;
+      target = a;
+    }
+  }
+
+  if (target && minDiff < Infinity) {
+    alarmTimer = setTimeout(() => {
+      const cur = new Date();
+      const currentH = cur.getHours();
+      const currentM = cur.getMinutes();
+      const stamp = `${cur.getFullYear()}-${cur.getMonth()}-${cur.getDate()} ${currentH}:${currentM}`;
+      const key = `${target.id}@${stamp}`;
+      if (alarmLastFired !== key) {
+        alarmLastFired = key;
+        if (!target.daily) {
+          target.on = false;
+          saveAlarms();
+          if (appState.currentView === 'view-alarm') renderAlarmList();
+        }
+        ringClockAlarm(target, false);
+      }
+      scheduleNextAlarm();
+    }, minDiff);
+  }
+}
+scheduleNextAlarm();
+
+// Catch missed alarms if PC was sleeping/hibernating and wakes up
+onTauriEvent('system-resumed', () => {
+  const now = new Date();
   const currentH = now.getHours();
   const currentM = now.getMinutes();
-  const stamp = `${now.getFullYear()}-${now.getMonth()}-${now.getDate()} ${currentH}:${currentM}`;
-
   for (const a of alarms) {
     if (!a.on) continue;
-    let shouldFire = false;
-    let isMissed = false;
-
-    if (a.h === currentH && a.m === currentM && now.getSeconds() <= 5) {
-      shouldFire = true;
-    } else if (justWokeUp) {
-      const alarmTarget = new Date(now);
-      alarmTarget.setHours(a.h, a.m, 0, 0);
-      const targetMs = alarmTarget.getTime();
-      if (targetMs >= (nowMs - elapsed) && targetMs <= nowMs && (nowMs - targetMs) < 2 * 3600 * 1000) {
-        shouldFire = true;
-        isMissed = true;
-      }
-    }
-
-    if (shouldFire) {
-      const key = `${a.id}@${stamp}`;
-      if (alarmLastFired === key) continue;
-      alarmLastFired = key;
-      if (!a.daily) { a.on = false; saveAlarms(); if (appState.currentView === 'view-alarm') renderAlarmList(); }
+    if (a.h === currentH && a.m === currentM) {
       ringClockAlarm(a, false);
-      if (isMissed) {
-        const tagEl = document.getElementById('alarm-hud-tag');
-        if (tagEl) tagEl.textContent = `Missed Alarm • ${fmtAlarmTime(a.h, a.m)}`;
+      if (!a.daily) {
+        a.on = false;
+        saveAlarms();
+        if (appState.currentView === 'view-alarm') renderAlarmList();
       }
-      break;
     }
   }
-}, 1000);
+  scheduleNextAlarm();
+});
 
 // ==================== 12. CAPS LOCK / NUM LOCK INDICATOR ====================
-// Rust (lock_keys) reads the toggle state; the island pops a small HUD when it changes.
-// Settings: general.capsToast, general.numToast (System > Startup & Alerts).
+// Rust (lock-keys-changed event) sends native Win32 low-level keyboard notifications with 0% polling.
 const CAPS_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4 5 12h4v4h6v-4h4z"/><line x1="9" y1="20" x2="15" y2="20"/></svg>';
 const NUM_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="3"/><path d="M9 8v4M9 8l-1 1M14.5 8h1.5v8"/><path d="M8 16h2"/></svg>';
-let lockKeysPrev = null;
-async function pollLockKeys() {
+
+onTauriEvent('lock-keys-changed', (event) => {
   const g = SET.general || {};
-  if (!g.capsToast && !g.numToast) { lockKeysPrev = null; return; }
-  const r = await tryInvoke('lock_keys', {});
-  if (!Array.isArray(r) || r.length < 2) return;
-  const [caps, num] = r;
-  if (lockKeysPrev) {
-    if (g.capsToast && caps !== lockKeysPrev[0]) {
-      showDeviceHud({ iconHTML: CAPS_SVG, plain: !caps, accent: caps ? 'blue' : '', name: 'Caps Lock', tag: caps ? 'On' : 'Off', ms: 1500 });
-    } else if (g.numToast && num !== lockKeysPrev[1]) {
-      showDeviceHud({ iconHTML: NUM_SVG, plain: !num, accent: num ? 'blue' : '', name: 'Num Lock', tag: num ? 'On' : 'Off', ms: 1500 });
-    }
+  const payload = (event && event.payload) || {};
+  const { caps, num, changed } = payload;
+  if (changed === 'caps') {
+    if (!g.capsToast) return; // Strict setting: OFF means do NOTHING!
+    showDeviceHud({ iconHTML: CAPS_SVG, plain: !caps, accent: caps ? 'blue' : '', name: 'Caps Lock', tag: caps ? 'On' : 'Off', ms: 1500 });
+  } else if (changed === 'num') {
+    if (!g.numToast) return; // Strict setting: OFF means do NOTHING!
+    showDeviceHud({ iconHTML: NUM_SVG, plain: !num, accent: num ? 'blue' : '', name: 'Num Lock', tag: num ? 'On' : 'Off', ms: 1500 });
   }
-  lockKeysPrev = [caps, num];
-}
-setInterval(pollLockKeys, 250);
+});
 
 // ==================== 13. DOWNLOAD PROGRESS / COMPLETE HUD ====================
-// Rust (downloads_scan) lists unfinished browser downloads and freshly finished files in the Downloads folder.
-// Browsers do not publish the total size, so: HUD when a download starts, a thin blue sweep on the pill while
-// bytes keep arriving, and a "Download Complete" HUD (click = show in Explorer) when it is done.
-// Setting: general.downloadHud
+// Rust (downloads-changed event) sends native Win32 directory change notifications with 0% polling.
 const DL_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 11l5 5 5-5"/><path d="M5 20h14"/></svg>';
 const DL_DONE_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline class="clip-tick" points="5 12.5 10 17.5 19 7"/></svg>';
 const dlTrack = new Map();       // partial file name -> { size, changedAt, firstAt }
 const dlSeenRecent = new Set();
 let dlSeeded = false;
 let dlOpenName = null;           // finished file the HUD would open on click
+let dlScanBusy = false;
 
 function dlSize(b) {
   if (b >= 1073741824) return (b / 1073741824).toFixed(1) + ' GB';
@@ -5192,48 +5204,55 @@ function dlClean(name) {
   const n = name.replace(/\.(crdownload|part|opdownload|download|partial)$/i, '');
   return /^unconfirmed \d+/i.test(n) ? 'New download' : n;
 }
-async function pollDownloads() {
+
+async function handleDownloadsChanged() {
+  if (dlScanBusy) return;
   if (!(SET.general && SET.general.downloadHud)) {
     island.classList.remove('dl-active'); dlTrack.clear(); dlSeeded = false; return;
   }
-  const r = await tryInvoke('downloads_scan', {});
-  if (!r || !Array.isArray(r.partials)) return;
-  const now = Date.now();
-  const cur = new Set();
-  let started = null;
-  for (const f of r.partials) {
-    cur.add(f.name);
-    const t = dlTrack.get(f.name);
-    if (!t) {
-      dlTrack.set(f.name, { size: f.size, changedAt: now, firstAt: now });
-      if (dlSeeded && f.age_secs <= 15 && !started) started = f;
-    } else if (f.size !== t.size) { t.size = f.size; t.changedAt = now; }
-  }
-  // vanished partial = finished (or cancelled): finished only if a fresh file appeared
-  let finished = null;
-  for (const [name, t] of [...dlTrack]) {
-    if (cur.has(name)) continue;
-    dlTrack.delete(name);
-    if (!dlSeeded || now - t.firstAt < 1000) continue;
-    const base = dlClean(name).toLowerCase();
-    const fresh = (r.recent || []).filter((f) => f.age_secs <= 20 && !dlSeenRecent.has(f.name));
-    finished = fresh.find((f) => f.name.toLowerCase() === base) || fresh[0] || null;
-  }
-  (r.recent || []).forEach((f) => dlSeenRecent.add(f.name));
-  if (dlSeenRecent.size > 400) dlSeenRecent.clear();
-  dlSeeded = true;
+  dlScanBusy = true;
+  try {
+    const r = await tryInvoke('downloads_scan', {});
+    if (!r || !Array.isArray(r.partials)) return;
+    const now = Date.now();
+    const cur = new Set();
+    let started = null;
+    for (const f of r.partials) {
+      cur.add(f.name);
+      const t = dlTrack.get(f.name);
+      if (!t) {
+        dlTrack.set(f.name, { size: f.size, changedAt: now, firstAt: now });
+        if (dlSeeded && f.age_secs <= 15 && !started) started = f;
+      } else if (f.size !== t.size) { t.size = f.size; t.changedAt = now; }
+    }
+    // vanished partial = finished (or cancelled): finished only if a fresh file appeared
+    let finished = null;
+    for (const [name, t] of [...dlTrack]) {
+      if (cur.has(name)) continue;
+      dlTrack.delete(name);
+      if (!dlSeeded || now - t.firstAt < 1000) continue;
+      const base = dlClean(name).toLowerCase();
+      const fresh = (r.recent || []).filter((f) => f.age_secs <= 20 && !dlSeenRecent.has(f.name));
+      finished = fresh.find((f) => f.name.toLowerCase() === base) || fresh[0] || null;
+    }
+    (r.recent || []).forEach((f) => dlSeenRecent.add(f.name));
+    if (dlSeenRecent.size > 400) dlSeenRecent.clear();
+    dlSeeded = true;
 
-  const active = [...dlTrack.values()].some((t) => now - t.changedAt < 4000);
-  island.classList.toggle('dl-active', active && appState.currentView === 'view-compact');
+    const active = [...dlTrack.values()].some((t) => now - t.changedAt < 4000);
+    island.classList.toggle('dl-active', active && appState.currentView === 'view-compact');
 
-  if (finished) {
-    dlOpenName = finished.name;
-    showDeviceHud({ iconHTML: DL_DONE_SVG, plain: true, accent: 'ok', name: finished.name, tag: `Download Complete • ${dlSize(finished.size)}`, ms: 4200 });
-  } else if (started) {
-    showDeviceHud({ iconHTML: DL_SVG, plain: true, accent: 'blue', name: dlClean(started.name), tag: `Downloading • ${dlSize(started.size)}`, ms: 2200 });
+    if (finished) {
+      dlOpenName = finished.name;
+      showDeviceHud({ iconHTML: DL_DONE_SVG, plain: true, accent: 'ok', name: finished.name, tag: `Download Complete • ${dlSize(finished.size)}`, ms: 4200 });
+    } else if (started) {
+      showDeviceHud({ iconHTML: DL_SVG, plain: true, accent: 'blue', name: dlClean(started.name), tag: `Downloading • ${dlSize(started.size)}`, ms: 2200 });
+    }
+  } finally {
+    dlScanBusy = false;
   }
 }
-setInterval(pollDownloads, 1000);
+onTauriEvent('downloads-changed', handleDownloadsChanged);
 document.getElementById('c-bt-hud')?.addEventListener('click', (e) => {
   if (!dlOpenName || !island.classList.contains('bt-hud-active')) return;
   if (!document.getElementById('bt-hud-name') || document.getElementById('bt-hud-name').textContent !== dlOpenName) return;

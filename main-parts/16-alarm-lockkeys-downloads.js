@@ -10,7 +10,10 @@ let alarmPick = { h: 7, m: 30, daily: false };
 let alarmSnoozeAt = 0;          // ms timestamp, 0 = no snooze pending
 let alarmLastFired = '';        // "<id>@<yyyy-mm-dd hh:mm>": never ring twice in one minute
 
-function saveAlarms() { try { localStorage.setItem(ALARM_KEY, JSON.stringify(alarms)); } catch (_) {} }
+function saveAlarms() {
+  try { localStorage.setItem(ALARM_KEY, JSON.stringify(alarms)); } catch (_) {}
+  scheduleNextAlarm();
+}
 function pad2(n) { return String(n).padStart(2, '0'); }
 function fmtAlarmTime(h, m) {
   if (SET.general && SET.general.hour24) return `${pad2(h)}:${pad2(m)}`;
@@ -113,91 +116,109 @@ function ringClockAlarm(a, snoozed) {
 }
 function snoozeClockAlarm() {
   alarmSnoozeAt = Date.now() + ALARM_SNOOZE_MS;
+  scheduleNextAlarm();
 }
-let alarmLastCheck = Date.now();
-setInterval(() => {
-  const now = new Date();
-  const nowMs = now.getTime();
-  const elapsed = nowMs - alarmLastCheck;
-  alarmLastCheck = nowMs;
 
-  if (alarmSnoozeAt && nowMs >= alarmSnoozeAt) {
-    alarmSnoozeAt = 0;
-    ringClockAlarm(appState.lastRungAlarm, true);
+let alarmTimer = null;
+function scheduleNextAlarm() {
+  if (alarmTimer) {
+    clearTimeout(alarmTimer);
+    alarmTimer = null;
+  }
+  const now = Date.now();
+
+  if (alarmSnoozeAt && alarmSnoozeAt > now) {
+    const diff = Math.max(50, alarmSnoozeAt - now);
+    alarmTimer = setTimeout(() => {
+      alarmSnoozeAt = 0;
+      ringClockAlarm(appState.lastRungAlarm, true);
+      scheduleNextAlarm();
+    }, diff);
     return;
   }
 
-  const justWokeUp = elapsed > 4000;
+  const active = alarms.filter((a) => a.on);
+  if (!active.length) return; // 0 active alarms = 0 timers, 0% CPU!
+
+  const nowDate = new Date();
+  let minDiff = Infinity;
+  let target = null;
+  for (const a of active) {
+    const diff = nextAlarmMs(a, nowDate) - now;
+    if (diff > 0 && diff < minDiff) {
+      minDiff = diff;
+      target = a;
+    }
+  }
+
+  if (target && minDiff < Infinity) {
+    alarmTimer = setTimeout(() => {
+      const cur = new Date();
+      const currentH = cur.getHours();
+      const currentM = cur.getMinutes();
+      const stamp = `${cur.getFullYear()}-${cur.getMonth()}-${cur.getDate()} ${currentH}:${currentM}`;
+      const key = `${target.id}@${stamp}`;
+      if (alarmLastFired !== key) {
+        alarmLastFired = key;
+        if (!target.daily) {
+          target.on = false;
+          saveAlarms();
+          if (appState.currentView === 'view-alarm') renderAlarmList();
+        }
+        ringClockAlarm(target, false);
+      }
+      scheduleNextAlarm();
+    }, minDiff);
+  }
+}
+scheduleNextAlarm();
+
+// Catch missed alarms if PC was sleeping/hibernating and wakes up
+onTauriEvent('system-resumed', () => {
+  const now = new Date();
   const currentH = now.getHours();
   const currentM = now.getMinutes();
-  const stamp = `${now.getFullYear()}-${now.getMonth()}-${now.getDate()} ${currentH}:${currentM}`;
-
   for (const a of alarms) {
     if (!a.on) continue;
-    let shouldFire = false;
-    let isMissed = false;
-
-    if (a.h === currentH && a.m === currentM && now.getSeconds() <= 5) {
-      shouldFire = true;
-    } else if (justWokeUp) {
-      const alarmTarget = new Date(now);
-      alarmTarget.setHours(a.h, a.m, 0, 0);
-      const targetMs = alarmTarget.getTime();
-      if (targetMs >= (nowMs - elapsed) && targetMs <= nowMs && (nowMs - targetMs) < 2 * 3600 * 1000) {
-        shouldFire = true;
-        isMissed = true;
-      }
-    }
-
-    if (shouldFire) {
-      const key = `${a.id}@${stamp}`;
-      if (alarmLastFired === key) continue;
-      alarmLastFired = key;
-      if (!a.daily) { a.on = false; saveAlarms(); if (appState.currentView === 'view-alarm') renderAlarmList(); }
+    if (a.h === currentH && a.m === currentM) {
       ringClockAlarm(a, false);
-      if (isMissed) {
-        const tagEl = document.getElementById('alarm-hud-tag');
-        if (tagEl) tagEl.textContent = `Missed Alarm • ${fmtAlarmTime(a.h, a.m)}`;
+      if (!a.daily) {
+        a.on = false;
+        saveAlarms();
+        if (appState.currentView === 'view-alarm') renderAlarmList();
       }
-      break;
     }
   }
-}, 1000);
+  scheduleNextAlarm();
+});
 
 // ==================== 12. CAPS LOCK / NUM LOCK INDICATOR ====================
-// Rust (lock_keys) reads the toggle state; the island pops a small HUD when it changes.
-// Settings: general.capsToast, general.numToast (System > Startup & Alerts).
+// Rust (lock-keys-changed event) sends native Win32 low-level keyboard notifications with 0% polling.
 const CAPS_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4 5 12h4v4h6v-4h4z"/><line x1="9" y1="20" x2="15" y2="20"/></svg>';
 const NUM_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="3"/><path d="M9 8v4M9 8l-1 1M14.5 8h1.5v8"/><path d="M8 16h2"/></svg>';
-let lockKeysPrev = null;
-async function pollLockKeys() {
+
+onTauriEvent('lock-keys-changed', (event) => {
   const g = SET.general || {};
-  if (!g.capsToast && !g.numToast) { lockKeysPrev = null; return; }
-  const r = await tryInvoke('lock_keys', {});
-  if (!Array.isArray(r) || r.length < 2) return;
-  const [caps, num] = r;
-  if (lockKeysPrev) {
-    if (g.capsToast && caps !== lockKeysPrev[0]) {
-      showDeviceHud({ iconHTML: CAPS_SVG, plain: !caps, accent: caps ? 'blue' : '', name: 'Caps Lock', tag: caps ? 'On' : 'Off', ms: 1500 });
-    } else if (g.numToast && num !== lockKeysPrev[1]) {
-      showDeviceHud({ iconHTML: NUM_SVG, plain: !num, accent: num ? 'blue' : '', name: 'Num Lock', tag: num ? 'On' : 'Off', ms: 1500 });
-    }
+  const payload = (event && event.payload) || {};
+  const { caps, num, changed } = payload;
+  if (changed === 'caps') {
+    if (!g.capsToast) return; // Strict setting: OFF means do NOTHING!
+    showDeviceHud({ iconHTML: CAPS_SVG, plain: !caps, accent: caps ? 'blue' : '', name: 'Caps Lock', tag: caps ? 'On' : 'Off', ms: 1500 });
+  } else if (changed === 'num') {
+    if (!g.numToast) return; // Strict setting: OFF means do NOTHING!
+    showDeviceHud({ iconHTML: NUM_SVG, plain: !num, accent: num ? 'blue' : '', name: 'Num Lock', tag: num ? 'On' : 'Off', ms: 1500 });
   }
-  lockKeysPrev = [caps, num];
-}
-setInterval(pollLockKeys, 250);
+});
 
 // ==================== 13. DOWNLOAD PROGRESS / COMPLETE HUD ====================
-// Rust (downloads_scan) lists unfinished browser downloads and freshly finished files in the Downloads folder.
-// Browsers do not publish the total size, so: HUD when a download starts, a thin blue sweep on the pill while
-// bytes keep arriving, and a "Download Complete" HUD (click = show in Explorer) when it is done.
-// Setting: general.downloadHud
+// Rust (downloads-changed event) sends native Win32 directory change notifications with 0% polling.
 const DL_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 11l5 5 5-5"/><path d="M5 20h14"/></svg>';
 const DL_DONE_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline class="clip-tick" points="5 12.5 10 17.5 19 7"/></svg>';
 const dlTrack = new Map();       // partial file name -> { size, changedAt, firstAt }
 const dlSeenRecent = new Set();
 let dlSeeded = false;
 let dlOpenName = null;           // finished file the HUD would open on click
+let dlScanBusy = false;
 
 function dlSize(b) {
   if (b >= 1073741824) return (b / 1073741824).toFixed(1) + ' GB';
@@ -208,48 +229,55 @@ function dlClean(name) {
   const n = name.replace(/\.(crdownload|part|opdownload|download|partial)$/i, '');
   return /^unconfirmed \d+/i.test(n) ? 'New download' : n;
 }
-async function pollDownloads() {
+
+async function handleDownloadsChanged() {
+  if (dlScanBusy) return;
   if (!(SET.general && SET.general.downloadHud)) {
     island.classList.remove('dl-active'); dlTrack.clear(); dlSeeded = false; return;
   }
-  const r = await tryInvoke('downloads_scan', {});
-  if (!r || !Array.isArray(r.partials)) return;
-  const now = Date.now();
-  const cur = new Set();
-  let started = null;
-  for (const f of r.partials) {
-    cur.add(f.name);
-    const t = dlTrack.get(f.name);
-    if (!t) {
-      dlTrack.set(f.name, { size: f.size, changedAt: now, firstAt: now });
-      if (dlSeeded && f.age_secs <= 15 && !started) started = f;
-    } else if (f.size !== t.size) { t.size = f.size; t.changedAt = now; }
-  }
-  // vanished partial = finished (or cancelled): finished only if a fresh file appeared
-  let finished = null;
-  for (const [name, t] of [...dlTrack]) {
-    if (cur.has(name)) continue;
-    dlTrack.delete(name);
-    if (!dlSeeded || now - t.firstAt < 1000) continue;
-    const base = dlClean(name).toLowerCase();
-    const fresh = (r.recent || []).filter((f) => f.age_secs <= 20 && !dlSeenRecent.has(f.name));
-    finished = fresh.find((f) => f.name.toLowerCase() === base) || fresh[0] || null;
-  }
-  (r.recent || []).forEach((f) => dlSeenRecent.add(f.name));
-  if (dlSeenRecent.size > 400) dlSeenRecent.clear();
-  dlSeeded = true;
+  dlScanBusy = true;
+  try {
+    const r = await tryInvoke('downloads_scan', {});
+    if (!r || !Array.isArray(r.partials)) return;
+    const now = Date.now();
+    const cur = new Set();
+    let started = null;
+    for (const f of r.partials) {
+      cur.add(f.name);
+      const t = dlTrack.get(f.name);
+      if (!t) {
+        dlTrack.set(f.name, { size: f.size, changedAt: now, firstAt: now });
+        if (dlSeeded && f.age_secs <= 15 && !started) started = f;
+      } else if (f.size !== t.size) { t.size = f.size; t.changedAt = now; }
+    }
+    // vanished partial = finished (or cancelled): finished only if a fresh file appeared
+    let finished = null;
+    for (const [name, t] of [...dlTrack]) {
+      if (cur.has(name)) continue;
+      dlTrack.delete(name);
+      if (!dlSeeded || now - t.firstAt < 1000) continue;
+      const base = dlClean(name).toLowerCase();
+      const fresh = (r.recent || []).filter((f) => f.age_secs <= 20 && !dlSeenRecent.has(f.name));
+      finished = fresh.find((f) => f.name.toLowerCase() === base) || fresh[0] || null;
+    }
+    (r.recent || []).forEach((f) => dlSeenRecent.add(f.name));
+    if (dlSeenRecent.size > 400) dlSeenRecent.clear();
+    dlSeeded = true;
 
-  const active = [...dlTrack.values()].some((t) => now - t.changedAt < 4000);
-  island.classList.toggle('dl-active', active && appState.currentView === 'view-compact');
+    const active = [...dlTrack.values()].some((t) => now - t.changedAt < 4000);
+    island.classList.toggle('dl-active', active && appState.currentView === 'view-compact');
 
-  if (finished) {
-    dlOpenName = finished.name;
-    showDeviceHud({ iconHTML: DL_DONE_SVG, plain: true, accent: 'ok', name: finished.name, tag: `Download Complete • ${dlSize(finished.size)}`, ms: 4200 });
-  } else if (started) {
-    showDeviceHud({ iconHTML: DL_SVG, plain: true, accent: 'blue', name: dlClean(started.name), tag: `Downloading • ${dlSize(started.size)}`, ms: 2200 });
+    if (finished) {
+      dlOpenName = finished.name;
+      showDeviceHud({ iconHTML: DL_DONE_SVG, plain: true, accent: 'ok', name: finished.name, tag: `Download Complete • ${dlSize(finished.size)}`, ms: 4200 });
+    } else if (started) {
+      showDeviceHud({ iconHTML: DL_SVG, plain: true, accent: 'blue', name: dlClean(started.name), tag: `Downloading • ${dlSize(started.size)}`, ms: 2200 });
+    }
+  } finally {
+    dlScanBusy = false;
   }
 }
-setInterval(pollDownloads, 1000);
+onTauriEvent('downloads-changed', handleDownloadsChanged);
 document.getElementById('c-bt-hud')?.addEventListener('click', (e) => {
   if (!dlOpenName || !island.classList.contains('bt-hud-active')) return;
   if (!document.getElementById('bt-hud-name') || document.getElementById('bt-hud-name').textContent !== dlOpenName) return;

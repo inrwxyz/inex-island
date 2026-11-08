@@ -24,23 +24,36 @@ function renderMediaProgress(pos) {
   }
   const dur = appState.mediaDuration || 0;
   pos = Math.min(dur || pos, Math.max(0, pos));
+
+  if (appState.currentView !== 'view-media') return;
+
   const curTimeEl = document.getElementById('m-cur-time');
   const totTimeEl = document.getElementById('m-tot-time');
   const progFillEl = document.getElementById('m-prog-fill');
   const sliderEl = document.getElementById('m-seek-slider');
 
-  if (curTimeEl) curTimeEl.textContent = fmtTime(pos);
-  if (totTimeEl) totTimeEl.textContent = dur > 0 ? `-${fmtTime(dur - pos)}` : '--:--';
+  if (curTimeEl) {
+    const str = fmtTime(pos);
+    if (curTimeEl.textContent !== str) curTimeEl.textContent = str;
+  }
+  if (totTimeEl) {
+    const str = dur > 0 ? `-${fmtTime(dur - pos)}` : '--:--';
+    if (totTimeEl.textContent !== str) totTimeEl.textContent = str;
+  }
   const pct = dur > 0 ? Math.min(100, (pos / dur) * 100) : 0;
-  if (progFillEl) progFillEl.style.width = `${pct}%`;
+  if (progFillEl) {
+    const w = `${pct}%`;
+    if (progFillEl.style.width !== w) progFillEl.style.width = w;
+  }
   if (sliderEl && !appState.mediaSeeking) {
-    sliderEl.value = Math.round(pct * 10);
+    const v = Math.round(pct * 10);
+    if (sliderEl.value != v) sliderEl.value = v;
   }
 }
 
-// Tick media progress smoothly every 250ms (no backwards snapping)
+// Tick media progress smoothly every 250ms when expanded media player is open
 setInterval(() => {
-  if (appState.mediaPlaying && !appState.mediaSeeking && appState.mediaDuration > 0) {
+  if (appState.currentView === 'view-media' && appState.mediaPlaying && !appState.mediaSeeking && appState.mediaDuration > 0) {
     renderMediaProgress();
   }
 }, 250);

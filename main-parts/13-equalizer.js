@@ -29,39 +29,46 @@ function eqDraw() {
   const sens = (SET.notch.eqSensitivity || 100) / 100;
   const isPlaying = appState.mediaPlaying;
 
-  cEqBars.forEach((bar, i) => {
-    let target = 2;
-    if (isPlaying) {
-      if (SET.notch.eqSync) {
-        const val = lastFrequencies[i] ?? 0.18;
-        const bandBoost = i === 4 ? 1.55 : (i === 3 ? 1.35 : (i === 2 ? 1.12 : 1.0));
-        const norm = Math.max(0, (val - 0.18) / 0.82) * sens * bandBoost;
-        target = 2 + Math.min(1, norm) * 10;
-      } else {
-        const t = performance.now();
-        target = 2 + (0.55 + 0.35 * Math.sin(t / 260 + i * 1.5)) * 10;
+  const isCompact = appState.currentView === 'view-compact';
+  if (isCompact) {
+    cEqBars.forEach((bar, i) => {
+      let target = 2;
+      if (isPlaying) {
+        if (SET.notch.eqSync) {
+          const val = lastFrequencies[i] ?? 0.18;
+          const bandBoost = i === 4 ? 1.55 : (i === 3 ? 1.35 : (i === 2 ? 1.12 : 1.0));
+          const norm = Math.max(0, (val - 0.18) / 0.82) * sens * bandBoost;
+          target = 2 + Math.min(1, norm) * 10;
+        } else {
+          const t = performance.now();
+          target = 2 + (0.55 + 0.35 * Math.sin(t / 260 + i * 1.5)) * 10;
+        }
       }
-    }
-    currentHeightsC[i] += (target - currentHeightsC[i]) * 0.45;
-    bar.style.height = currentHeightsC[i].toFixed(1) + 'px';
-  });
+      currentHeightsC[i] += (target - currentHeightsC[i]) * 0.45;
+      const hStr = currentHeightsC[i].toFixed(1) + 'px';
+      if (bar.style.height !== hStr) bar.style.height = hStr;
+    });
+  }
 
-  mEqBars.forEach((bar, i) => {
-    let target = 2;
-    if (isPlaying) {
-      if (SET.notch.eqSync) {
-        const val = lastFrequencies[i] ?? 0.18;
-        const bandBoost = i === 4 ? 1.55 : (i === 3 ? 1.35 : (i === 2 ? 1.12 : 1.0));
-        const norm = Math.max(0, (val - 0.18) / 0.82) * sens * bandBoost;
-        target = 2 + Math.min(1, norm) * 18;
-      } else {
-        const t = performance.now();
-        target = 2 + (0.55 + 0.35 * Math.sin(t / 260 + i * 1.5)) * 18;
+  if (appState.currentView === 'view-media') {
+    mEqBars.forEach((bar, i) => {
+      let target = 2;
+      if (isPlaying) {
+        if (SET.notch.eqSync) {
+          const val = lastFrequencies[i] ?? 0.18;
+          const bandBoost = i === 4 ? 1.55 : (i === 3 ? 1.35 : (i === 2 ? 1.12 : 1.0));
+          const norm = Math.max(0, (val - 0.18) / 0.82) * sens * bandBoost;
+          target = 2 + Math.min(1, norm) * 18;
+        } else {
+          const t = performance.now();
+          target = 2 + (0.55 + 0.35 * Math.sin(t / 260 + i * 1.5)) * 18;
+        }
       }
-    }
-    currentHeightsM[i] += (target - currentHeightsM[i]) * 0.45;
-    bar.style.height = currentHeightsM[i].toFixed(1) + 'px';
-  });
+      currentHeightsM[i] += (target - currentHeightsM[i]) * 0.45;
+      const hStr = currentHeightsM[i].toFixed(1) + 'px';
+      if (bar.style.height !== hStr) bar.style.height = hStr;
+    });
+  }
 
   if (!isPlaying && currentHeightsC.every((h) => h < 2.1) && currentHeightsM.every((h) => h < 2.1)) {
     eqRaf = 0;
@@ -83,17 +90,10 @@ function syncEq() {
 }
 
 function chime() {
-  try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    [880, 1175, 1568].forEach((f, i) => {
-      const o = ctx.createOscillator(), g = ctx.createGain();
-      o.frequency.value = f; o.connect(g); g.connect(ctx.destination);
-      const t0 = ctx.currentTime + i * 0.18;
-      g.gain.setValueAtTime(0.0001, t0);
-      g.gain.exponentialRampToValueAtTime(0.25, t0 + 0.02);
-      g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.5);
-      o.start(t0); o.stop(t0 + 0.55);
-    });
-  } catch (_) {}
+  invokeTauri('play_alarm_sound').catch(() => {});
 }
+
+
+
+
 

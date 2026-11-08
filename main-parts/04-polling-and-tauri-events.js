@@ -45,13 +45,15 @@ async function pollSystemAndMedia() {
 let pollBusy = false;
 async function pollLight() {
   if (document.hidden || pollBusy) return;
+  if (island.classList.contains('smart-hidden') || appState.currentView !== 'view-compact') return;
+  const wL = SET.widgets ? SET.widgets.left : null;
+  const wR = SET.widgets ? SET.widgets.right : null;
+  const needsStats = ['ram', 'cpu', 'gpu', 'disk', 'net'].some(k => wL === k || wR === k);
+  if (!needsStats) return;
   pollBusy = true;
   try { await refreshStats(); } finally { pollBusy = false; }
 }
-setInterval(pollLight, 3000);
-// safety nets only (the events below do the real work)
-setInterval(() => { if (!document.hidden) refreshRadios(); }, 30000);
-setInterval(() => { if (!document.hidden) refreshMedia(); }, 2500);
+setInterval(pollLight, 3500);
 function onTauriEvent(name, fn) {
   try {
     const r = window.__TAURI__.event.listen(name, fn);

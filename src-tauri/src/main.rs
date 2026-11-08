@@ -11,6 +11,8 @@ mod privacy;
 mod shelf;
 mod visualizer;
 mod wifi;
+#[cfg(target_os = "windows")]
+mod native_events;
 
 use serde::Serialize;
 use std::io::{Read, Write};
@@ -115,6 +117,34 @@ fn clipboard_seq() -> u32 {
     {
         0
     }
+}
+
+#[tauri::command]
+fn get_clipboard_text() -> String {
+    #[cfg(windows)]
+    unsafe {
+        use windows::Win32::System::DataExchange::{CloseClipboard, GetClipboardData, OpenClipboard};
+        use windows::Win32::System::Memory::{GlobalLock, GlobalUnlock};
+        use windows::Win32::Foundation::{HGLOBAL, HWND};
+        const CF_UNICODETEXT: u32 = 13;
+        if OpenClipboard(HWND::default()).is_ok() {
+            let mut result = String::new();
+            if let Ok(h) = GetClipboardData(CF_UNICODETEXT) {
+                if !h.0.is_null() {
+                    let ptr = GlobalLock(HGLOBAL(h.0)) as *const u16;
+                    if !ptr.is_null() {
+                        let len = (0..).take_while(|&i| *ptr.add(i) != 0).count();
+                        let slice = std::slice::from_raw_parts(ptr, len);
+                        result = String::from_utf16_lossy(slice);
+                        let _ = GlobalUnlock(HGLOBAL(h.0));
+                    }
+                }
+            }
+            let _ = CloseClipboard();
+            return result;
+        }
+    }
+    String::new()
 }
 
 #[tauri::command]
@@ -1293,6 +1323,86 @@ fn setup_shelf_drop(app: AppHandle) {
     shelf::setup_shelf_drop(app);
 }
 
+fn generate_chime_wav() -> Vec<u8> {
+    let sample_rate: u32 = 44100;
+    let duration = 0.85;
+    let total_samples = (sample_rate as f32 * duration) as usize;
+    let mut pcm: Vec<i16> = vec![0; total_samples];
+
+    let notes = [
+        (523.25, 0.00, 0.28), // C5
+        (659.25, 0.08, 0.26), // E5
+        (783.99, 0.16, 0.24), // G5
+        (1046.50, 0.24, 0.22), // C6
+    ];
+
+    for &(freq, delay, vol) in &notes {
+        let start_sample = (delay * sample_rate as f32) as usize;
+        for i in start_sample..total_samples {
+            let t = (i - start_sample) as f32 / sample_rate as f32;
+            let decay = (-t * 4.5).exp();
+            let sample = (2.0 * std::f32::consts::PI * freq * t).sin() * vol * decay;
+            let val = (sample * 32767.0) as i32;
+            pcm[i] = pcm[i].saturating_add(val as i16);
+        }
+    }
+
+    let mut wav = Vec::with_capacity(44 + total_samples * 2);
+    let data_size = (total_samples * 2) as u32;
+    let file_size = 36 + data_size;
+
+    wav.extend_from_slice(b"RIFF");
+    wav.extend_from_slice(&file_size.to_le_bytes());
+    wav.extend_from_slice(b"WAVE");
+
+    wav.extend_from_slice(b"fmt ");
+    wav.extend_from_slice(&16u32.to_le_bytes());
+    wav.extend_from_slice(&1u16.to_le_bytes());
+    wav.extend_from_slice(&1u16.to_le_bytes());
+    wav.extend_from_slice(&sample_rate.to_le_bytes());
+    wav.extend_from_slice(&(sample_rate * 2).to_le_bytes());
+    wav.extend_from_slice(&2u16.to_le_bytes());
+    wav.extend_from_slice(&16u16.to_le_bytes());
+
+    wav.extend_from_slice(b"data");
+    wav.extend_from_slice(&data_size.to_le_bytes());
+    for s in pcm {
+        wav.extend_from_slice(&s.to_le_bytes());
+    }
+
+    wav
+}
+
+#[tauri::command]
+fn play_alarm_sound() {
+    #[cfg(target_os = "windows")]
+    {
+        use windows::core::HSTRING;
+        unsafe {
+            #[link(name = "winmm")]
+            extern "system" {
+                fn PlaySoundW(pszSound: *const u16, hmod: usize, fdwSound: u32) -> i32;
+            }
+            const SND_ASYNC: u32 = 0x0001;
+            const SND_NODEFAULT: u32 = 0x0002;
+            const SND_MEMORY: u32 = 0x0004;
+            const SND_FILENAME: u32 = 0x00020000;
+
+            let alarm_file = r"C:\Windows\Media\Alarm01.wav";
+            if std::path::Path::new(alarm_file).exists() {
+                let hstr = HSTRING::from(alarm_file);
+                if PlaySoundW(hstr.as_ptr(), 0, SND_FILENAME | SND_ASYNC | SND_NODEFAULT) != 0 {
+                    return;
+                }
+            }
+
+            static CHIME: std::sync::OnceLock<Vec<u8>> = std::sync::OnceLock::new();
+            let wav = CHIME.get_or_init(generate_chime_wav);
+            let _ = PlaySoundW(wav.as_ptr() as *const u16, 0, SND_MEMORY | SND_ASYNC | SND_NODEFAULT);
+        }
+    }
+}
+
 fn show_settings_window(app: &AppHandle) {
     if let Some(w) = app.get_webview_window("settings") {
         let _ = w.emit("settings-opened", ());
@@ -1564,6 +1674,12 @@ fn main() {
             visualizer::setup_audio_visualization(app.handle().clone());
             locker_bridge::start(app.handle().clone());
 
+            #[cfg(target_os = "windows")]
+            {
+                native_events::setup_native_events(app.handle().clone());
+                downloads::start_downloads_watcher(app.handle().clone());
+            }
+
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.set_always_on_top(true);
                 let _ = window.set_decorations(false);
@@ -1649,6 +1765,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             resize_island,
             clipboard_seq,
+            get_clipboard_text,
             get_net_speed,
             privacy::privacy_watch_start,
             focus_island,
@@ -1660,6 +1777,7 @@ fn main() {
             open_settings,
             close_settings,
             drag_settings,
+            play_alarm_sound,
             quit_app,
             restart_app,
             settings_changed,

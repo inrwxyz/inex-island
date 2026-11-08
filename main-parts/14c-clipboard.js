@@ -165,32 +165,31 @@ document.getElementById('island')?.addEventListener('mouseenter', checkSystemCli
 
 // System-wide copy -> little "Copied" popup in the island (Windows tells us the clipboard changed, no matter which app copied)
 const CLIP_HUD_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/><path class="clip-tick" d="M8.5 14.5l2.5 2.5 4.5-5"/></svg>';
-let clipSeqPrev = null;
 let clipHudAt = 0;
-async function pollClipboardSeq() {
-  const seq = await tryInvoke('clipboard_seq', {});
-  if (typeof seq !== 'number' || seq === 0) return;
-  if (clipSeqPrev === null) { clipSeqPrev = seq; return; }
-  if (seq === clipSeqPrev) return;
-  clipSeqPrev = seq;
-  let text = '';
-  try {
-    if (document.hasFocus() && navigator.clipboard && navigator.clipboard.readText) {
-      text = await navigator.clipboard.readText();
-      if (text) addClipboardText(text);
-    }
-  } catch (_) {}
+
+onTauriEvent('clipboard-copied', async () => {
+  if (SET.general && SET.general.copyToast === false) return; // Strict toggle: OFF means do NOTHING!
+  let text = await tryInvoke('get_clipboard_text', {});
+  if (!text || typeof text !== 'string') {
+    try {
+      if (navigator.clipboard && navigator.clipboard.readText) {
+        text = await navigator.clipboard.readText();
+      }
+    } catch (_) {}
+  }
+  if (!text || typeof text !== 'string' || !text.trim()) return;
+  addClipboardText(text);
+
   // our own copy buttons already show a toast; do not stack a second popup
   if (appState.toast || !(SET.general.copyToast !== false)) return;
   const now = Date.now();
   if (now - clipHudAt < 1200) return;
   clipHudAt = now;
-  const one = (text || '').replace(/\s+/g, ' ').trim();
+  const one = text.replace(/\s+/g, ' ').trim();
   showDeviceHud({
     iconHTML: CLIP_HUD_SVG, plain: true,
     name: 'Copied',
     tag: one ? (one.length > 24 ? one.slice(0, 24) + '\u2026' : one) : 'Copied to Clipboard',
     ms: 1700
   });
-}
-setInterval(pollClipboardSeq, 600);
+});

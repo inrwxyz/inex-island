@@ -1,31 +1,9 @@
-// 10. Focus Timer + Apple Crystal Alarm
+// 10. Focus Timer + Apple Crystal Alarm (100% Native Windows Sound, Zero Chromium AudioService)
 let alarmChimeInterval = null;
 let alarmAutoDismissTimeout = null;
 
 function playAlarmChime() {
-  try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const chord = [
-      { f: 523.25, d: 0.00, v: 0.28 }, // C5
-      { f: 659.25, d: 0.08, v: 0.26 }, // E5
-      { f: 783.99, d: 0.16, v: 0.24 }, // G5
-      { f: 1046.50, d: 0.24, v: 0.22 } // C6
-    ];
-    chord.forEach((n) => {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(n.f, ctx.currentTime);
-      const t0 = ctx.currentTime + n.d;
-      gain.gain.setValueAtTime(0.0001, t0);
-      gain.gain.exponentialRampToValueAtTime(n.v, t0 + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.7);
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start(t0);
-      osc.stop(t0 + 0.75);
-    });
-  } catch (_) {}
+  invokeTauri('play_alarm_sound').catch(() => {});
 }
 
 let alarmStartT = null;
