@@ -835,7 +835,7 @@ pub fn foreground_is_fullscreen() -> bool {
         GetMonitorInfoW, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTONEAREST,
     };
     use windows::Win32::UI::WindowsAndMessaging::{
-        GetClassNameW, GetForegroundWindow, GetWindowRect, GetWindowTextW, IsZoomed,
+        GetClassNameW, GetForegroundWindow, GetWindowRect, GetWindowTextW, GetWindowThreadProcessId, IsZoomed,
     };
     unsafe {
         let hwnd = GetForegroundWindow();
@@ -847,16 +847,59 @@ pub fn foreground_is_fullscreen() -> bool {
         let name = String::from_utf16_lossy(&class[..n.max(0) as usize]);
         if matches!(
             name.as_str(),
-            "Progman" | "WorkerW" | "Shell_TrayWnd" | "Windows.UI.Core.CoreWindow"
+            "Progman"
+                | "WorkerW"
+                | "Shell_TrayWnd"
+                | "Shell_SecondaryTrayWnd"
+                | "Windows.UI.Core.CoreWindow"
+                | "XamlExplorerHostIslandWindow"
+                | "Shell_InputSwitchTopLevel"
+                | "MultitaskingViewFrame"
         ) {
             return false;
         }
-        // Ignore our own Island or Settings window
+        // Ignore our own Island or Settings window, or screenshot clipping overlays
         let mut title_buf = [0u16; 64];
         let tn = GetWindowTextW(hwnd, &mut title_buf);
         let title = String::from_utf16_lossy(&title_buf[..tn.max(0) as usize]);
-        if title.contains("Inex Island") {
+        let title_lower = title.to_lowercase();
+        if title.contains("Inex Island")
+            || title_lower.contains("snipping")
+            || title_lower.contains("screen clipping")
+            || title_lower.contains("snip & sketch")
+            || title_lower.contains("screenshot")
+        {
             return false;
+        }
+
+        // Check process image name to never hide during screenshots or for our own app
+        let mut pid = 0u32;
+        GetWindowThreadProcessId(hwnd, Some(&mut pid));
+        if pid != 0 {
+            use windows::core::PWSTR;
+            use windows::Win32::Foundation::CloseHandle;
+            use windows::Win32::System::Threading::{
+                OpenProcess, QueryFullProcessImageNameW, PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION,
+            };
+            if let Ok(h) = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid) {
+                let mut buf = [0u16; 260];
+                let mut len = buf.len() as u32;
+                if QueryFullProcessImageNameW(h, PROCESS_NAME_WIN32, PWSTR(buf.as_mut_ptr()), &mut len).is_ok() {
+                    let exe = String::from_utf16_lossy(&buf[..len as usize]).to_lowercase();
+                    if exe.ends_with("snippingtool.exe")
+                        || exe.ends_with("screenclippinghost.exe")
+                        || exe.contains("screensketch")
+                        || exe.ends_with("sharex.exe")
+                        || exe.ends_with("lightshot.exe")
+                        || exe.ends_with("flameshot.exe")
+                        || exe.ends_with("inex-island.exe")
+                    {
+                        let _ = CloseHandle(h);
+                        return false;
+                    }
+                }
+                let _ = CloseHandle(h);
+            }
         }
 
         // 1. Check if window is Maximized (like YouTube / Chrome / Explorer in video)

@@ -7,7 +7,7 @@ let dropConnected = false;
 let dropCurrentUrl = '';
 
 function openDropView() {
-  switchView('view-drop', 'state-sub', 316, 248);
+  switchView('view-inexdrop', 'state-sub', 316, 248);
   refreshDropUI();
 }
 

@@ -1,10 +1,6 @@
 document.getElementById('tile-p2p')?.addEventListener('click', () => {
   switchView('view-p2p', 'state-sub', 316, 248);
 });
-document.getElementById('tile-drop')?.addEventListener('click', () => {
-  if (typeof toggleInexDrop === 'function') toggleInexDrop();
-  else switchView('view-drop', 'state-sub', 316, 248);
-});
 document.getElementById('tile-tray').addEventListener('click', openTrayView);
 
 document.querySelectorAll('.back-btn').forEach((btn) => {

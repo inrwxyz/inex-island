@@ -120,7 +120,7 @@ const SLOT_DEFS = {
     stop: () => {},
     click: () => {
       if (typeof toggleInexDrop === 'function') toggleInexDrop();
-      else switchView('view-drop', 'state-sub', 316, 248);
+      else switchView('view-inexdrop', 'state-sub', 316, 248);
     }
   },
   p2p: {
@@ -1631,10 +1631,6 @@ document.getElementById('btn-more-bt').addEventListener('click', () => invokeTau
 document.getElementById('tile-p2p')?.addEventListener('click', () => {
   switchView('view-p2p', 'state-sub', 316, 248);
 });
-document.getElementById('tile-drop')?.addEventListener('click', () => {
-  if (typeof toggleInexDrop === 'function') toggleInexDrop();
-  else switchView('view-drop', 'state-sub', 316, 248);
-});
 document.getElementById('tile-tray').addEventListener('click', openTrayView);
 
 document.querySelectorAll('.back-btn').forEach((btn) => {
@@ -3018,7 +3014,7 @@ let dropConnected = false;
 let dropCurrentUrl = '';
 
 function openDropView() {
-  switchView('view-drop', 'state-sub', 316, 248);
+  switchView('view-inexdrop', 'state-sub', 316, 248);
   refreshDropUI();
 }
 

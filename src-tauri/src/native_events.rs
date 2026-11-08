@@ -93,6 +93,8 @@ const WM_QUERYENDSESSION: u32 = 0x0011;
 const WM_ENDSESSION: u32 = 0x0016;
 
 const EVENT_SYSTEM_FOREGROUND: u32 = 0x0003;
+const EVENT_SYSTEM_MOVESIZESTART: u32 = 0x000A;
+const EVENT_SYSTEM_MOVESIZEEND: u32 = 0x000B;
 const EVENT_SYSTEM_MINIMIZESTART: u32 = 0x0016;
 const EVENT_SYSTEM_MINIMIZEEND: u32 = 0x0017;
 const EVENT_OBJECT_LOCATIONCHANGE: u32 = 0x800B;
@@ -269,14 +271,22 @@ unsafe extern "system" fn win_event_proc(
 
     // Fullscreen / maximized state of the foreground window changed (Smart Mode).
     if event == EVENT_OBJECT_LOCATIONCHANGE {
-        // very frequent event: only the foreground window itself matters
-        if id_object != OBJID_WINDOW || hwnd != GetForegroundWindow() {
+        // very frequent event: only windows matter
+        if id_object != OBJID_WINDOW {
+            return;
+        }
+        let fg = GetForegroundWindow();
+        if fg == HWND::default() {
+            return;
+        }
+        use windows::Win32::UI::WindowsAndMessaging::{GetAncestor, GA_ROOT};
+        if hwnd != fg && GetAncestor(hwnd, GA_ROOT) != fg {
             return;
         }
         recheck_fullscreen();
         return;
     }
-    if event == EVENT_SYSTEM_MINIMIZESTART || event == EVENT_SYSTEM_MINIMIZEEND {
+    if event == EVENT_SYSTEM_MINIMIZESTART || event == EVENT_SYSTEM_MINIMIZEEND || event == EVENT_SYSTEM_MOVESIZEEND {
         recheck_fullscreen();
         return;
     }
@@ -394,6 +404,15 @@ pub fn setup_native_events(app: AppHandle) {
             let _ = SetWinEventHook(
                 EVENT_SYSTEM_MINIMIZESTART,
                 EVENT_SYSTEM_MINIMIZEEND,
+                0,
+                win_event_proc,
+                0,
+                0,
+                WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS,
+            );
+            let _ = SetWinEventHook(
+                EVENT_SYSTEM_MOVESIZESTART,
+                EVENT_SYSTEM_MOVESIZEEND,
                 0,
                 win_event_proc,
                 0,
