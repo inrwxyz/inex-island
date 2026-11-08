@@ -45,8 +45,14 @@ const SLOT_DEFS = {
     stop: () => {},
     click: () => {
       if (typeof toggleInexDrop === 'function') toggleInexDrop();
-      else switchView('view-p2p', 'state-sub', 316, 248);
+      else switchView('view-drop', 'state-sub', 316, 248);
     }
+  },
+  p2p: {
+    el: 'tile-p2p',
+    start: () => {},
+    stop: () => {},
+    click: () => switchView('view-p2p', 'state-sub', 316, 248)
   },
   tray: {
     el: 'tile-tray',

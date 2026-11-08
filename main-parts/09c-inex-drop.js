@@ -7,7 +7,7 @@ let dropConnected = false;
 let dropCurrentUrl = '';
 
 function openDropView() {
-  switchView('view-p2p', 'state-sub', 316, 248);
+  switchView('view-drop', 'state-sub', 316, 248);
   refreshDropUI();
 }
 

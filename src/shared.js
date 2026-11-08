@@ -26,7 +26,7 @@ export const DEFAULTS = {
   share: { deviceName: '', firebaseUrl: '' }
 };
 
-export const DEFAULT_ACTION_TILES = ['awake', 'snip', 'calendar', 'timer', 'clipboard', 'lock', 'settings'];
+export const DEFAULT_ACTION_TILES = ['awake', 'snip', 'calendar', 'timer', 'clipboard', 'notepad', 'lock', 'settings'];
 
 export const ALL_ACTION_TILES = {
   awake: { id: 'awake', label: 'Keep Awake', desc: 'Prevent PC from sleeping', icon: 'sun' },
@@ -51,6 +51,7 @@ export const ALL_ACTION_TILES = {
 export const SLOT_OPTIONS = [
   ['wifi', 'Wi-Fi'],
   ['drop', 'Inex Drop'],
+  ['p2p', 'P2P Link'],
   ['bt', 'Bluetooth'],
   ['tray', 'File Tray'],
   ['notepad', 'Quick Notes'],
@@ -96,13 +97,18 @@ export function load() {
     if (base.menu.actionTiles.length === 0) {
       base.menu.actionTiles = [...DEFAULT_ACTION_TILES];
     }
+    if (!base.menu.actionTiles.includes('notepad')) {
+      const lockIdx = base.menu.actionTiles.indexOf('lock');
+      if (lockIdx !== -1) base.menu.actionTiles.splice(lockIdx, 0, 'notepad');
+      else base.menu.actionTiles.push('notepad');
+    }
     if (!base.slots) base.slots = { a: 'wifi', b: 'drop', c: 'bt', d: 'tray' };
     if (!base.slots.a) base.slots.a = 'wifi';
     if (!base.slots.b) base.slots.b = 'drop';
     if (!base.slots.c) base.slots.c = 'bt';
     if (!base.slots.d) base.slots.d = 'tray';
     const usedSlots = new Set();
-    const validSlots = ['wifi', 'drop', 'bt', 'tray', 'notepad', 'mic'];
+    const validSlots = ['wifi', 'drop', 'p2p', 'bt', 'tray', 'notepad', 'mic'];
     for (const k of ['a', 'b', 'c', 'd']) {
       let val = base.slots[k];
       if (!validSlots.includes(val) || usedSlots.has(val)) {

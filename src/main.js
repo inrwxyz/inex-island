@@ -120,8 +120,14 @@ const SLOT_DEFS = {
     stop: () => {},
     click: () => {
       if (typeof toggleInexDrop === 'function') toggleInexDrop();
-      else switchView('view-p2p', 'state-sub', 316, 248);
+      else switchView('view-drop', 'state-sub', 316, 248);
     }
+  },
+  p2p: {
+    el: 'tile-p2p',
+    start: () => {},
+    stop: () => {},
+    click: () => switchView('view-p2p', 'state-sub', 316, 248)
   },
   tray: {
     el: 'tile-tray',
@@ -1627,7 +1633,7 @@ document.getElementById('tile-p2p')?.addEventListener('click', () => {
 });
 document.getElementById('tile-drop')?.addEventListener('click', () => {
   if (typeof toggleInexDrop === 'function') toggleInexDrop();
-  else switchView('view-p2p', 'state-sub', 316, 248);
+  else switchView('view-drop', 'state-sub', 316, 248);
 });
 document.getElementById('tile-tray').addEventListener('click', openTrayView);
 
@@ -1788,9 +1794,18 @@ function renderQuickActionTiles() {
 
 // 6. Volume & Brightness Sliders
 function setVolumeUI(level) {
-  document.getElementById('val-vol').textContent = `${level}%`;
-  document.getElementById('slider-vol').value = level;
-  document.getElementById('m-vol-slider').value = level;
+  const valEl = document.getElementById('val-vol');
+  if (valEl) valEl.textContent = `${level}%`;
+  const s = document.getElementById('slider-vol');
+  if (s) {
+    s.value = level;
+    s.style.setProperty('--val', `${level}%`);
+  }
+  const ms = document.getElementById('m-vol-slider');
+  if (ms) {
+    ms.value = level;
+    ms.style.setProperty('--val', `${level}%`);
+  }
   appState.lastVolume = level;
 }
 function handleVolumeChange(newVal) {
@@ -1813,18 +1828,23 @@ document.getElementById('m-vol-slider').addEventListener('input', (e) => handleV
 document.getElementById('slider-bright').addEventListener('change', (e) => {
   const level = parseInt(e.target.value, 10);
   document.getElementById('val-bright').textContent = `${level}%`;
+  e.target.style.setProperty('--val', `${level}%`);
   invokeTauri('set_system_brightness', { level });
 });
 document.getElementById('slider-bright').addEventListener('input', (e) => {
   document.getElementById('val-bright').textContent = `${e.target.value}%`;
+  e.target.style.setProperty('--val', `${e.target.value}%`);
 });
 // Brightness follows Windows (Fn keys, quick settings, auto-brightness) through an event, no polling
 function setBrightUI(level) {
   if (typeof level !== 'number') return;
   const s = document.getElementById('slider-bright');
-  if (!s || s.dataset.drag === '1') return;
-  s.value = level;
-  document.getElementById('val-bright').textContent = `${level}%`;
+  if (s) {
+    if (s.dataset.drag !== '1') s.value = level;
+    s.style.setProperty('--val', `${level}%`);
+  }
+  const valEl = document.getElementById('val-bright');
+  if (valEl) valEl.textContent = `${level}%`;
 }
 document.getElementById('slider-bright').addEventListener('pointerdown', (e) => { e.target.dataset.drag = '1'; });
 window.addEventListener('pointerup', () => { const s = document.getElementById('slider-bright'); if (s) s.dataset.drag = ''; });
@@ -2180,7 +2200,16 @@ document.getElementById('btn-clear-tray').addEventListener('click', () => {
   updateTrayUI();
 });
 
-document.getElementById('btn-tray-quickshare').addEventListener('click', async () => {
+document.getElementById('btn-tray-inexdrop')?.addEventListener('click', async () => {
+  if (appState.trayFiles && appState.trayFiles.length > 0) {
+    for (const f of appState.trayFiles) {
+      if (f.path) await invokeTauri('stage_file_for_phone', { path: f.path });
+    }
+  }
+  if (typeof openDropView === 'function') openDropView();
+});
+
+document.getElementById('btn-tray-quickshare')?.addEventListener('click', async () => {
   goCompact();
   await invokeTauri('launch_quick_share');
 });
@@ -2989,7 +3018,7 @@ let dropConnected = false;
 let dropCurrentUrl = '';
 
 function openDropView() {
-  switchView('view-p2p', 'state-sub', 316, 248);
+  switchView('view-drop', 'state-sub', 316, 248);
   refreshDropUI();
 }
 

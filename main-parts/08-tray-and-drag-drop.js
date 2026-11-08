@@ -260,7 +260,16 @@ document.getElementById('btn-clear-tray').addEventListener('click', () => {
   updateTrayUI();
 });
 
-document.getElementById('btn-tray-quickshare').addEventListener('click', async () => {
+document.getElementById('btn-tray-inexdrop')?.addEventListener('click', async () => {
+  if (appState.trayFiles && appState.trayFiles.length > 0) {
+    for (const f of appState.trayFiles) {
+      if (f.path) await invokeTauri('stage_file_for_phone', { path: f.path });
+    }
+  }
+  if (typeof openDropView === 'function') openDropView();
+});
+
+document.getElementById('btn-tray-quickshare')?.addEventListener('click', async () => {
   goCompact();
   await invokeTauri('launch_quick_share');
 });
