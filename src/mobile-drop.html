@@ -2,189 +2,186 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
-<meta name="theme-color" content="#08080a">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b0b0c">
+<meta name="color-scheme" content="dark">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>Inex Drop</title>
 <style>
 :root {
-  --bg: #08080a;
-  --card: #121216;
-  --card-sub: rgba(255, 255, 255, 0.035);
-  --accent-green: #30d158;
-  --fg: #f5f5f7;
-  --dim: #8e8e93;
-  --border: rgba(255, 255, 255, 0.075);
+  color-scheme: dark;
+  --bg: #0b0b0c;
+  --card: #141416;
+  --soft: rgba(255, 255, 255, 0.045);
+  --soft-2: rgba(255, 255, 255, 0.08);
+  --fg: #f2f2f3;
+  --dim: #8b8b90;
+  --line: rgba(255, 255, 255, 0.085);
+  --ok: #30d158;
+  --bad: #ff453a;
 }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html { background: var(--bg); }
 body {
-  margin: 0; padding: 18px 14px;
+  margin: 0; min-height: 100vh; min-height: 100dvh;
+  padding: max(18px, env(safe-area-inset-top)) 14px max(22px, env(safe-area-inset-bottom));
   background: var(--bg); color: var(--fg);
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif;
-  min-height: 100vh; display: flex; flex-direction: column; align-items: center;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  display: flex; flex-direction: column; align-items: center;
 }
 .card {
   width: 100%; max-width: 440px;
-  background: var(--card); border: 1px solid var(--border);
-  border-radius: 24px; padding: 22px;
-  box-shadow: 0 16px 40px rgba(0,0,0,0.6);
-  margin-bottom: 14px; text-align: center;
+  background: var(--card); border: 1px solid var(--line);
+  border-radius: 26px; padding: 20px;
+  box-shadow: 0 24px 60px -24px rgba(0, 0, 0, 0.8);
 }
-.header-row {
-  display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;
-}
-.logo-title {
-  display: flex; align-items: center; gap: 9px; font-weight: 700; font-size: 17px; letter-spacing: -0.02em;
-}
+.header-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
+.logo-title { display: flex; align-items: center; gap: 10px; font-weight: 650; font-size: 17px; letter-spacing: -0.025em; }
 .logo-ico {
-  width: 28px; height: 28px; border-radius: 50%;
-  background: rgba(255, 255, 255, 0.1); border: 1px solid var(--border);
+  width: 30px; height: 30px; border-radius: 10px; background: var(--soft-2);
   display: grid; place-items: center;
 }
+.logo-ico svg { width: 16px; height: 16px; stroke: var(--fg); fill: none; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
 .badge {
-  font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 12px;
-  background: rgba(48,209,88,0.14); color: var(--accent-green);
-  border: 1px solid rgba(48,209,88,0.28);
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 11.5px; font-weight: 600; padding: 5px 11px 5px 9px; border-radius: 999px;
+  background: var(--soft); color: var(--fg); border: 1px solid var(--line);
 }
-.badge.offline {
-  background: rgba(255,255,255,0.06); color: var(--dim);
-  border: 1px solid var(--border);
-}
+.badge::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 8px rgba(48, 209, 88, 0.7); }
+.badge.offline { color: var(--dim); }
+.badge.offline::before { background: var(--dim); box-shadow: none; }
+
 .drop-zone {
-  border: 2px dashed rgba(255,255,255,0.14); border-radius: 20px;
-  padding: 38px 16px; margin: 14px 0; background: rgba(255,255,255,0.015);
-  cursor: pointer; transition: all .18s;
+  border: 1.5px dashed rgba(255, 255, 255, 0.16); border-radius: 22px;
+  padding: 34px 16px 30px; background: var(--soft); text-align: center;
+  cursor: pointer; transition: background .18s, border-color .18s, transform .12s;
 }
-.drop-zone.hover { border-color: rgba(255,255,255,0.4); background: rgba(255,255,255,0.05); }
-.drop-zone svg { width: 44px; height: 44px; stroke: #fff; stroke-width: 1.8; fill: none; margin-bottom: 8px; opacity: 0.92; }
-.drop-title { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
-.drop-sub { font-size: 12px; color: var(--dim); }
+.drop-zone:active { transform: scale(0.985); background: var(--soft-2); }
+.drop-zone.busy { opacity: 0.45; pointer-events: none; }
+.dz-ico { width: 54px; height: 54px; margin: 0 auto 12px; border-radius: 50%; background: var(--soft-2); display: grid; place-items: center; }
+.dz-ico svg { width: 24px; height: 24px; stroke: var(--fg); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.drop-title { font-size: 16.5px; font-weight: 650; letter-spacing: -0.02em; margin-bottom: 4px; }
+.drop-sub { font-size: 12.5px; color: var(--dim); }
+
 .btn {
-  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-  width: 100%; height: 44px; border-radius: 13px; border: 1px solid var(--border);
-  font-size: 14px; font-weight: 600; cursor: pointer;
-  background: rgba(255,255,255,0.08); color: #fff; transition: opacity .15s, background .15s;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  width: 100%; height: 46px; border-radius: 14px; border: 1px solid var(--line);
+  font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; text-decoration: none;
+  background: var(--soft-2); color: var(--fg); transition: opacity .15s, transform .12s;
 }
-.btn:active { opacity: 0.82; }
-.btn-primary {
-  background: #fff !important; color: #000 !important; border: 0 !important; font-weight: 700;
+.btn:active { opacity: 0.8; transform: scale(0.985); }
+.btn-primary { background: var(--fg); color: #0b0b0c; border: 0; }
+.btn-green { background: var(--ok); color: #04170a; border: 0; font-weight: 700; }
+.btn-ghost { background: transparent; color: var(--dim); height: 40px; font-size: 12.5px; margin-top: 12px; }
+
+/* Transfer queue */
+.queue { display: none; margin-top: 14px; }
+.queue-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; padding: 0 2px; }
+.queue-head h4, .section-head h4 { margin: 0; font-size: 11px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: var(--dim); }
+.queue-head span { font-size: 11.5px; color: var(--dim); font-variant-numeric: tabular-nums; }
+.q-item {
+  display: flex; align-items: center; gap: 11px; padding: 10px 12px; margin-bottom: 7px;
+  background: var(--soft); border: 1px solid var(--line); border-radius: 15px;
 }
-.btn-green {
-  background: var(--accent-green) !important; color: #fff !important; border: 0 !important;
-  box-shadow: 0 2px 8px rgba(48, 209, 88, 0.32);
+.q-ico { width: 34px; height: 34px; flex: none; border-radius: 11px; background: var(--soft-2); display: grid; place-items: center; }
+.q-ico svg { width: 16px; height: 16px; stroke: var(--fg); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.q-main { flex: 1; min-width: 0; text-align: left; }
+.q-name { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.q-sub { font-size: 11px; color: var(--dim); margin-top: 2px; font-variant-numeric: tabular-nums; }
+.q-bar { height: 3px; border-radius: 2px; background: var(--soft-2); margin-top: 7px; overflow: hidden; display: none; }
+.q-bar i { display: block; height: 100%; width: 0; background: var(--fg); border-radius: 2px; transition: width .12s linear; }
+.q-item.sending .q-bar { display: block; }
+.q-state { flex: none; width: 22px; height: 22px; display: grid; place-items: center; color: var(--dim); }
+.q-state svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+.q-item.done .q-state { color: var(--ok); }
+.q-item.fail .q-state { color: var(--bad); }
+.q-item.fail .q-sub { color: var(--bad); }
+.spin { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--soft-2); border-top-color: var(--fg); animation: sp .8s linear infinite; }
+@keyframes sp { to { transform: rotate(360deg); } }
+
+.notice {
+  display: none; margin-top: 12px; padding: 11px 13px; border-radius: 14px; font-size: 12.5px; font-weight: 600; text-align: center;
+  background: var(--soft); border: 1px solid var(--line);
 }
-.btn-outline {
-  background: transparent; border: 1px solid var(--border);
-  color: var(--dim); margin-top: 10px; height: 38px; font-size: 12px;
-}
-.prog-box { display: none; margin: 14px 0; text-align: left; }
-.prog-bar-bg {
-  width: 100%; height: 6px; border-radius: 3px;
-  background: rgba(255,255,255,0.08); overflow: hidden; margin-top: 6px;
-}
-.prog-fill {
-  width: 0%; height: 100%; background: #fff; border-radius: 3px; transition: width .1s linear;
-}
-.prog-info {
-  display: flex; justify-content: space-between; font-size: 11.5px; color: var(--dim);
-}
-.file-list { margin-top: 14px; text-align: left; }
-.file-list-header {
-  display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;
-}
-.file-list h4 {
-  font-size: 11.5px; color: var(--dim); margin: 0;
-  text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700;
-}
-.file-expire-pill {
-  font-size: 10px; color: #ff9f0a; font-weight: 600; background: rgba(255,159,10,0.12);
-  padding: 2px 7px; border-radius: 8px;
-}
-.file-item {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 10px 12px; background: var(--card-sub); border: 1px solid var(--border);
-  border-radius: 14px; margin-bottom: 8px; font-size: 13px; gap: 8px;
-}
-.success-msg {
-  display: none; padding: 10px; border-radius: 12px;
-  background: rgba(48,209,88,0.12); color: var(--accent-green);
-  font-size: 12.5px; font-weight: 600; margin: 12px 0;
-}
+.notice.ok { color: var(--ok); }
+.notice.bad { color: var(--bad); }
+
+/* Incoming from PC */
+.section-head { display: flex; justify-content: space-between; align-items: center; margin: 20px 2px 8px; }
+.pill { font-size: 10.5px; font-weight: 600; color: var(--dim); background: var(--soft-2); padding: 3px 8px; border-radius: 999px; font-variant-numeric: tabular-nums; }
+.file-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; margin-bottom: 7px; background: var(--soft); border: 1px solid var(--line); border-radius: 15px; }
+.file-item .btn { width: auto; height: 34px; padding: 0 14px; font-size: 12px; border-radius: 11px; }
+
 .toast {
-  position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
-  background: rgba(20,20,25,0.95); border: 1px solid rgba(255,255,255,0.14);
-  color: #fff; padding: 9px 16px; border-radius: 20px; font-size: 12px; font-weight: 600;
-  display: none; z-index: 999; box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+  position: fixed; left: 50%; bottom: max(24px, env(safe-area-inset-bottom)); transform: translateX(-50%);
+  background: rgba(28, 28, 31, 0.96); border: 1px solid var(--line); color: var(--fg);
+  padding: 10px 18px; border-radius: 999px; font-size: 12.5px; font-weight: 600;
+  display: none; z-index: 99; box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6);
 }
+.center-msg { text-align: center; padding: 18px 6px 8px; }
+.center-msg h2 { margin: 0 0 6px; font-size: 19px; letter-spacing: -0.02em; }
+.center-msg p { margin: 0; color: var(--dim); font-size: 13px; }
 #scannerCard { display: none; }
 </style>
 </head>
 <body>
 
-<!-- 1. Offline / Standalone Home Screen PWA View -->
+<!-- Standby (opened without a PIN) -->
 <div class="card" id="scannerCard">
   <div class="header-row">
     <div class="logo-title">
-      <div class="logo-ico">
-        <svg viewBox="0 0 24 24" width="16" height="16" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round"><path d="M12 2v10M8 8l4-4 4 4M4 14v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg>
-      </div>
+      <div class="logo-ico"><svg viewBox="0 0 24 24"><path d="M12 15V3M8 7l4-4 4 4M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg></div>
       <span>Inex Drop</span>
     </div>
     <span class="badge offline">Standby</span>
   </div>
-  <div style="padding:28px 12px 20px;text-align:center;">
-    <svg viewBox="0 0 24 24" width="48" height="48" stroke="#fff" stroke-width="1.6" fill="none" style="opacity:0.8;margin-bottom:12px;"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="12" cy="12" r="3"/></svg>
-    <div style="font-size:16px;font-weight:600;margin-bottom:6px;">Connect to Inex Island</div>
-    <div style="font-size:12px;color:var(--dim);margin-bottom:20px;">Scan the QR code on your PC screen to connect</div>
-    <label class="btn btn-primary" style="display:flex;cursor:pointer;">
-      <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2.2" fill="none"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
-      <span>Scan PC QR Code</span>
-      <input type="file" id="qrCameraInput" accept="image/*" capture="environment" style="display:none;" onchange="handleQrCamera(this)">
-    </label>
+  <div class="center-msg" style="padding:26px 6px 18px;">
+    <div class="dz-ico"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3M21 14v.01M14 21h.01M21 21h-3v-4"/></svg></div>
+    <h2>Connect to Inex Island</h2>
+    <p>Scan the QR code on your PC screen to connect</p>
   </div>
+  <label class="btn btn-primary" style="cursor:pointer;">
+    <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+    <span>Scan PC QR Code</span>
+    <input type="file" id="qrCameraInput" accept="image/*" capture="environment" style="display:none;" onchange="handleQrCamera(this)">
+  </label>
 </div>
 
-<!-- 2. Main Connected Inex Drop View -->
+<!-- Connected -->
 <div class="card" id="mainDropCard">
   <div class="header-row">
     <div class="logo-title">
-      <div class="logo-ico">
-        <svg viewBox="0 0 24 24" width="16" height="16" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round"><path d="M12 2v10M8 8l4-4 4 4M4 14v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg>
-      </div>
+      <div class="logo-ico"><svg viewBox="0 0 24 24"><path d="M12 15V3M8 7l4-4 4 4M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg></div>
       <span>Inex Drop</span>
     </div>
     <span class="badge" id="statusBadge">Connected</span>
   </div>
 
   <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
-    <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+    <div class="dz-ico"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></div>
     <div class="drop-title">Send to PC</div>
-    <div class="drop-sub">Tap to select Photos, Videos, or Files</div>
+    <div class="drop-sub">Tap to choose photos, videos or files</div>
   </div>
-  <input type="file" id="fileInput" multiple style="display:none" onchange="handleFiles(this.files)">
+  <input type="file" id="fileInput" multiple style="display:none" onchange="handleFiles(this)">
 
-  <div class="prog-box" id="progBox">
-    <div class="prog-info">
-      <span id="progFileName">Uploading...</span>
-      <span id="progPct">0%</span>
-    </div>
-    <div class="prog-bar-bg"><div class="prog-fill" id="progFill"></div></div>
+  <div class="queue" id="queueBox">
+    <div class="queue-head"><h4 id="queueTitle">Sending</h4><span id="queueCount"></span></div>
+    <div id="queueList"></div>
   </div>
+  <div class="notice" id="noticeBox"></div>
 
-  <div class="success-msg" id="successMsg">✓ File transferred to PC Downloads!</div>
-
-  <!-- Incoming Files from PC (Tray Push with 60s Expiration) -->
-  <div class="file-list" id="pcFilesBox" style="display:none;">
-    <div class="file-list-header">
-      <h4>📥 Incoming from PC</h4>
-      <span class="file-expire-pill" id="fileExpirePill">Expires in 60s</span>
+  <div id="pcFilesBox" style="display:none;">
+    <div class="section-head">
+      <h4>Incoming from PC</h4>
+      <span class="pill" id="fileExpirePill">60s</span>
     </div>
     <div id="pcFilesList"></div>
   </div>
 
-  <button class="btn btn-outline" onclick="disconnect()">Disconnect</button>
+  <button class="btn btn-ghost" onclick="disconnect()">Disconnect</button>
 </div>
 
 <div class="toast" id="toastBox"></div>
@@ -194,25 +191,45 @@ let pin = new URLSearchParams(window.location.search).get('pin') || '';
 const downloadedSet = new Set();
 let expireSeconds = 60;
 let expireInterval = null;
+let busy = false;
 
-// Check standalone mode without PIN
 if (!pin) {
   document.getElementById('scannerCard').style.display = 'block';
   document.getElementById('mainDropCard').style.display = 'none';
-} else {
-  document.getElementById('scannerCard').style.display = 'none';
-  document.getElementById('mainDropCard').style.display = 'block';
 }
+
+const $ = (id) => document.getElementById(id);
+const enc = encodeURIComponent;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 function showMobileToast(msg) {
-  const t = document.getElementById('toastBox');
-  if (!t) return;
+  const t = $('toastBox');
   t.textContent = msg;
   t.style.display = 'block';
-  setTimeout(() => { t.style.display = 'none'; }, 2200);
+  clearTimeout(showMobileToast._t);
+  showMobileToast._t = setTimeout(() => { t.style.display = 'none'; }, 2200);
 }
 
-// 1. Device Registration
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+function fmtBytes(n) {
+  n = Number(n) || 0;
+  if (n >= 1073741824) return (n / 1073741824).toFixed(1) + ' GB';
+  if (n >= 1048576) return (n / 1048576).toFixed(1) + ' MB';
+  if (n >= 1024) return Math.round(n / 1024) + ' KB';
+  return n + ' B';
+}
+function iconFor(name) {
+  const ext = (name.split('.').pop() || '').toLowerCase();
+  if (['mp4', 'mkv', 'mov', 'avi', 'webm', 'wmv', '3gp'].includes(ext)) return '<svg viewBox="0 0 24 24"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>';
+  if (['mp3', 'wav', 'flac', 'aac', 'm4a', 'ogg', 'opus'].includes(ext)) return '<svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>';
+  if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'heic', 'bmp'].includes(ext)) return '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>';
+  if (['zip', 'rar', '7z', 'tar', 'gz', 'apk'].includes(ext)) return '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="12" y1="3" x2="12" y2="21"/><rect x="10" y="8" width="4" height="4" rx="1"/></svg>';
+  return '<svg viewBox="0 0 24 24"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>';
+}
+
+// 1. Device registration
 function registerDevice() {
   if (!pin) return;
   const ua = navigator.userAgent;
@@ -223,239 +240,227 @@ function registerDevice() {
     const match = ua.match(/;\s*([^;]+?)\s*Build/);
     dev = match ? match[1] : 'Android Phone';
   }
-  fetch('/register?pin=' + encodeURIComponent(pin), {
+  fetch('/register?pin=' + enc(pin), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ device: dev })
-  }).catch(()=>{});
+  }).catch(() => {});
 }
 registerDevice();
 
-// 2. Poll incoming files staged from PC Tray with 60s Expiration
+// 2. Incoming files staged from the PC tray (60 s)
 let consecutiveErrors = 0;
 let lastFileCount = 0;
 
 function pollFiles() {
   if (!pin) return;
-  fetch('/files?pin=' + encodeURIComponent(pin))
-    .then(r => {
-      if (!r.ok) throw new Error('status ' + r.status);
-      consecutiveErrors = 0;
-      return r.json();
-    })
-    .then(data => {
-      const list = document.getElementById('pcFilesList');
-      const box = document.getElementById('pcFilesBox');
-      const pill = document.getElementById('fileExpirePill');
-
-      // Filter out files already downloaded in this session
-      const pendingFiles = (data || []).filter(f => !downloadedSet.has(f.name));
-
-      if (pendingFiles.length > 0) {
+  fetch('/files?pin=' + enc(pin))
+    .then((r) => { if (!r.ok) throw new Error('status ' + r.status); consecutiveErrors = 0; return r.json(); })
+    .then((data) => {
+      const list = $('pcFilesList');
+      const box = $('pcFilesBox');
+      const pill = $('fileExpirePill');
+      const pending = (data || []).filter((f) => !downloadedSet.has(f.name));
+      if (pending.length > 0) {
         if (lastFileCount === 0) {
           expireSeconds = 60;
+          pill.textContent = expireSeconds + 's';
           clearInterval(expireInterval);
           expireInterval = setInterval(() => {
             expireSeconds--;
-            if (pill) pill.textContent = `Expires in ${expireSeconds}s`;
-            if (expireSeconds <= 0) {
-              clearInterval(expireInterval);
-              box.style.display = 'none';
-            }
+            pill.textContent = Math.max(expireSeconds, 0) + 's';
+            if (expireSeconds <= 0) { clearInterval(expireInterval); box.style.display = 'none'; }
           }, 1000);
         }
-        lastFileCount = pendingFiles.length;
+        lastFileCount = pending.length;
         box.style.display = 'block';
-
-        list.innerHTML = pendingFiles.map(f => {
-          const safeName = f.name.replace(/"/g, '&quot;');
-          const encodedName = encodeURIComponent(f.name);
-          return `
-            <div class="file-item">
-              <div style="text-align:left;flex:1;overflow:hidden;padding-right:6px;">
-                <strong style="display:block;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${safeName}</strong>
-                <small style="color:var(--dim);">${(f.size/1024/1024).toFixed(1)} MB</small>
-              </div>
-              <a href="/download/${encodedName}?pin=${encodeURIComponent(pin)}" download="${safeName}" onclick="onFileDownloadClick('${safeName}')" class="btn btn-green" style="height:32px;width:auto;padding:0 12px;font-size:11.5px;text-decoration:none;">Accept & Download</a>
+        list.innerHTML = pending.map((f) => `
+          <div class="file-item">
+            <div class="q-ico">${iconFor(f.name)}</div>
+            <div class="q-main">
+              <div class="q-name">${esc(f.name)}</div>
+              <div class="q-sub">${fmtBytes(f.size)}</div>
             </div>
-          `;
-        }).join('');
+            <a href="/download/${enc(f.name)}?pin=${enc(pin)}" download="${esc(f.name)}" onclick="onFileDownloadClick(this.getAttribute('download'))" class="btn btn-green">Accept</a>
+          </div>`).join('');
       } else {
         lastFileCount = 0;
         clearInterval(expireInterval);
         box.style.display = 'none';
       }
-    }).catch(() => {
+    })
+    .catch(() => {
       consecutiveErrors++;
       if (consecutiveErrors >= 3) {
-        document.body.innerHTML = '<div class="card" style="margin-top:60px;"><h2>Disconnected</h2><p style="color:var(--dim);">Inex Drop was turned off on PC.</p></div>';
+        document.body.innerHTML = '<div class="card center-msg" style="margin-top:60px;"><h2>Disconnected</h2><p>Inex Drop was turned off on PC.</p></div>';
       }
     });
 }
 setInterval(pollFiles, 2500);
 pollFiles();
 
-// 3. Mark file as downloaded and expire immediately
 function onFileDownloadClick(fileName) {
   downloadedSet.add(fileName);
-  showMobileToast('Downloading ' + fileName + '...');
-  setTimeout(() => {
-    pollFiles();
-  }, 1000);
+  showMobileToast('Downloading ' + fileName);
+  setTimeout(pollFiles, 1000);
 }
 
-// 4. File picker and upload flow
-function handleFiles(files) {
-  if (!files || files.length === 0) return;
-  uploadQueue(Array.from(files));
+// 3. Send to PC: ONE request and ONE approval for the whole selection
+const CHECK_ICON = '<svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>';
+const CROSS_ICON = '<svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+const DOT_ICON = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="1.2"/></svg>';
+
+function handleFiles(input) {
+  const files = Array.from(input.files || []);
+  input.value = '';            // lets the same files be picked again later
+  if (files.length === 0) return;
+  if (busy) { showMobileToast('A transfer is already running'); return; }
+  sendBatch(files);
 }
 
-async function uploadQueue(queue) {
-  for (let i = 0; i < queue.length; i++) {
-    await uploadSingle(queue[i]);
-  }
+function renderQueue(files, states) {
+  $('queueBox').style.display = 'block';
+  $('queueList').innerHTML = files.map((f, i) => {
+    const st = states[i] || { cls: '', sub: fmtBytes(f.size), icon: DOT_ICON };
+    return `<div class="q-item ${st.cls}" id="qi${i}">
+      <div class="q-ico">${iconFor(f.name)}</div>
+      <div class="q-main">
+        <div class="q-name">${esc(f.name)}</div>
+        <div class="q-sub" id="qs${i}">${st.sub}</div>
+        <div class="q-bar"><i id="qb${i}"></i></div>
+      </div>
+      <div class="q-state" id="qt${i}">${st.icon}</div>
+    </div>`;
+  }).join('');
+}
+function setItem(i, cls, sub, icon) {
+  const el = $('qi' + i); if (!el) return;
+  el.className = 'q-item ' + cls;
+  if (sub != null) $('qs' + i).textContent = sub;
+  if (icon != null) $('qt' + i).innerHTML = icon;
+}
+function setNotice(text, kind) {
+  const n = $('noticeBox');
+  if (!text) { n.style.display = 'none'; return; }
+  n.className = 'notice ' + (kind || '');
+  n.textContent = text;
+  n.style.display = 'block';
 }
 
-async function uploadSingle(file) {
-  const progBox = document.getElementById('progBox');
-  const progFill = document.getElementById('progFill');
-  const progPct = document.getElementById('progPct');
-  const progFileName = document.getElementById('progFileName');
-  const successMsg = document.getElementById('successMsg');
+async function sendBatch(files) {
+  busy = true;
+  $('dropZone').classList.add('busy');
+  setNotice('');
+  const total = files.reduce((a, f) => a + f.size, 0);
+  $('queueTitle').textContent = files.length > 1 ? `Sending ${files.length} files` : 'Sending';
+  $('queueCount').textContent = fmtBytes(total);
+  renderQueue(files, files.map(() => ({ cls: '', sub: 'Waiting for PC…', icon: '<div class="spin"></div>' })));
 
-  progBox.style.display = 'block';
-  successMsg.style.display = 'none';
-  progFileName.textContent = 'Prompting PC to accept ' + file.name + '...';
-  progFill.style.width = '20%';
-  progPct.textContent = 'Waiting for PC...';
+  const failAll = (msg, sub) => {
+    files.forEach((_, i) => setItem(i, 'fail', sub, CROSS_ICON));
+    setNotice(msg, 'bad');
+  };
 
-  // Step 1: Pre-flight transfer authorization check on PC
+  // Step 1: one authorization request for everything
   let transferId = '';
   try {
-    const reqRes = await fetch('/request_transfer?pin=' + encodeURIComponent(pin), {
+    const res = await fetch('/request_transfer?pin=' + enc(pin), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: file.name, size: file.size })
-    }).then(r => r.json());
-    if (reqRes && reqRes.id) {
-      transferId = reqRes.id;
-    }
+      body: JSON.stringify({ files: files.map((f) => ({ name: f.name, size: f.size })) })
+    }).then((r) => r.json());
+    transferId = res && res.id ? res.id : '';
   } catch (e) {
-    alert('Could not contact PC');
-    progBox.style.display = 'none';
-    return;
+    failAll('Could not reach the PC', 'Not sent');
+    return finish();
   }
+  if (!transferId) { failAll('Could not reach the PC', 'Not sent'); return finish(); }
 
-  // Step 2: Poll PC approval with 60-second timeout
+  // Step 2: wait for Accept / Decline on the PC (max 60 s)
   let approved = false;
-  const startWait = Date.now();
-  while (Date.now() - startWait < 60000) {
-    await new Promise(r => setTimeout(r, 600));
+  const t0 = Date.now();
+  while (Date.now() - t0 < 60000) {
+    await sleep(600);
     try {
-      const check = await fetch(`/check_transfer?id=${transferId}&pin=${encodeURIComponent(pin)}`).then(r => r.json());
-      if (check.status === 'accepted') {
-        approved = true;
-        break;
-      } else if (check.status === 'declined') {
-        progFileName.textContent = 'Transfer Declined on PC';
-        progPct.textContent = 'Declined';
-        progFill.style.background = '#ff453a';
-        setTimeout(() => {
-          progBox.style.display = 'none';
-          progFill.style.background = '#fff';
-        }, 2600);
-        return;
-      }
+      const c = await fetch(`/check_transfer?id=${enc(transferId)}&pin=${enc(pin)}`).then((r) => r.json());
+      if (c.status === 'accepted') { approved = true; break; }
+      if (c.status === 'declined') { failAll('Declined on PC', 'Declined'); return finish(); }
     } catch (_) {}
   }
+  if (!approved) { failAll('No answer from PC (1 min)', 'Timed out'); return finish(); }
 
-  if (!approved) {
-    progFileName.textContent = 'Transfer timed out (1 min)';
-    setTimeout(() => { progBox.style.display = 'none'; }, 2000);
-    return;
+  // Step 3: upload one after another with the same approval
+  files.forEach((_, i) => setItem(i, '', 'Queued', DOT_ICON));
+  let okCount = 0;
+  for (let i = 0; i < files.length; i++) {
+    const ok = await uploadOne(files[i], i, transferId);
+    if (ok) okCount++;
+    else { for (let j = i + 1; j < files.length; j++) setItem(j, 'fail', 'Not sent', CROSS_ICON); break; }
   }
+  if (okCount === files.length) {
+    setNotice(files.length > 1 ? `✓ ${files.length} files sent to PC` : '✓ Sent to PC Downloads', 'ok');
+  } else {
+    setNotice(`${okCount} of ${files.length} sent`, 'bad');
+  }
+  finish();
+}
 
-  // Step 3: Stream high-speed upload to PC
-  progFileName.textContent = 'Sending ' + file.name;
-  progFill.style.width = '0%';
-  progPct.textContent = '0%';
+function finish() {
+  busy = false;
+  $('dropZone').classList.remove('busy');
+  clearTimeout(finish._t);
+  finish._t = setTimeout(() => {
+    if (busy) return;
+    $('queueBox').style.display = 'none';
+    setNotice('');
+  }, 6000);
+}
 
+function uploadOne(file, i, transferId) {
   return new Promise((resolve) => {
-    let lastTime = performance.now();
-    let lastLoaded = 0;
-    let speedText = '';
-
+    setItem(i, 'sending', '0%', '<div class="spin"></div>');
+    let lastTime = performance.now(), lastLoaded = 0, speed = '';
     const xhr = new XMLHttpRequest();
-    xhr.open('POST', `/upload?id=${transferId}&name=${encodeURIComponent(file.name)}&pin=${encodeURIComponent(pin)}`, true);
-
+    xhr.open('POST', `/upload?id=${enc(transferId)}&name=${enc(file.name)}&pin=${enc(pin)}`, true);
     xhr.upload.onprogress = (e) => {
-      if (e.lengthComputable) {
-        const pct = Math.round((e.loaded / e.total) * 100);
-        const now = performance.now();
-        const dt = (now - lastTime) / 1000;
-        if (dt >= 0.2) {
-          const bytesDiff = e.loaded - lastLoaded;
-          const mbps = (bytesDiff / (1024 * 1024 * dt)).toFixed(1);
-          speedText = `${mbps} MB/s`;
-          lastTime = now;
-          lastLoaded = e.loaded;
-        }
-        progFill.style.width = pct + '%';
-        progPct.textContent = speedText ? `${speedText} • ${pct}%` : `${pct}%`;
+      if (!e.lengthComputable) return;
+      const pct = Math.round((e.loaded / e.total) * 100);
+      const now = performance.now();
+      const dt = (now - lastTime) / 1000;
+      if (dt >= 0.25) {
+        speed = ((e.loaded - lastLoaded) / (1048576 * dt)).toFixed(1) + ' MB/s';
+        lastTime = now; lastLoaded = e.loaded;
       }
+      const bar = $('qb' + i); if (bar) bar.style.width = pct + '%';
+      $('qs' + i).textContent = speed ? `${speed} • ${pct}%` : pct + '%';
     };
-
     xhr.onload = () => {
-      if (xhr.status === 200) {
-        progFill.style.width = '100%';
-        progPct.textContent = speedText ? `${speedText} • 100%` : '100%';
-        successMsg.style.display = 'block';
-        setTimeout(() => {
-          progBox.style.display = 'none';
-        }, 1800);
-        resolve();
-      } else {
-        alert('Transfer failed or was declined on PC.');
-        resolve();
-      }
+      if (xhr.status === 200) { setItem(i, 'done', fmtBytes(file.size) + ' • Sent', CHECK_ICON); resolve(true); }
+      else { setItem(i, 'fail', 'Refused by PC', CROSS_ICON); resolve(false); }
     };
-
-    xhr.onerror = () => {
-      alert('Upload failed: Inex Drop disconnected.');
-      resolve();
-    };
-
+    xhr.onerror = () => { setItem(i, 'fail', 'Connection lost', CROSS_ICON); resolve(false); };
     xhr.send(file);
   });
 }
 
-// 5. In-browser Camera QR Scanner
+// 4. In-browser QR scanner (standby page)
 function handleQrCamera(input) {
   if (input.files && input.files[0]) {
-    // If the browser provides BarcodeDetector API (standard in modern Chrome on Android)
     if ('BarcodeDetector' in window) {
       const detector = new BarcodeDetector({ formats: ['qr_code'] });
-      createImageBitmap(input.files[0]).then(bitmap => {
-        return detector.detect(bitmap);
-      }).then(barcodes => {
-        if (barcodes.length > 0) {
-          const urlStr = barcodes[0].rawValue;
-          window.location.href = urlStr;
-        } else {
-          alert('No QR code detected. Try pointing camera directly at the PC QR code.');
-        }
-      }).catch(err => {
-        alert('Scanning error: ' + err.message);
-      });
+      createImageBitmap(input.files[0]).then((bmp) => detector.detect(bmp)).then((codes) => {
+        if (codes.length > 0) window.location.href = codes[0].rawValue;
+        else alert('No QR code detected. Point the camera at the QR code on the PC.');
+      }).catch((err) => alert('Scanning error: ' + err.message));
     } else {
-      alert('QR scanning ready. Open camera app or Google Lens to connect directly.');
+      alert('Open your camera app or Google Lens and scan the QR code on the PC.');
     }
   }
 }
 
 function disconnect() {
-  fetch('/disconnect?pin=' + encodeURIComponent(pin), { method: 'POST' }).finally(() => {
-    document.body.innerHTML = '<div class="card" style="margin-top:60px;"><h2>Disconnected</h2><p style="color:var(--dim);">Inex Drop was disconnected.</p></div>';
+  fetch('/disconnect?pin=' + enc(pin), { method: 'POST' }).finally(() => {
+    document.body.innerHTML = '<div class="card center-msg" style="margin-top:60px;"><h2>Disconnected</h2><p>Inex Drop was disconnected.</p></div>';
   });
 }
 </script>

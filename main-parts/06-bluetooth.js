@@ -308,6 +308,8 @@ let btEvT = null, btNearT = null;
 let btHudTimer = null;
 let btHudStartT = null;
 let btHudBackT = null;
+let btHudEndT = null;
+let btHudPrompt = false;   // true while the HUD is the file-transfer Accept / Decline card
 let prevConnectedBtDevs = null;
 
 // ---- Dynamic-Island style HUD shared by Bluetooth connect and the charger ----
@@ -341,7 +343,8 @@ function showDeviceHud(o) {
   const battTxt = document.getElementById('bt-hud-batt-pct');
   if (!hud || !ico || !nameEl) return;
 
-  clearTimeout(btHudTimer); clearTimeout(btHudStartT); clearTimeout(btHudBackT);
+  clearTimeout(btHudTimer); clearTimeout(btHudStartT); clearTimeout(btHudBackT); clearTimeout(btHudEndT);
+  btHudPrompt = !!o.actions;
   // another HUD may be open: close it instantly
   clearTimeout(bioTimer); clearTimeout(bioAnimPhaseTimer); clearTimeout(bioStartTimer); clearTimeout(bioEndTimer);
   island.classList.remove('biometric-active', 'hud-out', 'hud-back', 'bio-hud');
@@ -351,6 +354,8 @@ function showDeviceHud(o) {
   ico.innerHTML = o.iconHTML;
   nameEl.textContent = o.name || 'Device';
   tagEl.textContent = o.tag || 'Connected';
+  const actBox = document.getElementById('bt-hud-actions');
+  if (actBox) actBox.classList.toggle('hidden', !o.actions);
 
   const pct = o.pct;
   const hasBatt = pct != null && pct >= 0 && pct <= 100;
@@ -405,19 +410,36 @@ function showDeviceHud(o) {
     island.classList.add('bt-hud-active');
   }, 110);
 
-  btHudTimer = setTimeout(() => {
-    island.classList.add('hud-out');
-    btHudBackT = setTimeout(() => {
-      island.classList.remove('bt-hud-active', 'hud-out');
-      island.classList.add('hud-back');
-      setTimeout(() => {
-        hud.classList.add('hidden');
-        island.classList.remove('hud-back');
-        hudRestoreWindow();
-        renderCenter(); updateClocks(); refreshMedia();
-      }, 560);
-    }, 170);
-  }, o.ms || 3200);
+  btHudTimer = setTimeout(() => hideDeviceHud(), o.ms || 3200);
+}
+
+// Closes the device HUD with the normal exit animation (or at once when instant = true)
+function hideDeviceHud(instant) {
+  const hud = document.getElementById('c-bt-hud');
+  if (!hud) return;
+  clearTimeout(btHudTimer); clearTimeout(btHudStartT); clearTimeout(btHudBackT); clearTimeout(btHudEndT);
+  btHudPrompt = false;
+  const finish = () => {
+    hud.classList.add('hidden');
+    island.classList.remove('bt-hud-active', 'hud-out', 'hud-back', 'hud-pre');
+    hudRestoreWindow();
+    renderCenter(); updateClocks(); refreshMedia();
+  };
+  if (instant || hud.classList.contains('hidden')) {
+    if (!hud.classList.contains('hidden')) finish();
+    return;
+  }
+  island.classList.add('hud-out');
+  btHudBackT = setTimeout(() => {
+    island.classList.remove('bt-hud-active', 'hud-out');
+    island.classList.add('hud-back');
+    btHudEndT = setTimeout(() => {
+      hud.classList.add('hidden');
+      island.classList.remove('hud-back');
+      hudRestoreWindow();
+      renderCenter(); updateClocks(); refreshMedia();
+    }, 560);
+  }, 170);
 }
 
 function showBtConnectHud(name, kind, battPct) {

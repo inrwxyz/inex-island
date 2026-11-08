@@ -9,7 +9,7 @@ export const DEFAULTS = {
     notchColor: '#030305', notchOpacity: 100, notchBorderColor: '#ffffff', notchBorderOpacity: 45, cornerRadius: 13,
     menuStyle: 'transparent', menuColor: '#0b0b10', menuOpacity: 92,
     themeStyle: 'default',
-    tileAccent: '#0a84ff', glowColor: '#ffffff', borderColor: '#ffffff', borderOpacity: 45,
+    tileAccent: '#0a84ff', borderColor: '#ffffff', borderOpacity: 45,
     fontStyle: 'jakarta', scale: 100, animations: true
   },
   notch: {
@@ -194,8 +194,21 @@ export function applyTheme(s) {
   root.setProperty('--color-tile-on-bg', menuLight ? '#050507' : '#f5f5f7');
   root.setProperty('--color-tile-on-fg', menuLight ? '#ffffff' : '#050507');
 
-  root.setProperty('--on', hexToRgb(a.glowColor).join(', '));
-  root.setProperty('--mac-accent', a.tileAccent || '#0a84ff');
+  // Active glow is automatic now: always the opposite of the menu background, so it never disappears
+  const menuBgRgb = a.menuStyle === 'color' ? [mr, mg, mb] : [14, 14, 20];
+  const menuBgLight = isLightRgb(menuBgRgb[0], menuBgRgb[1], menuBgRgb[2]) && (a.menuStyle !== 'color' || a.menuOpacity > 45);
+  root.setProperty('--on', menuBgLight ? '5, 5, 7' : '245, 245, 247');
+
+  // Tile accent: icon on the accent circle is black/white (whichever is readable),
+  // and the accent coloured status text falls back to the menu text colour if it would blend into the panel
+  const accentHex = a.tileAccent || '#0a84ff';
+  const [ar, ag, ab] = hexToRgb(accentHex);
+  const accentLight = isLightRgb(ar, ag, ab);
+  const lum = (r, g, b) => (r * 299 + g * 587 + b * 114) / 1000;
+  const accentBlends = Math.abs(lum(ar, ag, ab) - lum(menuBgRgb[0], menuBgRgb[1], menuBgRgb[2])) < 60;
+  root.setProperty('--mac-accent', accentHex);
+  root.setProperty('--mac-accent-fg', accentLight ? '#050507' : '#ffffff');
+  root.setProperty('--mac-accent-text', accentBlends ? 'var(--menu-fg)' : accentHex);
   root.setProperty('--line', `rgba(${br}, ${bg}, ${bb}, ${a.borderOpacity / 100})`);
   root.setProperty('--radius', a.cornerRadius + 'px');
   root.setProperty('--radius-menu', Math.round(a.cornerRadius * 1.15) + 'px');

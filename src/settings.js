@@ -69,7 +69,6 @@ const FONT_OPTS = [
   ['system', 'Windows Segoe UI (Native)'],
   ['mono', 'JetBrains Mono (Developer Code)']
 ];
-const GLOW_SWATCHES = ['#ffffff', '#dc143c', '#38bdf8', '#22c55e', '#a855f7', '#f59e0b'];
 
 const PAGES = [
   { id: 'notch', label: 'Notch', icon: 'notch', sections: [
@@ -112,8 +111,7 @@ const PAGES = [
       { path: 'appearance.tileAccent', type: 'color', icon: 'palette', t: 'Tile accent', d: 'Colour of active menu tiles' },
       { path: 'appearance.menuOpacity', type: 'range', icon: 'drop', t: 'Glass Transparency', d: 'Lower = more see-through blur', min: 20, max: 100, step: 5, unit: '%', showIf: (s) => s.appearance.menuStyle === 'color' },
       { path: 'appearance.borderColor', type: 'color', icon: 'border', t: 'Menu Border Outline', d: 'Color of the expanded menu borders' },
-      { path: 'appearance.borderOpacity', type: 'range', icon: 'drop', t: 'Menu Border Strength', d: 'Outline visibility of expanded menus', min: 10, max: 100, step: 5, unit: '%' },
-      { path: 'appearance.glowColor', type: 'color', icon: 'spark', t: 'Active Glow', d: 'Accent outline on active switches and sliders', swatches: GLOW_SWATCHES }
+      { path: 'appearance.borderOpacity', type: 'range', icon: 'drop', t: 'Menu Border Strength', d: 'Outline visibility of expanded menus', min: 10, max: 100, step: 5, unit: '%' }
     ] },
     { title: '2x2 Slots', rows: [
       { path: 'slots.a', type: 'select', icon: 'widgets', t: 'Slot 1 (Top-Left)', d: 'Default is Wi-Fi', options: SLOT_OPTIONS, onChange: slotChange('a') },

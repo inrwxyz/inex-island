@@ -224,18 +224,35 @@ fn handle_client(mut stream: TcpStream, app: &AppHandle, valid_pin: &str) {
                 let _ = stream.write_all(b"HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n");
                 return;
             }
-            let mut body = vec![0u8; content_length.min(4096)];
+            let mut body = vec![0u8; content_length.min(65536)];
             let _ = reader.read_exact(&mut body);
-            let (file_name, file_size) = if let Ok(json) = serde_json::from_slice::<serde_json::Value>(&body) {
-                let n = json.get("name").and_then(|v| v.as_str()).unwrap_or("received_file").to_string();
-                let s = json.get("size").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
-                (n, s)
-            } else {
-                ("received_file".to_string(), 0)
-            };
+
+            // One approval covers the whole batch: phone sends { files: [{name,size}, ...] }.
+            // Old single-file shape { name, size } still works.
+            let mut names: Vec<String> = Vec::new();
+            let mut total_size: usize = 0;
+            if let Ok(json) = serde_json::from_slice::<serde_json::Value>(&body) {
+                if let Some(arr) = json.get("files").and_then(|v| v.as_array()) {
+                    for f in arr {
+                        let n = f.get("name").and_then(|v| v.as_str()).unwrap_or("received_file");
+                        let sz = f.get("size").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+                        names.push(clean_filename(n));
+                        total_size += sz;
+                    }
+                } else {
+                    let n = json.get("name").and_then(|v| v.as_str()).unwrap_or("received_file");
+                    names.push(clean_filename(n));
+                    total_size = json.get("size").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+                }
+            }
+            if names.is_empty() {
+                names.push("received_file".to_string());
+            }
+            let file_count = names.len();
+            let clean_name = names[0].clone();
+            let file_size = total_size;
 
             let transfer_id = format!("{:x}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0));
-            let clean_name = clean_filename(&file_name);
             let dev_name = {
                 let st = get_state().lock().unwrap();
                 if st.device.is_empty() { "Phone".to_string() } else { st.device.clone() }
@@ -256,6 +273,8 @@ fn handle_client(mut stream: TcpStream, app: &AppHandle, valid_pin: &str) {
                 "type": "transfer_prompt",
                 "id": transfer_id,
                 "name": clean_name,
+                "names": names,
+                "count": file_count,
                 "size": file_size,
                 "device": dev_name
             }));

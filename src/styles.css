@@ -2563,7 +2563,7 @@ body {
   transition: background 0.18s ease;
 }
 .island.island.island:not([data-theme="matrix"]) .ctrl-tile.active .ico {
-  background: var(--mac-accent); color: #fff;
+  background: var(--mac-accent); color: var(--mac-accent-fg, #fff);
 }
 
 /* name + status */
@@ -2575,7 +2575,7 @@ body {
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   color: var(--menu-fg-dim);
 }
-.island:not([data-theme="matrix"]) .ctrl-tile.active .sr { color: var(--mac-accent); }
+.island:not([data-theme="matrix"]) .ctrl-tile.active .sr { color: var(--mac-accent-text, var(--mac-accent)); }
 .island:not([data-theme="matrix"]) .ctrl-tile .sr::before {
   display: block; font-size: 11.5px; font-weight: 600; letter-spacing: -0.03em; color: var(--menu-fg);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -2688,8 +2688,8 @@ body {
 }
 .drop-prompt-icon-bubble {
   width: 30px; height: 30px; border-radius: 50%;
-  background: color-mix(in srgb, var(--mac-accent) 20%, transparent);
-  color: var(--mac-accent); display: grid; place-items: center;
+  background: color-mix(in srgb, var(--menu-fg) 14%, transparent);
+  color: var(--menu-fg); display: grid; place-items: center;
   margin-bottom: 4px;
 }
 .drop-prompt-dev {
@@ -2707,7 +2707,7 @@ body {
   text-overflow: ellipsis; white-space: nowrap; max-width: 230px; margin: 0 auto;
 }
 .prompt-fsize {
-  display: block; font-size: 9.5px; color: var(--mac-accent); font-weight: 600; margin-top: 1px;
+  display: block; font-size: 9.5px; color: var(--menu-fg-dim); font-weight: 600; margin-top: 1px;
 }
 .drop-prompt-actions {
   display: flex; gap: 8px; width: 100%; margin-bottom: 2px;
@@ -2727,115 +2727,19 @@ body {
 .prompt-decline-btn:hover { background: rgba(255, 69, 58, 0.28) !important; }
 .prompt-decline-btn:active { transform: scale(0.97); }
 
-/* ---------- Inex Drop Island Transfer Prompt HUD (Bluetooth style compact notch) ---------- */
-.island.state-compact.prompt-hud-active {
-  width: 276px !important;
-  height: 40px !important;
-  border-radius: 20px !important;
-  top: 10px !important;
-  background: #000 !important;
-  border: 0 !important;
-  box-shadow: 0 0 0 0.5px rgba(255, 255, 255, 0.08), 0 20px 42px -12px rgba(0, 0, 0, 0.8) !important;
-  transition: width 0.55s cubic-bezier(0.34, 1.45, 0.64, 1), height 0.55s cubic-bezier(0.34, 1.45, 0.64, 1),
-              top 0.45s cubic-bezier(0.22, 1, 0.36, 1), border-radius 0.45s cubic-bezier(0.22, 1, 0.36, 1) !important;
-}
-.island.state-compact.prompt-hud-active .compact-bar {
-  height: 100% !important;
-  padding: 0 !important;
-}
-.island.state-compact.prompt-hud-active :is(.c-left, .c-center, .c-right, .c-biometric-hud, .c-bt-hud, .c-alarm-hud, .c-timer-chip) {
-  display: none !important;
-}
-.island.state-compact.prompt-hud-active .c-prompt-hud {
-  display: flex !important;
-}
-
-.c-prompt-hud {
-  display: none;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  height: 100%;
-  padding: 0 8px 0 12px;
-  font-family: "SF Pro Display", -apple-system, BlinkMacSystemFont, "Inter", sans-serif;
-  -webkit-font-smoothing: antialiased;
-  box-sizing: border-box;
-}
-.c-prompt-hud > * {
-  animation: btIn 0.4s var(--ease-close) both;
-}
-.prompt-hud-ico {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
-  display: grid;
-  place-items: center;
-  flex: none;
-}
-.prompt-hud-ico svg {
-  width: 13px;
-  height: 13px;
-}
-.prompt-hud-text {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  flex: 1;
-  text-align: left;
-}
-.prompt-hud-title {
-  font-size: 11px;
-  font-weight: 600;
-  color: #fff;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 135px;
-  line-height: 1.25;
-}
-.prompt-hud-meta {
-  font-size: 9px;
-  color: var(--dim, #8e8e93);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  margin-top: 1px;
-}
-.prompt-hud-actions {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex: none;
-}
+/* ---------- Accept / Decline buttons inside the shared device HUD (file transfer request) ---------- */
+.c-bt-hud > .bt-hud-actions { animation-delay: 0.26s; }
+.bt-hud-actions { display: flex; align-items: center; gap: 5px; flex: none; }
+.bt-hud-actions.hidden { display: none; }
 .hud-action-btn {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  border: 0;
-  display: grid;
-  place-items: center;
-  cursor: pointer;
-  padding: 0;
-  transition: transform 0.12s ease, filter 0.15s ease;
+  width: 22px; height: 22px; border-radius: 50%; border: 0; padding: 0; cursor: pointer;
+  display: grid; place-items: center;
+  transition: transform 0.12s ease, filter 0.15s ease, background 0.15s ease;
 }
-.hud-action-btn:active {
-  transform: scale(0.92);
-}
-.hud-action-btn.accept {
-  background: #30d158;
-  color: #fff;
-  box-shadow: 0 2px 6px rgba(48, 209, 88, 0.35);
-}
-.hud-action-btn.accept:hover {
-  filter: brightness(1.12);
-}
-.hud-action-btn.decline {
-  background: rgba(255, 69, 58, 0.18);
-  color: #ff453a;
-  border: 1px solid rgba(255, 69, 58, 0.45);
-}
-.hud-action-btn.decline:hover {
-  background: rgba(255, 69, 58, 0.3);
-}
+.hud-action-btn:active { transform: scale(0.9); }
+.hud-action-btn.accept { background: #30d158; color: #fff; box-shadow: 0 2px 6px rgba(48, 209, 88, 0.35); }
+.hud-action-btn.accept:hover { filter: brightness(1.12); }
+.hud-action-btn.decline { background: rgba(255, 69, 58, 0.18); color: #ff453a; box-shadow: inset 0 0 0 1px rgba(255, 69, 58, 0.45); }
+.hud-action-btn.decline:hover { background: rgba(255, 69, 58, 0.3); }
+
+.drop-prompt-icon-bubble svg { width: 16px; height: 16px; }
