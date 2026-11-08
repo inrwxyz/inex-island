@@ -3,87 +3,104 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<meta name="theme-color" content="#08080a">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>Inex Drop</title>
 <style>
 :root {
-  --bg: #0b0b0f;
-  --card: #15151c;
-  --card-sub: rgba(255, 255, 255, 0.04);
-  --accent: #0a84ff;
+  --bg: #08080a;
+  --card: #121216;
+  --card-sub: rgba(255, 255, 255, 0.035);
   --accent-green: #30d158;
   --fg: #f5f5f7;
   --dim: #8e8e93;
-  --border: rgba(255, 255, 255, 0.08);
+  --border: rgba(255, 255, 255, 0.075);
 }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 body {
   margin: 0; padding: 18px 14px;
   background: var(--bg); color: var(--fg);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif;
   min-height: 100vh; display: flex; flex-direction: column; align-items: center;
 }
 .card {
   width: 100%; max-width: 440px;
   background: var(--card); border: 1px solid var(--border);
-  border-radius: 24px; padding: 20px;
-  box-shadow: 0 14px 36px rgba(0,0,0,0.55);
+  border-radius: 24px; padding: 22px;
+  box-shadow: 0 16px 40px rgba(0,0,0,0.6);
   margin-bottom: 14px; text-align: center;
 }
 .header-row {
   display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;
 }
 .logo-title {
-  display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 17px; letter-spacing: -0.02em;
+  display: flex; align-items: center; gap: 9px; font-weight: 700; font-size: 17px; letter-spacing: -0.02em;
 }
 .logo-ico {
   width: 28px; height: 28px; border-radius: 50%;
-  background: var(--accent); display: grid; place-items: center;
+  background: rgba(255, 255, 255, 0.1); border: 1px solid var(--border);
+  display: grid; place-items: center;
 }
 .badge {
   font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 12px;
-  background: rgba(48,209,88,0.15); color: var(--accent-green);
-  border: 1px solid rgba(48,209,88,0.3);
+  background: rgba(48,209,88,0.14); color: var(--accent-green);
+  border: 1px solid rgba(48,209,88,0.28);
+}
+.badge.offline {
+  background: rgba(255,255,255,0.06); color: var(--dim);
+  border: 1px solid var(--border);
 }
 .drop-zone {
-  border: 2px dashed rgba(255,255,255,0.16); border-radius: 20px;
-  padding: 36px 16px; margin: 14px 0; background: rgba(255,255,255,0.02);
+  border: 2px dashed rgba(255,255,255,0.14); border-radius: 20px;
+  padding: 38px 16px; margin: 14px 0; background: rgba(255,255,255,0.015);
   cursor: pointer; transition: all .18s;
 }
-.drop-zone.hover { border-color: var(--accent); background: rgba(10,132,255,0.08); }
-.drop-zone svg { width: 44px; height: 44px; stroke: var(--accent); stroke-width: 2; fill: none; margin-bottom: 8px; }
+.drop-zone.hover { border-color: rgba(255,255,255,0.4); background: rgba(255,255,255,0.05); }
+.drop-zone svg { width: 44px; height: 44px; stroke: #fff; stroke-width: 1.8; fill: none; margin-bottom: 8px; opacity: 0.92; }
 .drop-title { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
 .drop-sub { font-size: 12px; color: var(--dim); }
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-  width: 100%; height: 46px; border-radius: 14px; border: none;
-  font-size: 14.5px; font-weight: 600; cursor: pointer;
-  background: var(--accent); color: #fff; transition: opacity .15s;
+  width: 100%; height: 44px; border-radius: 13px; border: 1px solid var(--border);
+  font-size: 14px; font-weight: 600; cursor: pointer;
+  background: rgba(255,255,255,0.08); color: #fff; transition: opacity .15s, background .15s;
 }
 .btn:active { opacity: 0.82; }
+.btn-primary {
+  background: #fff !important; color: #000 !important; border: 0 !important; font-weight: 700;
+}
 .btn-green {
-  background: var(--accent-green) !important;
-  color: #fff !important;
-  box-shadow: 0 2px 8px rgba(48, 209, 88, 0.35);
+  background: var(--accent-green) !important; color: #fff !important; border: 0 !important;
+  box-shadow: 0 2px 8px rgba(48, 209, 88, 0.32);
 }
 .btn-outline {
   background: transparent; border: 1px solid var(--border);
-  color: var(--dim); margin-top: 10px; height: 40px; font-size: 12.5px;
+  color: var(--dim); margin-top: 10px; height: 38px; font-size: 12px;
 }
 .prog-box { display: none; margin: 14px 0; text-align: left; }
 .prog-bar-bg {
-  width: 100%; height: 8px; border-radius: 4px;
-  background: rgba(255,255,255,0.1); overflow: hidden; margin-top: 6px;
+  width: 100%; height: 6px; border-radius: 3px;
+  background: rgba(255,255,255,0.08); overflow: hidden; margin-top: 6px;
 }
 .prog-fill {
-  width: 0%; height: 100%; background: var(--accent); border-radius: 4px; transition: width .1s linear;
+  width: 0%; height: 100%; background: #fff; border-radius: 3px; transition: width .1s linear;
 }
 .prog-info {
-  display: flex; justify-content: space-between; font-size: 12px; color: var(--dim);
+  display: flex; justify-content: space-between; font-size: 11.5px; color: var(--dim);
 }
 .file-list { margin-top: 14px; text-align: left; }
+.file-list-header {
+  display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;
+}
 .file-list h4 {
-  font-size: 12px; color: var(--dim); margin: 0 0 8px 4px;
+  font-size: 11.5px; color: var(--dim); margin: 0;
   text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700;
+}
+.file-expire-pill {
+  font-size: 10px; color: #ff9f0a; font-weight: 600; background: rgba(255,159,10,0.12);
+  padding: 2px 7px; border-radius: 8px;
 }
 .file-item {
   display: flex; align-items: center; justify-content: space-between;
@@ -93,18 +110,44 @@ body {
 .success-msg {
   display: none; padding: 10px; border-radius: 12px;
   background: rgba(48,209,88,0.12); color: var(--accent-green);
-  font-size: 13px; font-weight: 600; margin: 12px 0;
+  font-size: 12.5px; font-weight: 600; margin: 12px 0;
 }
 .toast {
   position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
   background: rgba(20,20,25,0.95); border: 1px solid rgba(255,255,255,0.14);
-  color: #fff; padding: 10px 18px; border-radius: 20px; font-size: 12.5px; font-weight: 600;
+  color: #fff; padding: 9px 16px; border-radius: 20px; font-size: 12px; font-weight: 600;
   display: none; z-index: 999; box-shadow: 0 8px 24px rgba(0,0,0,0.6);
 }
+#scannerCard { display: none; }
 </style>
 </head>
 <body>
-<div class="card">
+
+<!-- 1. Offline / Standalone Home Screen PWA View -->
+<div class="card" id="scannerCard">
+  <div class="header-row">
+    <div class="logo-title">
+      <div class="logo-ico">
+        <svg viewBox="0 0 24 24" width="16" height="16" stroke="#fff" stroke-width="2.2" fill="none" stroke-linecap="round"><path d="M12 2v10M8 8l4-4 4 4M4 14v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg>
+      </div>
+      <span>Inex Drop</span>
+    </div>
+    <span class="badge offline">Standby</span>
+  </div>
+  <div style="padding:28px 12px 20px;text-align:center;">
+    <svg viewBox="0 0 24 24" width="48" height="48" stroke="#fff" stroke-width="1.6" fill="none" style="opacity:0.8;margin-bottom:12px;"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="12" cy="12" r="3"/></svg>
+    <div style="font-size:16px;font-weight:600;margin-bottom:6px;">Connect to Inex Island</div>
+    <div style="font-size:12px;color:var(--dim);margin-bottom:20px;">Scan the QR code on your PC screen to connect</div>
+    <label class="btn btn-primary" style="display:flex;cursor:pointer;">
+      <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2.2" fill="none"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+      <span>Scan PC QR Code</span>
+      <input type="file" id="qrCameraInput" accept="image/*" capture="environment" style="display:none;" onchange="handleQrCamera(this)">
+    </label>
+  </div>
+</div>
+
+<!-- 2. Main Connected Inex Drop View -->
+<div class="card" id="mainDropCard">
   <div class="header-row">
     <div class="logo-title">
       <div class="logo-ico">
@@ -132,9 +175,12 @@ body {
 
   <div class="success-msg" id="successMsg">✓ File transferred to PC Downloads!</div>
 
-  <!-- Incoming Files from PC (Tray Push) -->
+  <!-- Incoming Files from PC (Tray Push with 60s Expiration) -->
   <div class="file-list" id="pcFilesBox" style="display:none;">
-    <h4>📥 Incoming from PC</h4>
+    <div class="file-list-header">
+      <h4>📥 Incoming from PC</h4>
+      <span class="file-expire-pill" id="fileExpirePill">Expires in 60s</span>
+    </div>
     <div id="pcFilesList"></div>
   </div>
 
@@ -144,19 +190,31 @@ body {
 <div class="toast" id="toastBox"></div>
 
 <script>
-const pin = new URLSearchParams(window.location.search).get('pin') || '';
+let pin = new URLSearchParams(window.location.search).get('pin') || '';
 const downloadedSet = new Set();
+let expireSeconds = 60;
+let expireInterval = null;
+
+// Check standalone mode without PIN
+if (!pin) {
+  document.getElementById('scannerCard').style.display = 'block';
+  document.getElementById('mainDropCard').style.display = 'none';
+} else {
+  document.getElementById('scannerCard').style.display = 'none';
+  document.getElementById('mainDropCard').style.display = 'block';
+}
 
 function showMobileToast(msg) {
   const t = document.getElementById('toastBox');
   if (!t) return;
   t.textContent = msg;
   t.style.display = 'block';
-  setTimeout(() => { t.style.display = 'none'; }, 2400);
+  setTimeout(() => { t.style.display = 'none'; }, 2200);
 }
 
-// 1. Register device name with PC
+// 1. Device Registration
 function registerDevice() {
+  if (!pin) return;
   const ua = navigator.userAgent;
   let dev = 'Mobile Device';
   if (/iPhone/i.test(ua)) dev = 'iPhone';
@@ -173,9 +231,12 @@ function registerDevice() {
 }
 registerDevice();
 
-// 2. Poll incoming files staged from PC Tray
+// 2. Poll incoming files staged from PC Tray with 60s Expiration
 let consecutiveErrors = 0;
+let lastFileCount = 0;
+
 function pollFiles() {
+  if (!pin) return;
   fetch('/files?pin=' + encodeURIComponent(pin))
     .then(r => {
       if (!r.ok) throw new Error('status ' + r.status);
@@ -185,27 +246,43 @@ function pollFiles() {
     .then(data => {
       const list = document.getElementById('pcFilesList');
       const box = document.getElementById('pcFilesBox');
-      if (data && data.length > 0) {
+      const pill = document.getElementById('fileExpirePill');
+
+      // Filter out files already downloaded in this session
+      const pendingFiles = (data || []).filter(f => !downloadedSet.has(f.name));
+
+      if (pendingFiles.length > 0) {
+        if (lastFileCount === 0) {
+          expireSeconds = 60;
+          clearInterval(expireInterval);
+          expireInterval = setInterval(() => {
+            expireSeconds--;
+            if (pill) pill.textContent = `Expires in ${expireSeconds}s`;
+            if (expireSeconds <= 0) {
+              clearInterval(expireInterval);
+              box.style.display = 'none';
+            }
+          }, 1000);
+        }
+        lastFileCount = pendingFiles.length;
         box.style.display = 'block';
-        list.innerHTML = data.map(f => {
-          const isDownloaded = downloadedSet.has(f.name);
+
+        list.innerHTML = pendingFiles.map(f => {
           const safeName = f.name.replace(/"/g, '&quot;');
           const encodedName = encodeURIComponent(f.name);
           return `
             <div class="file-item">
               <div style="text-align:left;flex:1;overflow:hidden;padding-right:6px;">
-                <strong style="display:block;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${safeName}</strong>
+                <strong style="display:block;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${safeName}</strong>
                 <small style="color:var(--dim);">${(f.size/1024/1024).toFixed(1)} MB</small>
               </div>
-              ${isDownloaded ? `
-                <span style="font-size:11px;font-weight:600;color:var(--accent-green);padding:4px 8px;background:rgba(48,209,88,0.12);border-radius:8px;">✓ Saved</span>
-              ` : `
-                <button class="btn btn-green" onclick="acceptAndDownload('${encodedName}', '${safeName}')" style="height:34px;width:auto;padding:0 12px;font-size:12px;border-radius:10px;">Accept & Download</button>
-              `}
+              <a href="/download/${encodedName}?pin=${encodeURIComponent(pin)}" download="${safeName}" onclick="onFileDownloadClick('${safeName}')" class="btn btn-green" style="height:32px;width:auto;padding:0 12px;font-size:11.5px;text-decoration:none;">Accept & Download</a>
             </div>
           `;
         }).join('');
       } else {
+        lastFileCount = 0;
+        clearInterval(expireInterval);
         box.style.display = 'none';
       }
     }).catch(() => {
@@ -218,20 +295,13 @@ function pollFiles() {
 setInterval(pollFiles, 2500);
 pollFiles();
 
-// 3. One-click instant direct download upon clicking Accept
-function acceptAndDownload(encodedName, rawName) {
-  downloadedSet.add(decodeURIComponent(encodedName));
-  const dlUrl = `/download/${encodedName}?pin=${encodeURIComponent(pin)}`;
-  
-  const a = document.createElement('a');
-  a.href = dlUrl;
-  a.download = decodeURIComponent(encodedName);
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-
-  showMobileToast('Downloading ' + rawName + '...');
-  pollFiles();
+// 3. Mark file as downloaded and expire immediately
+function onFileDownloadClick(fileName) {
+  downloadedSet.add(fileName);
+  showMobileToast('Downloading ' + fileName + '...');
+  setTimeout(() => {
+    pollFiles();
+  }, 1000);
 }
 
 // 4. File picker and upload flow
@@ -276,10 +346,10 @@ async function uploadSingle(file) {
     return;
   }
 
-  // Step 2: Poll PC approval (up to 40 seconds)
+  // Step 2: Poll PC approval with 60-second timeout
   let approved = false;
   const startWait = Date.now();
-  while (Date.now() - startWait < 40000) {
+  while (Date.now() - startWait < 60000) {
     await new Promise(r => setTimeout(r, 600));
     try {
       const check = await fetch(`/check_transfer?id=${transferId}&pin=${encodeURIComponent(pin)}`).then(r => r.json());
@@ -287,12 +357,12 @@ async function uploadSingle(file) {
         approved = true;
         break;
       } else if (check.status === 'declined') {
-        progFileName.textContent = 'Transfer Declined by PC';
+        progFileName.textContent = 'Transfer Declined on PC';
         progPct.textContent = 'Declined';
         progFill.style.background = '#ff453a';
         setTimeout(() => {
           progBox.style.display = 'none';
-          progFill.style.background = 'var(--accent)';
+          progFill.style.background = '#fff';
         }, 2600);
         return;
       }
@@ -300,12 +370,12 @@ async function uploadSingle(file) {
   }
 
   if (!approved) {
-    progFileName.textContent = 'Transfer timed out';
+    progFileName.textContent = 'Transfer timed out (1 min)';
     setTimeout(() => { progBox.style.display = 'none'; }, 2000);
     return;
   }
 
-  // Step 3: Stream high-speed upload to PC (40-60+ MB/s)
+  // Step 3: Stream high-speed upload to PC
   progFileName.textContent = 'Sending ' + file.name;
   progFill.style.width = '0%';
   progPct.textContent = '0%';
@@ -357,6 +427,30 @@ async function uploadSingle(file) {
 
     xhr.send(file);
   });
+}
+
+// 5. In-browser Camera QR Scanner
+function handleQrCamera(input) {
+  if (input.files && input.files[0]) {
+    // If the browser provides BarcodeDetector API (standard in modern Chrome on Android)
+    if ('BarcodeDetector' in window) {
+      const detector = new BarcodeDetector({ formats: ['qr_code'] });
+      createImageBitmap(input.files[0]).then(bitmap => {
+        return detector.detect(bitmap);
+      }).then(barcodes => {
+        if (barcodes.length > 0) {
+          const urlStr = barcodes[0].rawValue;
+          window.location.href = urlStr;
+        } else {
+          alert('No QR code detected. Try pointing camera directly at the PC QR code.');
+        }
+      }).catch(err => {
+        alert('Scanning error: ' + err.message);
+      });
+    } else {
+      alert('QR scanning ready. Open camera app or Google Lens to connect directly.');
+    }
+  }
 }
 
 function disconnect() {

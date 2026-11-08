@@ -440,18 +440,51 @@ fn handle_client(mut stream: TcpStream, app: &AppHandle, valid_pin: &str) {
                 if let Ok(mut f) = File::open(&path_str) {
                     let meta = f.metadata().ok();
                     let file_size = meta.map(|m| m.len()).unwrap_or(0);
+                    let ext = std::path::Path::new(&file_name).extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+                    let mime = match ext.as_str() {
+                        "mp4" => "video/mp4",
+                        "mkv" => "video/x-matroska",
+                        "mov" => "video/quicktime",
+                        "webm" => "video/webm",
+                        "avi" => "video/x-msvideo",
+                        "mp3" => "audio/mpeg",
+                        "wav" => "audio/wav",
+                        "flac" => "audio/flac",
+                        "aac" => "audio/aac",
+                        "m4a" => "audio/mp4",
+                        "jpg" | "jpeg" => "image/jpeg",
+                        "png" => "image/png",
+                        "webp" => "image/webp",
+                        "gif" => "image/gif",
+                        "pdf" => "application/pdf",
+                        "zip" => "application/zip",
+                        _ => "application/octet-stream",
+                    };
                     let header = format!(
-                        "HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Disposition: attachment; filename=\"{}\"\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                        "HTTP/1.1 200 OK\r\nContent-Type: {}\r\nContent-Disposition: attachment; filename=\"{}\"\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                        mime,
                         clean_filename(&file_name),
                         file_size
                     );
                     if stream.write_all(header.as_bytes()).is_ok() {
-                        let mut buf = [0u8; 64 * 1024];
+                        let _ = stream.set_nodelay(true);
+                        let mut buf = [0u8; 256 * 1024];
                         while let Ok(n) = f.read(&mut buf) {
                             if n == 0 || get_stop_flag().load(Ordering::SeqCst) { break; }
                             if stream.write_all(&buf[..n]).is_err() { break; }
                         }
                     }
+                    // Remove from staged_files immediately after download so it EXPIRES!
+                    {
+                        let mut state = get_state().lock().unwrap();
+                        state.staged_files.retain(|sf| {
+                            PathBuf::from(sf).file_name().map(|n| n.to_string_lossy() != file_name).unwrap_or(true)
+                        });
+                    }
+                    let _ = app.emit("inexdrop-event", serde_json::json!({
+                        "type": "pushed_file_downloaded",
+                        "name": file_name
+                    }));
                     return;
                 }
             }
@@ -679,9 +712,25 @@ pub fn get_inex_drop_status() -> DropStatus {
 
 #[tauri::command]
 pub fn stage_file_for_phone(path: String) -> Result<bool, String> {
-    let mut state = get_state().lock().unwrap();
-    if !state.staged_files.contains(&path) {
-        state.staged_files.push(path);
+    {
+        let mut state = get_state().lock().unwrap();
+        if !state.staged_files.contains(&path) {
+            state.staged_files.push(path.clone());
+        }
     }
+    // Auto-expire staged file on PC after 60 seconds (1 minute expiry)
+    let p_clone = path;
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_secs(60));
+        let mut state = get_state().lock().unwrap();
+        state.staged_files.retain(|f| f != &p_clone);
+    });
     Ok(true)
+}
+
+#[tauri::command]
+pub fn clear_staged_files() -> bool {
+    let mut state = get_state().lock().unwrap();
+    state.staged_files.clear();
+    true
 }

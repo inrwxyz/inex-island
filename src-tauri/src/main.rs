@@ -1919,6 +1919,7 @@ fn main() {
             inex_drop::stop_inex_drop,
             inex_drop::get_inex_drop_status,
             inex_drop::stage_file_for_phone,
+            inex_drop::clear_staged_files,
             inex_drop::respond_inex_transfer,
             check_update,
             get_app_version,

@@ -6,6 +6,72 @@ let dropActive = false;
 let dropConnected = false;
 let dropCurrentUrl = '';
 let currentPromptId = null;
+let promptExpireTimer = null;
+
+function getFileIcon(name) {
+  const ext = (name || '').split('.').pop().toLowerCase();
+  if (['mp4', 'mkv', 'mov', 'avi', 'webm', 'wmv'].includes(ext)) {
+    return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>';
+  }
+  if (['mp3', 'wav', 'flac', 'aac', 'm4a', 'ogg'].includes(ext)) {
+    return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>';
+  }
+  if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].includes(ext)) {
+    return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>';
+  }
+  if (['zip', 'rar', '7z', 'tar', 'gz'].includes(ext)) {
+    return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="12" y1="3" x2="12" y2="21"/><rect x="10" y="8" width="4" height="4" rx="1"/></svg>';
+  }
+  return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>';
+}
+
+function showPromptHud(id, name, meta, iconSvg) {
+  const hud = document.getElementById('c-prompt-hud');
+  const ico = document.getElementById('prompt-hud-ico');
+  const titleEl = document.getElementById('prompt-hud-title');
+  const metaEl = document.getElementById('prompt-hud-meta');
+  if (!hud || !ico || !titleEl) return;
+
+  ico.innerHTML = iconSvg;
+  titleEl.textContent = name || 'File';
+  if (metaEl) metaEl.textContent = meta || '';
+
+  hud.classList.remove('hidden');
+  tryInvoke('resize_island', { width: 284, height: 48 });
+  island.classList.add('prompt-hud-active');
+}
+
+function closePromptHud() {
+  const hud = document.getElementById('c-prompt-hud');
+  if (hud) hud.classList.add('hidden');
+  island.classList.remove('prompt-hud-active');
+  if (appState.currentView === 'view-compact' || !appState.currentView) {
+    goCompact();
+  }
+}
+
+async function acceptTransferPrompt() {
+  if (!currentPromptId) return;
+  const pid = currentPromptId;
+  currentPromptId = null;
+  clearTimeout(promptExpireTimer);
+  closePromptHud();
+  await invokeTauri('respond_inex_transfer', { id: pid, accept: true });
+  refreshDropUI();
+}
+
+async function declineTransferPrompt(silent = false) {
+  if (!currentPromptId) return;
+  const pid = currentPromptId;
+  currentPromptId = null;
+  clearTimeout(promptExpireTimer);
+  closePromptHud();
+  await invokeTauri('respond_inex_transfer', { id: pid, accept: false });
+  refreshDropUI();
+  if (!silent) {
+    showToast('unphone', 'Transfer declined', 1800);
+  }
+}
 
 function openDropView() {
   switchView('view-inexdrop', 'state-sub', 316, 248);
@@ -178,15 +244,41 @@ onTauriEvent('inexdrop-event', (event) => {
   } else if (p.type === 'connected') {
     dropActive = true;
     dropConnected = true;
-    showToast('phone', `Connected to ${p.device || 'Phone'}!`, 2000);
+    const PHONE_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none"><rect x="7" y="2" width="10" height="20" rx="2"/><line x1="11" y1="18" x2="13" y2="18"/></svg>';
+    if (typeof showDeviceHud === 'function') {
+      showDeviceHud({
+        iconHTML: PHONE_SVG,
+        plain: true,
+        name: p.device || 'Android Phone',
+        tag: 'Connected',
+        accent: 'green',
+        ms: 2800
+      });
+    } else {
+      showToast('phone', `Connected to ${p.device || 'Phone'}!`, 2000);
+    }
     refreshDropUI();
   } else if (p.type === 'disconnected') {
     dropConnected = false;
-    showToast('unphone', 'Phone disconnected', 1800);
+    closePromptHud();
+    const UNPHONE_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" stroke-width="2" fill="none"><rect x="7" y="2" width="10" height="20" rx="2"/><line x1="11" y1="18" x2="13" y2="18"/><line x1="2" y1="2" x2="22" y2="22"/></svg>';
+    if (typeof showDeviceHud === 'function') {
+      showDeviceHud({
+        iconHTML: UNPHONE_SVG,
+        plain: true,
+        name: p.device || 'Phone',
+        tag: 'Disconnected',
+        accent: 'red',
+        ms: 2200
+      });
+    } else {
+      showToast('unphone', 'Phone disconnected', 1800);
+    }
     refreshDropUI();
   } else if (p.type === 'stopped') {
     dropActive = false;
     dropConnected = false;
+    closePromptHud();
     const rxBox = document.getElementById('drop-rx-progress');
     if (rxBox) rxBox.classList.add('hidden');
     if (typeof finishCompactTransferUI === 'function') {
@@ -195,17 +287,29 @@ onTauriEvent('inexdrop-event', (event) => {
     refreshDropUI();
   } else if (p.type === 'transfer_prompt') {
     currentPromptId = p.id;
-    openDropView();
-    const devEl = document.getElementById('prompt-sender-name');
-    const fileEl = document.getElementById('prompt-file-name');
-    const sizeEl = document.getElementById('prompt-file-size');
-    if (devEl) devEl.textContent = p.device || 'Android Phone';
-    if (fileEl) fileEl.textContent = p.name || 'File';
-    if (sizeEl) {
-      const mb = (p.size / (1024 * 1024)).toFixed(1);
-      sizeEl.textContent = `${mb} MB`;
+    clearTimeout(promptExpireTimer);
+    // 1-minute expiration timer on prompt
+    promptExpireTimer = setTimeout(() => {
+      if (currentPromptId === p.id) {
+        declineTransferPrompt(true);
+      }
+    }, 60000);
+
+    const mb = (p.size / (1024 * 1024)).toFixed(1);
+    const iconSvg = getFileIcon(p.name);
+
+    if (appState.currentView === 'view-inexdrop') {
+      const devEl = document.getElementById('prompt-sender-name');
+      const fileEl = document.getElementById('prompt-file-name');
+      const sizeEl = document.getElementById('prompt-file-size');
+      if (devEl) devEl.textContent = p.device || 'Android Phone';
+      if (fileEl) fileEl.textContent = p.name || 'File';
+      if (sizeEl) sizeEl.textContent = `${mb} MB`;
+      refreshDropUI();
+    } else {
+      // Show Dynamic Island Compact Prompt HUD (Bluetooth banner style!)
+      showPromptHud(p.id, p.name, `${mb} MB • ${p.device || 'Android Phone'}`, iconSvg);
     }
-    refreshDropUI();
   } else if (p.type === 'upload_cancelled') {
     const rxBox = document.getElementById('drop-rx-progress');
     if (rxBox) rxBox.classList.add('hidden');
@@ -238,6 +342,7 @@ onTauriEvent('inexdrop-event', (event) => {
       updateCompactTransferPct(p.pct, p.speed);
     }
   } else if (p.type === 'upload_done') {
+    closePromptHud();
     const rxPct = document.getElementById('drop-rx-pct');
     const rxBar = document.getElementById('drop-rx-bar');
     const rxBox = document.getElementById('drop-rx-progress');
@@ -260,9 +365,25 @@ onTauriEvent('inexdrop-event', (event) => {
       });
     }
 
+    // P2P-style: copy path to clipboard and add to File Tray!
+    if (p.path) {
+      try {
+        navigator.clipboard.writeText(p.path);
+      } catch (_) {}
+      if (typeof addTrayItem === 'function') {
+        addTrayItem(p.path);
+      } else if (appState.trayFiles && !appState.trayFiles.some(f => f.path === p.path)) {
+        appState.trayFiles.unshift({ path: p.path, name: p.name, size: p.size });
+        if (typeof renderTrayList === 'function') renderTrayList();
+      }
+    }
+
     setTimeout(() => {
       if (rxBox) rxBox.classList.add('hidden');
     }, 2500);
+  } else if (p.type === 'pushed_file_downloaded') {
+    showToast('done', `${p.name || 'File'} downloaded on Phone!`, 2200);
+  }
   }
 });
 
@@ -317,27 +438,25 @@ function initInexDrop() {
           await invokeTauri('stage_file_for_phone', { path: f.path });
         }
       }
-      showToast('done', 'Files pushed to Phone!', 1800);
+      showToast('phone', 'Files pushed to Phone! (Expires in 1 min)', 2500);
     });
   }
 
-  // Accept / Decline handlers
+  // Accept / Decline handlers (both Compact HUD and Subview)
+  document.getElementById('btn-hud-accept')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    acceptTransferPrompt();
+  });
+  document.getElementById('btn-hud-decline')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    declineTransferPrompt();
+  });
+
   document.getElementById('btn-prompt-accept')?.addEventListener('click', async () => {
-    if (currentPromptId) {
-      const pid = currentPromptId;
-      currentPromptId = null;
-      await invokeTauri('respond_inex_transfer', { id: pid, accept: true });
-      refreshDropUI();
-    }
+    acceptTransferPrompt();
   });
   document.getElementById('btn-prompt-decline')?.addEventListener('click', async () => {
-    if (currentPromptId) {
-      const pid = currentPromptId;
-      currentPromptId = null;
-      await invokeTauri('respond_inex_transfer', { id: pid, accept: false });
-      refreshDropUI();
-      showToast('unphone', 'Transfer declined', 1800);
-    }
+    declineTransferPrompt();
   });
 }
 
