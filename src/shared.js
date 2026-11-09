@@ -51,7 +51,6 @@ export const ALL_ACTION_TILES = {
 export const SLOT_OPTIONS = [
   ['wifi', 'Wi-Fi'],
   ['drop', 'Inex Drop'],
-  ['p2p', 'P2P Link'],
   ['bt', 'Bluetooth'],
   ['tray', 'File Tray'],
   ['notepad', 'Quick Notes'],
@@ -108,7 +107,7 @@ export function load() {
     if (!base.slots.c) base.slots.c = 'bt';
     if (!base.slots.d) base.slots.d = 'tray';
     const usedSlots = new Set();
-    const validSlots = ['wifi', 'drop', 'p2p', 'bt', 'tray', 'notepad', 'mic'];
+    const validSlots = ['wifi', 'drop', 'bt', 'tray', 'notepad', 'mic'];
     for (const k of ['a', 'b', 'c', 'd']) {
       let val = base.slots[k];
       if (!validSlots.includes(val) || usedSlots.has(val)) {

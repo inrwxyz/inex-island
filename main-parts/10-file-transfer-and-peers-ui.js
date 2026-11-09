@@ -360,6 +360,7 @@ function updateOfferGlow() {
   for (const e of rtcPeers.values()) if (e.recv && !e.recv.accepted) pending = true;
   document.getElementById('c-peer-badge').classList.toggle('offer', pending);
   document.getElementById('tile-p2p')?.classList.toggle('offer', pending);
+  document.getElementById('rail-p2p')?.classList.toggle('offer', pending);
   document.getElementById('tile-drop')?.classList.toggle('offer', pending);
 }
 
@@ -389,6 +390,7 @@ function renderPeersUI() {
     exitBtn.classList.toggle('hidden', !appState.roomCode && appState.peers.length === 0);
   }
   const count = appState.peers.length;
+  if (typeof updateDropRailBadge === 'function') updateDropRailBadge(count);
   const inRoomOrConnected = !!(appState.roomCode || count > 0);
   document.getElementById('btn-gen-code')?.classList.toggle('hidden', inRoomOrConnected);
   document.getElementById('p2p-join-box')?.classList.toggle('hidden', inRoomOrConnected);

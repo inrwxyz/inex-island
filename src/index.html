@@ -13,6 +13,18 @@
 <body>
   <div id="island" class="island state-compact" data-mode="smart" data-menu="transparent">
 
+    <!-- Side rail inside Inex Drop: slide up / down (or click) to pick Quick Share or P2P -->
+    <div id="drop-rail" class="drop-rail">
+      <i class="drop-rail-ind"></i>
+      <button id="rail-qs" class="rail-btn on" title="Inex Drop (Quick Share)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v10M8 8l4-4 4 4M4 14v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg>
+      </button>
+      <button id="rail-p2p" class="rail-btn" title="P2P">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="1.5" y="3" width="9" height="7" rx="1.5"/><path d="M4 13h4"/><rect x="13.5" y="12" width="9" height="7" rx="1.5"/><path d="M16 22h4"/><path d="M12 6.5h4.5V10"/><path d="M12 17.5H7.5V14"/></svg>
+        <b id="rail-p2p-badge" class="rail-badge hidden">0</b>
+      </button>
+    </div>
+
     <!-- ==================== 1. COMPACT PILL ==================== -->
     <div id="view-compact" class="view active">
       <div class="compact-bar">

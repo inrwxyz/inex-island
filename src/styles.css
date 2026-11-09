@@ -2988,3 +2988,35 @@ body {
 .clip-media-info { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .clip-media-info .clipboard-item-header { margin: 0; }
 .clip-media-name { font-size: 11px; color: #f1f5f9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ==================== INEX DROP SIDE RAIL (Quick Share <-> P2P) ==================== */
+.drop-rail {
+  position: absolute; right: 10px; top: 50px; z-index: 6;
+  width: 34px; padding: 3px; box-sizing: border-box;
+  display: none; flex-direction: column; gap: 4px;
+  border-radius: 17px;
+  background: color-mix(in srgb, var(--menu-fg) 9%, transparent);
+  --i: 0;
+}
+.island.has-rail .drop-rail { display: flex; animation: railIn 0.34s var(--spring) backwards; }
+@keyframes railIn { from { opacity: 0; transform: translateX(8px); } to { opacity: 1; transform: none; } }
+.drop-rail-ind {
+  position: absolute; left: 3px; top: 3px; width: 28px; height: 28px; border-radius: 50%;
+  background: var(--color-tile-on-bg);
+  transform: translateY(calc(var(--i) * 32px));
+  transition: transform 0.35s var(--spring-pop);
+}
+.rail-btn {
+  position: relative; z-index: 1; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 50%;
+  background: transparent; color: var(--menu-fg-dim); cursor: pointer;
+  display: grid; place-items: center; transition: color 0.2s ease;
+}
+.rail-btn svg { width: 15px; height: 15px; }
+.rail-btn.on { color: var(--color-tile-on-fg); }
+.rail-btn.offer:not(.on) { color: #ff9f0a; }
+.rail-badge {
+  position: absolute; top: -3px; right: -4px; min-width: 13px; height: 13px; padding: 0 3px; box-sizing: border-box;
+  border-radius: 7px; background: #30d158; color: #000; font-size: 8.5px; font-weight: 700; line-height: 13px; text-align: center;
+}
+.island.has-rail #view-inexdrop .drop-body,
+.island.has-rail #view-p2p .p2p-body { margin-right: 46px; }

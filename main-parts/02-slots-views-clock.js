@@ -48,12 +48,6 @@ const SLOT_DEFS = {
       else switchView('view-inexdrop', 'state-sub', 316, 268);
     }
   },
-  p2p: {
-    el: 'tile-p2p',
-    start: () => {},
-    stop: () => {},
-    click: () => switchView('view-p2p', 'state-sub', 316, 248)
-  },
   tray: {
     el: 'tile-tray',
     start: () => { if (typeof updateTrayUI === 'function') updateTrayUI(); },
@@ -153,6 +147,7 @@ function switchView(viewId, stateClass, winWidth, winHeight) {
   );
   island.classList.add(stateClass);
   appState.currentView = viewId;
+  if (typeof syncDropRail === 'function') syncDropRail(viewId);   // Inex Drop <-> P2P side rail
   updateCompactStateClasses();
   if (typeof syncLoadTimer === 'function') syncLoadTimer();
   if (typeof syncMediaTick === 'function') syncMediaTick();

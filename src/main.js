@@ -123,12 +123,6 @@ const SLOT_DEFS = {
       else switchView('view-inexdrop', 'state-sub', 316, 268);
     }
   },
-  p2p: {
-    el: 'tile-p2p',
-    start: () => {},
-    stop: () => {},
-    click: () => switchView('view-p2p', 'state-sub', 316, 248)
-  },
   tray: {
     el: 'tile-tray',
     start: () => { if (typeof updateTrayUI === 'function') updateTrayUI(); },
@@ -228,6 +222,7 @@ function switchView(viewId, stateClass, winWidth, winHeight) {
   );
   island.classList.add(stateClass);
   appState.currentView = viewId;
+  if (typeof syncDropRail === 'function') syncDropRail(viewId);   // Inex Drop <-> P2P side rail
   updateCompactStateClasses();
   if (typeof syncLoadTimer === 'function') syncLoadTimer();
   if (typeof syncMediaTick === 'function') syncMediaTick();
@@ -3935,6 +3930,50 @@ if (document.readyState === 'loading') {
 } else {
   initInexDrop();
 }
+// ==================== 09d. INEX DROP SIDE RAIL ====================
+// P2P is no longer a separate menu tile: it lives inside Inex Drop. A slim icon rail on the right side of the
+// Inex Drop / P2P panels lets you slide up / down (mouse wheel) or click to pick Quick Share or P2P.
+// The two panels themselves (view-inexdrop, view-p2p) are unchanged.
+// (a function, not a const: switchView can run before this part has executed)
+function dropRailViews() { return ['view-inexdrop', 'view-p2p']; }
+
+function syncDropRail(viewId) {
+  const idx = dropRailViews().indexOf(viewId);
+  island.classList.toggle('has-rail', idx !== -1);
+  if (idx === -1) return;
+  const rail = document.getElementById('drop-rail');
+  if (rail) rail.style.setProperty('--i', String(idx));
+  document.getElementById('rail-qs')?.classList.toggle('on', idx === 0);
+  document.getElementById('rail-p2p')?.classList.toggle('on', idx === 1);
+}
+
+function goDropRail(idx) {
+  if (idx < 0 || idx >= dropRailViews().length) return;
+  if (appState.currentView === dropRailViews()[idx]) return;
+  if (idx === 0) openDropView();
+  else switchView('view-p2p', 'state-sub', 316, 268);
+}
+
+function updateDropRailBadge(count) {
+  const b = document.getElementById('rail-p2p-badge');
+  if (!b) return;
+  b.textContent = String(count);
+  b.classList.toggle('hidden', !count);
+}
+
+document.getElementById('rail-qs')?.addEventListener('click', (e) => { e.stopPropagation(); goDropRail(0); });
+document.getElementById('rail-p2p')?.addEventListener('click', (e) => { e.stopPropagation(); goDropRail(1); });
+
+let dropRailWheelAt = 0;
+document.getElementById('drop-rail')?.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  const now = Date.now();
+  if (now - dropRailWheelAt < 250) return;
+  dropRailWheelAt = now;
+  const cur = dropRailViews().indexOf(appState.currentView);
+  if (cur === -1) return;
+  goDropRail(cur + (e.deltaY > 0 ? 1 : -1));
+}, { passive: false });
 // ==================== P2P FILE TRANSFER (offer lives in P2P list, streamed to disk, no RAM blow-up) ====================
 const CHUNK = 128 * 1024;           // one WebRTC message
 const READ_BLOCK = 4 * 1024 * 1024; // read from disk in big blocks
@@ -4297,6 +4336,7 @@ function updateOfferGlow() {
   for (const e of rtcPeers.values()) if (e.recv && !e.recv.accepted) pending = true;
   document.getElementById('c-peer-badge').classList.toggle('offer', pending);
   document.getElementById('tile-p2p')?.classList.toggle('offer', pending);
+  document.getElementById('rail-p2p')?.classList.toggle('offer', pending);
   document.getElementById('tile-drop')?.classList.toggle('offer', pending);
 }
 
@@ -4326,6 +4366,7 @@ function renderPeersUI() {
     exitBtn.classList.toggle('hidden', !appState.roomCode && appState.peers.length === 0);
   }
   const count = appState.peers.length;
+  if (typeof updateDropRailBadge === 'function') updateDropRailBadge(count);
   const inRoomOrConnected = !!(appState.roomCode || count > 0);
   document.getElementById('btn-gen-code')?.classList.toggle('hidden', inRoomOrConnected);
   document.getElementById('p2p-join-box')?.classList.toggle('hidden', inRoomOrConnected);
