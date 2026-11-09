@@ -6,11 +6,18 @@
 [![Backend](https://img.shields.io/badge/Backend-Rust%202021-DEA584?style=flat-square&logo=rust)](https://github.com/inrwxyz/inex-island)
 [![Framework](https://img.shields.io/badge/Framework-Tauri%202-FFC131?style=flat-square&logo=tauri)](https://tauri.app/)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg?style=flat-square)](LICENSE)
-[![Release](https://img.shields.io/badge/Release-v0.3.4-brightgreen?style=flat-square)](https://github.com/inrwxyz/inex-island/releases)
+[![Release](https://img.shields.io/badge/Release-v0.3.5-brightgreen?style=flat-square)](https://github.com/inrwxyz/inex-island/releases)
 
 ---
 
 ## ✨ Highlights & Features
+
+- 📲 **Inex Drop (Google Quick Share Compatible & P2P Link)**:
+  - **Native Quick Share Protocol**: Reverse-engineered Google Nearby Connections implemented directly in Rust (`offline_wire_formats`, `securemessage`, and UKEY2 handshake).
+  - **Zero App Required on Phone**: Seamlessly send and receive files, videos, and folders with standard Android and Windows Quick Share devices.
+  - **Interactive Mode Rail**: Switch instantly between Quick Share and P2P with persistent mode memory (`localStorage`).
+  - **Live Controls & Batch Progress**: Pause, resume, and cancel transfers from either the Island Notch HUD or the subview card, with cumulative multi-file batch tracking.
+  - **Responsive File & Folder Pickers**: Native Windows OS file dialogs running in clean background STA threads with parent HWND attachment.
 
 - 🏝️ **Dual Island Modes**:
   - **Bezel Notch**: Sits flush with your screen's top bezel.
@@ -99,7 +106,7 @@
 
 - **Framework**: Tauri v2
 - **Backend**: Rust 2021 (`windows-rs`, `rustfft`, `wmi`, `tauri`)
-- **Frontend**: Lightweight ES Modules (15 decoupled modules in `main-parts/`)
+- **Frontend**: Lightweight ES Modules (21 decoupled modules in `main-parts/`)
 - **Signaling**: User-configured Firebase Realtime Database (handshake only)
 
 ---
