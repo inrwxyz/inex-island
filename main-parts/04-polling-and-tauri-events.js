@@ -211,7 +211,7 @@ document.getElementById('c-tray-btn').addEventListener('click', (e) => {
 });
 document.getElementById('c-peer-badge').addEventListener('click', (e) => {
   e.stopPropagation();
-  switchView('view-p2p', 'state-sub', 316, 208);
+  openP2PView();
 });
 
 island.addEventListener('mouseleave', () => {

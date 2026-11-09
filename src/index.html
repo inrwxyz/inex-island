@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&family=Lexend:wght@400;500;600;700&family=Montserrat:wght@400;500;600;700&family=Outfit:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700&family=Poppins:wght@400;500;600;700&family=Raleway:wght@400;500;600;700&family=Doto:wght@400;800&family=Space+Mono:wght@400;700&family=Space+Grotesk:wght@500;600;700&family=Syne:wght@500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=0.3.5" />
+  <link rel="stylesheet" href="styles.css?v=0.3.6" />
 </head>
 <body>
   <div id="island" class="island state-compact" data-mode="smart" data-menu="transparent">
@@ -187,6 +187,7 @@
 
         <div id="tile-drop" class="ctrl-tile">
           <svg class="ico ico-drop" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v10M8 8l4-4 4 4M4 14v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg>
+          <svg class="ico ico-p2p ico-p2p-alt" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="1.5" y="3" width="9" height="7" rx="1.5"/><path d="M4 13h4"/><rect x="13.5" y="12" width="9" height="7" rx="1.5"/><path d="M16 22h4"/><path d="M12 6.5h4.5V10"/><path d="M12 17.5H7.5V14"/></svg>
           <small id="tile-drop-sub" class="sr">Off</small><span id="tile-drop-title" class="sr">Inex Drop</span>
           <em id="drop-cap" class="cap"></em>
           <button class="chev" title="Inex Drop"><svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg></button>
@@ -312,11 +313,6 @@
           <svg viewBox="0 0 24 24" width="15" height="15" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"><path d="M12 2v10M8 8l4-4 4 4M4 14v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg>
           <span>Inex Drop</span>
         </button>
-
-        <button id="btn-tray-p2p" class="share-action-btn" title="P2P Share">
-          <svg viewBox="0 0 24 24" width="15" height="15" stroke="currentColor" stroke-width="2" fill="none"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-          <span id="tray-p2p-title">P2P Share</span>
-        </button>
       </div>
     </div>
 
@@ -337,7 +333,7 @@
           </div>
 
           <div class="join-box" id="p2p-join-box">
-            <input type="text" id="input-peer-code" placeholder="Enter code..." maxlength="6" />
+            <input type="text" id="input-peer-code" placeholder="Code" maxlength="6" />
             <button id="btn-join-code" class="pair-btn">Join</button>
           </div>
         </div>
@@ -367,9 +363,7 @@
           <div class="drop-idle-ico">
             <svg viewBox="0 0 24 24" width="38" height="38" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round"><path d="M12 2v10M8 8l4-4 4 4M4 14v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg>
           </div>
-          <div class="drop-idle-title">Inex Drop is Off</div>
-          <div class="drop-idle-sub">Send & receive files with Android & Windows devices nearby</div>
-          <button id="btn-drop-start" class="pair-btn" style="margin-top:10px; width:130px;">Turn On</button>
+          <div class="drop-idle-title">Quick Share</div>
         </div>
 
         <!-- State 2: Active / Ready (On) -->
@@ -616,6 +610,6 @@
 
   <script src="qrcode.js"></script>
   <script src="p2p-codec.js"></script>
-  <script type="module" src="main.js?v=0.3.5"></script>
+  <script type="module" src="main.js?v=0.3.6"></script>
 </body>
 </html>

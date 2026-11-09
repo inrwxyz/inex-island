@@ -90,9 +90,26 @@ function clearPrompt() {
   closePromptHud(true);
 }
 
-function openDropView() {
-  switchView('view-inexdrop', 'state-sub', 316, 268);
+// ONE menu size for Quick Share and P2P (the P2P panel size)
+var DROP_W = 316, DROP_H = 208;
+
+function openQsView() {
+  switchView('view-inexdrop', 'state-sub', DROP_W, DROP_H);
   refreshDropUI();
+}
+
+function openP2PView() {
+  switchView('view-p2p', 'state-sub', DROP_W, DROP_H);
+}
+
+// Opens whichever mode is selected (chevron, right click, tray, quick action)
+function openDropView() {
+  if (getDropMode() === 'p2p') openP2PView(); else openQsView();
+}
+
+// Tile left click: Quick Share = turn on / off, P2P = go inside (P2P has no on / off)
+function dropTileClick() {
+  if (getDropMode() === 'p2p') openP2PView(); else toggleInexDrop();
 }
 
 async function refreshDropUI() {
@@ -118,6 +135,8 @@ async function refreshDropUI() {
       subEl.textContent = 'Off';
     }
   }
+
+  if (typeof updateDropTile === 'function') updateDropTile();
 
   const pill = document.getElementById('drop-status-pill');
   const toggle = document.getElementById('qs-master-toggle');
@@ -721,7 +740,7 @@ function initInexDrop() {
   if (tileDrop) {
     tileDrop.addEventListener('click', (e) => {
       if (e.target.closest('.chev')) return openDropView();
-      toggleInexDrop();
+      dropTileClick();
     });
     tileDrop.addEventListener('contextmenu', (e) => {
       e.preventDefault();
@@ -823,6 +842,13 @@ function initInexDrop() {
     btnPause.addEventListener('click', () => {
       transferPaused = !transferPaused;
       btnPause.textContent = transferPaused ? 'Resume' : 'Pause';
+      const tSpeed = document.getElementById('qs-xfer-speed');
+      if (tSpeed) tSpeed.textContent = transferPaused ? 'Paused' : '';
+      if (typeof updateCompactTransferPct === 'function') {
+        const tPct = document.getElementById('qs-xfer-pct');
+        const curPct = tPct ? parseInt(tPct.textContent) || 0 : 0;
+        updateCompactTransferPct(curPct, transferPaused ? 'Paused' : '');
+      }
       invokeTauri('control_quick_share', { cmd: transferPaused ? 'p' : 'r' });
     });
   }

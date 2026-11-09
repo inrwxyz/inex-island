@@ -410,6 +410,7 @@ function renderPeersUI() {
   const p2pCap = document.getElementById('p2p-cap') || document.getElementById('drop-cap');
   if (p2pCap) p2pCap.textContent = count > 0 ? (rtcPeers.has('direct-peer') ? '1 direct peer' : `${count} peer${count > 1 ? 's' : ''}`) : '';
   if (tileP2P && !dropActive) tileP2P.classList.toggle('active', count > 0);
+  if (typeof updateDropTile === 'function') updateDropTile();   // the single Inex Drop tile shows the selected mode
 
   if (count > 0) {
     badge.classList.remove('hidden');
@@ -514,6 +515,7 @@ function renderCenter() {
   const xferLive = !!(appState.transferring && !isPrompt && !toast);
   island.classList.toggle('transferring', busy);
   island.classList.toggle('xfer-live', xferLive);
+  if (typeof syncPopupWindow === 'function') syncPopupWindow(busy);   // same window as the Bluetooth HUD
   document.getElementById('c-clock').classList.toggle('hidden', busy);
   document.getElementById('c-transfer-anim').classList.toggle('hidden', !xferLive);
   document.getElementById('c-prompt-anim').classList.toggle('hidden', !(isPrompt && !toast));

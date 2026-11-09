@@ -334,9 +334,29 @@ function hudWindowSize() {
   const k = hudUiScale();
   return { width: Math.ceil(256 * k) + 8, height: Math.ceil((hudIsFloating() ? 64 : 54) * k) };
 }
+// Transfer / toast / lock-prompt popups use the SAME window as the Bluetooth HUD.
+// (Before, only the CSS size matched: the OS window stayed 265x36, so these pills were clipped and looked smaller.)
+function popupIsBusy() { return !!(appState.transferring || appState.prompting || appState.lockerPrompting || appState.toast); }
+
 function hudRestoreWindow() {
   if (!hudCanShow() || appState.alarmActive) return;   // the timer-end card keeps its own window size
+  if (popupIsBusy()) { tryInvoke('resize_island', hudWindowSize()); return; }   // a popup is still open: keep the HUD-size window
   tryInvoke('resize_island', { width: 265, height: hudIsFloating() ? 48 : 36 });
+}
+
+let popupWinOn = false, popupWinT = null;
+function syncPopupWindow(busy) {
+  if (appState.currentView !== 'view-compact') return;
+  if (appState.alarmActive || island.classList.contains('bt-hud-active') || island.classList.contains('hud-pre')
+      || island.classList.contains('biometric-active') || island.classList.contains('bio-hud')) return;   // those own the window
+  clearTimeout(popupWinT);
+  if (busy) {
+    popupWinOn = true;
+    tryInvoke('resize_island', hudWindowSize());
+  } else if (popupWinOn) {
+    // let the pill finish shrinking before the window gets small again
+    popupWinT = setTimeout(() => { popupWinOn = false; if (!popupIsBusy()) hudRestoreWindow(); }, 650);
+  }
 }
 
 function showDeviceHud(o) {

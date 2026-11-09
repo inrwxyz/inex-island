@@ -119,8 +119,8 @@ const SLOT_DEFS = {
     start: () => {},
     stop: () => {},
     click: () => {
-      if (typeof toggleInexDrop === 'function') toggleInexDrop();
-      else switchView('view-inexdrop', 'state-sub', 316, 268);
+      if (typeof dropTileClick === 'function') dropTileClick();
+      else switchView('view-inexdrop', 'state-sub', 316, 208);
     }
   },
   tray: {
@@ -804,7 +804,7 @@ document.getElementById('c-tray-btn').addEventListener('click', (e) => {
 });
 document.getElementById('c-peer-badge').addEventListener('click', (e) => {
   e.stopPropagation();
-  switchView('view-p2p', 'state-sub', 316, 208);
+  openP2PView();
 });
 
 island.addEventListener('mouseleave', () => {
@@ -1514,9 +1514,29 @@ function hudWindowSize() {
   const k = hudUiScale();
   return { width: Math.ceil(256 * k) + 8, height: Math.ceil((hudIsFloating() ? 64 : 54) * k) };
 }
+// Transfer / toast / lock-prompt popups use the SAME window as the Bluetooth HUD.
+// (Before, only the CSS size matched: the OS window stayed 265x36, so these pills were clipped and looked smaller.)
+function popupIsBusy() { return !!(appState.transferring || appState.prompting || appState.lockerPrompting || appState.toast); }
+
 function hudRestoreWindow() {
   if (!hudCanShow() || appState.alarmActive) return;   // the timer-end card keeps its own window size
+  if (popupIsBusy()) { tryInvoke('resize_island', hudWindowSize()); return; }   // a popup is still open: keep the HUD-size window
   tryInvoke('resize_island', { width: 265, height: hudIsFloating() ? 48 : 36 });
+}
+
+let popupWinOn = false, popupWinT = null;
+function syncPopupWindow(busy) {
+  if (appState.currentView !== 'view-compact') return;
+  if (appState.alarmActive || island.classList.contains('bt-hud-active') || island.classList.contains('hud-pre')
+      || island.classList.contains('biometric-active') || island.classList.contains('bio-hud')) return;   // those own the window
+  clearTimeout(popupWinT);
+  if (busy) {
+    popupWinOn = true;
+    tryInvoke('resize_island', hudWindowSize());
+  } else if (popupWinOn) {
+    // let the pill finish shrinking before the window gets small again
+    popupWinT = setTimeout(() => { popupWinOn = false; if (!popupIsBusy()) hudRestoreWindow(); }, 650);
+  }
 }
 
 function showDeviceHud(o) {
@@ -1695,7 +1715,7 @@ document.getElementById('btn-refresh-bt').addEventListener('click', () => { invo
 document.getElementById('btn-more-bt').addEventListener('click', () => invokeTauri('open_bt_settings'));
 
 document.getElementById('tile-p2p')?.addEventListener('click', () => {
-  switchView('view-p2p', 'state-sub', 316, 248);
+  openP2PView();
 });
 document.getElementById('tile-tray').addEventListener('click', openTrayView);
 
@@ -2276,7 +2296,9 @@ document.getElementById('btn-clear-tray').addEventListener('click', () => {
   updateTrayUI();
 });
 
+// The tray has ONE share button. What it does depends on the mode selected inside Inex Drop.
 document.getElementById('btn-tray-inexdrop')?.addEventListener('click', async () => {
+  if (getDropMode() === 'p2p') { trayP2PShare(); return; }
   if (appState.trayFiles && appState.trayFiles.length > 0) {
     await stageTrayFilesForPhone();
   }
@@ -2310,7 +2332,7 @@ function renderPeerPicker() {
     box.appendChild(makeChip('Connect device in P2P...', () => {
       island.classList.remove('picker-open');
       picker.classList.add('hidden');
-      switchView('view-p2p', 'state-sub', 316, 208);
+      openP2PView();
     }));
   } else {
     // If more than 1 peer is connected, add a "Send to All" option
@@ -2344,7 +2366,7 @@ function renderPeerPicker() {
   picker.classList.remove('hidden');
 }
 
-document.getElementById('btn-tray-p2p').addEventListener('click', () => {
+function trayP2PShare() {
   let toSend = appState.trayFiles.filter((f) => appState.traySelectedIds && appState.traySelectedIds.has(f.id));
   if (toSend.length === 0 && appState.trayFiles.length > 0) {
     toSend = [...appState.trayFiles];
@@ -2364,7 +2386,7 @@ document.getElementById('btn-tray-p2p').addEventListener('click', () => {
   renderPeerPicker();
   island.classList.add('picker-open');
   invokeTauri('resize_island', { width: 316, height: 252 });
-});
+}
 
 function sendTrayFiles(peerId, files) {
   appState.traySelect = null;
@@ -3175,9 +3197,26 @@ function clearPrompt() {
   closePromptHud(true);
 }
 
-function openDropView() {
-  switchView('view-inexdrop', 'state-sub', 316, 268);
+// ONE menu size for Quick Share and P2P (the P2P panel size)
+var DROP_W = 316, DROP_H = 208;
+
+function openQsView() {
+  switchView('view-inexdrop', 'state-sub', DROP_W, DROP_H);
   refreshDropUI();
+}
+
+function openP2PView() {
+  switchView('view-p2p', 'state-sub', DROP_W, DROP_H);
+}
+
+// Opens whichever mode is selected (chevron, right click, tray, quick action)
+function openDropView() {
+  if (getDropMode() === 'p2p') openP2PView(); else openQsView();
+}
+
+// Tile left click: Quick Share = turn on / off, P2P = go inside (P2P has no on / off)
+function dropTileClick() {
+  if (getDropMode() === 'p2p') openP2PView(); else toggleInexDrop();
 }
 
 async function refreshDropUI() {
@@ -3203,6 +3242,8 @@ async function refreshDropUI() {
       subEl.textContent = 'Off';
     }
   }
+
+  if (typeof updateDropTile === 'function') updateDropTile();
 
   const pill = document.getElementById('drop-status-pill');
   const toggle = document.getElementById('qs-master-toggle');
@@ -3806,7 +3847,7 @@ function initInexDrop() {
   if (tileDrop) {
     tileDrop.addEventListener('click', (e) => {
       if (e.target.closest('.chev')) return openDropView();
-      toggleInexDrop();
+      dropTileClick();
     });
     tileDrop.addEventListener('contextmenu', (e) => {
       e.preventDefault();
@@ -3908,6 +3949,13 @@ function initInexDrop() {
     btnPause.addEventListener('click', () => {
       transferPaused = !transferPaused;
       btnPause.textContent = transferPaused ? 'Resume' : 'Pause';
+      const tSpeed = document.getElementById('qs-xfer-speed');
+      if (tSpeed) tSpeed.textContent = transferPaused ? 'Paused' : '';
+      if (typeof updateCompactTransferPct === 'function') {
+        const tPct = document.getElementById('qs-xfer-pct');
+        const curPct = tPct ? parseInt(tPct.textContent) || 0 : 0;
+        updateCompactTransferPct(curPct, transferPaused ? 'Paused' : '');
+      }
       invokeTauri('control_quick_share', { cmd: transferPaused ? 'p' : 'r' });
     });
   }
@@ -3947,16 +3995,82 @@ if (document.readyState === 'loading') {
   initInexDrop();
 }
 // ==================== 09d. INEX DROP SIDE RAIL ====================
-// P2P is no longer a separate menu tile: it lives inside Inex Drop. A slim icon rail on the right side of the
-// Inex Drop / P2P panels lets you slide up / down (mouse wheel) or click to pick Quick Share or P2P.
-// The two panels themselves (view-inexdrop, view-p2p) are unchanged.
-// (a function, not a const: switchView can run before this part has executed)
+// P2P lives inside Inex Drop. A slim icon rail (right side, vertically centred) picks the mode:
+// Quick Share or P2P. Exactly ONE mode is selected at a time and it is remembered across restarts.
+// The selected mode decides what the Inex Drop tile (left click / chevron) and the File Tray button do.
+// (functions + var on purpose: switchView can run before this part has executed)
+var dropModeCache = null;
+
 function dropRailViews() { return ['view-inexdrop', 'view-p2p']; }
+
+function getDropMode() {
+  if (dropModeCache == null) {
+    let v = 'qs';
+    try { if (localStorage.getItem('inex.dropMode') === 'p2p') v = 'p2p'; } catch (_) {}
+    dropModeCache = v;
+  }
+  return dropModeCache;
+}
+
+function setDropMode(mode) {
+  const m = mode === 'p2p' ? 'p2p' : 'qs';
+  const changed = m !== getDropMode();
+  dropModeCache = m;
+  if (changed) { try { localStorage.setItem('inex.dropMode', m); } catch (_) {} }
+  updateDropTile();
+  updateTrayShareButton();
+}
+
+var QS_ICON_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v10M8 8l4-4 4 4M4 14v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg>';
+var P2P_ICON_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="1.5" y="3" width="9" height="7" rx="1.5"/><path d="M4 13h4"/><rect x="13.5" y="12" width="9" height="7" rx="1.5"/><path d="M16 22h4"/><path d="M12 6.5h4.5V10"/><path d="M12 17.5H7.5V14"/></svg>';
+
+// The one Inex Drop tile always shows the selected mode (icon + status)
+function updateDropTile() {
+  const tile = document.getElementById('tile-drop');
+  if (!tile) return;
+  const p2p = getDropMode() === 'p2p';
+  tile.classList.toggle('mode-p2p', p2p);
+  const sub = document.getElementById('tile-drop-sub');
+  const cap = document.getElementById('drop-cap');
+  const title = document.getElementById('tile-drop-title');
+  const count = (appState.peers || []).length;
+  const direct = rtcPeers.has('direct-peer');
+  if (p2p) {
+    tile.classList.toggle('active', count > 0);
+    if (sub) sub.textContent = count > 0 ? (direct ? 'Direct 1:1' : `${count}/5 Peers`) : 'Standby';
+    if (cap) cap.textContent = count > 0 ? (direct ? '1 direct peer' : `${count} peer${count > 1 ? 's' : ''}`) : '';
+    if (title) title.textContent = 'P2P Link';
+    tile.title = 'Inex Drop · P2P (click to open)';
+  } else {
+    tile.classList.toggle('active', dropActive);
+    if (sub) sub.textContent = inTransfer ? 'Transferring' : (dropActive ? 'Ready' : 'Off');
+    if (cap) cap.textContent = '';
+    if (title) title.textContent = 'Inex Drop';
+    tile.title = 'Inex Drop · Quick Share (click to turn on / off)';
+  }
+}
+
+// The File Tray has a single "Inex Drop" button; its icon follows the selected mode
+function updateTrayShareButton() {
+  const btn = document.getElementById('btn-tray-inexdrop');
+  if (!btn) return;
+  const svg = btn.querySelector('svg');
+  const p2p = getDropMode() === 'p2p';
+  if (svg) {
+    const tmp = document.createElement('div');
+    tmp.innerHTML = p2p ? P2P_ICON_SVG : QS_ICON_SVG;
+    const n = tmp.firstElementChild;
+    n.setAttribute('width', '15'); n.setAttribute('height', '15');
+    svg.replaceWith(n);
+  }
+  btn.title = p2p ? 'Inex Drop · P2P' : 'Inex Drop · Quick Share';
+}
 
 function syncDropRail(viewId) {
   const idx = dropRailViews().indexOf(viewId);
   island.classList.toggle('has-rail', idx !== -1);
   if (idx === -1) return;
+  setDropMode(idx === 0 ? 'qs' : 'p2p');   // whatever is opened last is the selected mode (one at a time, remembered)
   const rail = document.getElementById('drop-rail');
   if (rail) rail.style.setProperty('--i', String(idx));
   document.getElementById('rail-qs')?.classList.toggle('on', idx === 0);
@@ -3966,8 +4080,8 @@ function syncDropRail(viewId) {
 function goDropRail(idx) {
   if (idx < 0 || idx >= dropRailViews().length) return;
   if (appState.currentView === dropRailViews()[idx]) return;
-  if (idx === 0) openDropView();
-  else switchView('view-p2p', 'state-sub', 316, 268);
+  if (idx === 0) openQsView();
+  else openP2PView();
 }
 
 function updateDropRailBadge(count) {
@@ -3990,6 +4104,10 @@ document.getElementById('drop-rail')?.addEventListener('wheel', (e) => {
   if (cur === -1) return;
   goDropRail(cur + (e.deltaY > 0 ? 1 : -1));
 }, { passive: false });
+
+// restore the remembered mode on the tile / tray button right after start
+updateDropTile();
+updateTrayShareButton();
 // ==================== P2P FILE TRANSFER (offer lives in P2P list, streamed to disk, no RAM blow-up) ====================
 const CHUNK = 128 * 1024;           // one WebRTC message
 const READ_BLOCK = 4 * 1024 * 1024; // read from disk in big blocks
@@ -4402,6 +4520,7 @@ function renderPeersUI() {
   const p2pCap = document.getElementById('p2p-cap') || document.getElementById('drop-cap');
   if (p2pCap) p2pCap.textContent = count > 0 ? (rtcPeers.has('direct-peer') ? '1 direct peer' : `${count} peer${count > 1 ? 's' : ''}`) : '';
   if (tileP2P && !dropActive) tileP2P.classList.toggle('active', count > 0);
+  if (typeof updateDropTile === 'function') updateDropTile();   // the single Inex Drop tile shows the selected mode
 
   if (count > 0) {
     badge.classList.remove('hidden');
@@ -4506,6 +4625,7 @@ function renderCenter() {
   const xferLive = !!(appState.transferring && !isPrompt && !toast);
   island.classList.toggle('transferring', busy);
   island.classList.toggle('xfer-live', xferLive);
+  if (typeof syncPopupWindow === 'function') syncPopupWindow(busy);   // same window as the Bluetooth HUD
   document.getElementById('c-clock').classList.toggle('hidden', busy);
   document.getElementById('c-transfer-anim').classList.toggle('hidden', !xferLive);
   document.getElementById('c-prompt-anim').classList.toggle('hidden', !(isPrompt && !toast));

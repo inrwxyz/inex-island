@@ -2454,7 +2454,7 @@ body {
 }
 .c-timer-chip svg { width: 11px; height: 11px; }
 .island.state-compact.timer-chip-on .c-timer-chip { display: inline-flex; }
-.island.state-compact:is(.bt-hud-active, .biometric-active, .alarm-active) .c-timer-chip { display: none !important; }
+.island.state-compact:is(.bt-hud-active, .biometric-active, .alarm-active, .transferring, .has-toast) .c-timer-chip { display: none !important; }
 .island.state-compact.transferring.timer-chip-on { width: 252px; }
 .island.state-compact.has-toast.timer-chip-on { width: 246px; }
 
@@ -2867,7 +2867,7 @@ body {
 /* ==================== INEX DROP: compact layout ==================== */
 /* The window is resized to 268px for this view, so the island itself must be that tall too
    (before, the island stayed 204px and the bottom of the view was cut off). */
-.island.state-sub:has(#view-inexdrop.active) { height: 264px; }
+/* Inex Drop uses the normal sub-menu size (same as P2P): .island.state-sub = 204px */
 
 .drop-body:has(#drop-state-active:not(.hidden)) {
   justify-content: flex-start; align-items: stretch;
@@ -2991,7 +2991,7 @@ body {
 
 /* ==================== INEX DROP SIDE RAIL (Quick Share <-> P2P) ==================== */
 .drop-rail {
-  position: absolute; right: 10px; top: 50px; z-index: 6;
+  position: absolute; right: 8px; top: calc(50% - 33px); z-index: 6;   /* vertically centred */
   width: 34px; padding: 3px; box-sizing: border-box;
   display: none; flex-direction: column; gap: 4px;
   border-radius: 17px;
@@ -3018,5 +3018,30 @@ body {
   position: absolute; top: -3px; right: -4px; min-width: 13px; height: 13px; padding: 0 3px; box-sizing: border-box;
   border-radius: 7px; background: #30d158; color: #000; font-size: 8.5px; font-weight: 700; line-height: 13px; text-align: center;
 }
+/* content is centred on the whole panel: equal space left and right (the rail floats in the right gap) */
 .island.has-rail #view-inexdrop .drop-body,
-.island.has-rail #view-p2p .p2p-body { margin-right: 46px; }
+.island.has-rail #view-p2p .p2p-body { margin: 0; padding-left: 44px; padding-right: 44px; }
+
+
+/* ==================== INEX DROP + P2P: one menu size, everything centred ==================== */
+.drop-body { flex: 1; min-height: 0; overflow: hidden; }
+/* Off state: only the Quick Share icon + name, dead centre of the whole panel (the header is ~38px, so lift by half of it) */
+#drop-state-idle { margin-top: -38px; }
+.drop-idle-title { margin: 0; width: 100%; text-align: center; }
+.drop-idle-sub { display: none; }
+.p2p-body .p2p-top-actions { justify-content: center; }
+.gen-code-btn { padding: 6px 8px; }
+.empty-hint { width: 100%; margin-left: auto; margin-right: auto; }
+.qs-transfer-box { padding: 8px 10px; }
+/* incoming offer inside the (smaller) menu */
+#drop-state-prompt .drop-prompt-icon-bubble { display: none; }
+#drop-state-prompt .drop-prompt-card { margin-bottom: 0; padding: 6px 12px; }
+
+/* Tile: the P2P icon shows when P2P is the selected Inex Drop mode */
+.ctrl-tile .ico-p2p-alt { display: none; }
+.ctrl-tile.mode-p2p .ico-drop { display: none; }
+.ctrl-tile.mode-p2p .ico-p2p-alt { display: block; }
+.ctrl-tile.mode-p2p.active .ico-p2p-alt .f1 { animation: flow 0.9s linear infinite; }
+
+/* File Tray: a single "Inex Drop" button (follows the selected mode) */
+.tray-share-actions { grid-template-columns: 1fr; }

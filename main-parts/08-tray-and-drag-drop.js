@@ -274,7 +274,9 @@ document.getElementById('btn-clear-tray').addEventListener('click', () => {
   updateTrayUI();
 });
 
+// The tray has ONE share button. What it does depends on the mode selected inside Inex Drop.
 document.getElementById('btn-tray-inexdrop')?.addEventListener('click', async () => {
+  if (getDropMode() === 'p2p') { trayP2PShare(); return; }
   if (appState.trayFiles && appState.trayFiles.length > 0) {
     await stageTrayFilesForPhone();
   }
@@ -308,7 +310,7 @@ function renderPeerPicker() {
     box.appendChild(makeChip('Connect device in P2P...', () => {
       island.classList.remove('picker-open');
       picker.classList.add('hidden');
-      switchView('view-p2p', 'state-sub', 316, 208);
+      openP2PView();
     }));
   } else {
     // If more than 1 peer is connected, add a "Send to All" option
@@ -342,7 +344,7 @@ function renderPeerPicker() {
   picker.classList.remove('hidden');
 }
 
-document.getElementById('btn-tray-p2p').addEventListener('click', () => {
+function trayP2PShare() {
   let toSend = appState.trayFiles.filter((f) => appState.traySelectedIds && appState.traySelectedIds.has(f.id));
   if (toSend.length === 0 && appState.trayFiles.length > 0) {
     toSend = [...appState.trayFiles];
@@ -362,7 +364,7 @@ document.getElementById('btn-tray-p2p').addEventListener('click', () => {
   renderPeerPicker();
   island.classList.add('picker-open');
   invokeTauri('resize_island', { width: 316, height: 252 });
-});
+}
 
 function sendTrayFiles(peerId, files) {
   appState.traySelect = null;

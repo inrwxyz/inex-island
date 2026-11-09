@@ -1,5 +1,5 @@
 document.getElementById('tile-p2p')?.addEventListener('click', () => {
-  switchView('view-p2p', 'state-sub', 316, 248);
+  openP2PView();
 });
 document.getElementById('tile-tray').addEventListener('click', openTrayView);
 
