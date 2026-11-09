@@ -112,6 +112,13 @@ function cancelAllActiveTransfers(notify = true) {
 document.getElementById('c-transfer-cancel-btn')?.addEventListener('click', (e) => {
   e.stopPropagation();
   cancelAllActiveTransfers(true);
+  if (typeof invokeTauri === 'function') {
+    invokeTauri('control_quick_share', { cmd: 'c' });
+  }
+  const tSub = document.getElementById('qs-xfer-sub');
+  if (tSub) tSub.textContent = 'Cancelling...';
+  const btnCancel = document.getElementById('btn-qs-cancel');
+  if (btnCancel) btnCancel.disabled = true;
 });
 
 async function handlePeerMessage(peerId, entry, msg) {

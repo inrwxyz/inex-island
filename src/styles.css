@@ -2935,18 +2935,22 @@ body {
 .qs-transfer-box { margin-top: 0; padding: 10px 12px; }
 
 
-/* ==================== FILE TRANSFER PILL: same size / shape as the Bluetooth + charger HUD ==================== */
-.island.state-compact.transferring.xfer-live {
+/* ==================== EVERY STATUS POPUP (transfer, toast, prompt, incoming file): exactly the Bluetooth HUD size ==================== */
+/* same width / height / corners / spring as .bt-hud-active; attached notch follows Settings > Corner Roundness */
+.island.state-compact:is(.transferring, .has-toast, .incoming-open):not(.biometric-active):not(.bt-hud-active):not(.alarm-active) {
   width: 220px !important; height: 37px !important; border-radius: 19px !important; top: 7px !important;
   background: #000 !important; border: 0 !important;
   box-shadow: 0 0 0 0.5px rgba(255, 255, 255, 0.06), 0 14px 28px -12px rgba(0, 0, 0, 0.7) !important;
   transition: width 0.65s var(--spring-pop), height 0.6s var(--spring-pop),
               top 0.45s var(--ease-close), border-radius 0.5s var(--ease-close) !important;
 }
-.island:not([data-style="floating"]).state-compact.transferring.xfer-live {
+.island:not([data-style="floating"]).state-compact:is(.transferring, .has-toast, .incoming-open):not(.biometric-active):not(.bt-hud-active):not(.alarm-active) {
   top: 0 !important; height: 40px !important;
   border-radius: 0 0 var(--radius) var(--radius) !important;
   box-shadow: 0 16px 30px -14px rgba(0, 0, 0, 0.7) !important;
+}
+.island.state-compact:is(.transferring, .has-toast, .incoming-open):not(.biometric-active):not(.bt-hud-active):not(.alarm-active) .compact-bar {
+  padding: 0 12px 0 9px !important; height: 100% !important; justify-content: center !important;
 }
 .island.state-compact.transferring.xfer-live .compact-bar { padding: 0 12px 0 9px !important; height: 100% !important; justify-content: center !important; }
 .island.state-compact.transferring.xfer-live #c-center-trigger { flex: 1 1 auto; min-width: 0; }
@@ -2972,3 +2976,15 @@ body {
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.02)), rgba(0, 0, 0, 0.35);
 }
 .clipboard-video-tile.small { height: 36px; }
+
+/* clipboard: image / file items = same height as a text item, small thumbnail in front, details beside it */
+.clipboard-item.clip-media .clip-media-row { display: flex; align-items: center; gap: 9px; min-width: 0; }
+.clip-thumb {
+  flex: none; width: 40px; height: 40px; border-radius: 8px; overflow: hidden;
+  display: flex; align-items: center; justify-content: center;
+  color: rgba(255, 255, 255, 0.7); background: rgba(0, 0, 0, 0.35);
+}
+.clip-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; pointer-events: none; }
+.clip-media-info { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.clip-media-info .clipboard-item-header { margin: 0; }
+.clip-media-name { font-size: 11px; color: #f1f5f9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

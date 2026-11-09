@@ -4049,6 +4049,13 @@ function cancelAllActiveTransfers(notify = true) {
 document.getElementById('c-transfer-cancel-btn')?.addEventListener('click', (e) => {
   e.stopPropagation();
   cancelAllActiveTransfers(true);
+  if (typeof invokeTauri === 'function') {
+    invokeTauri('control_quick_share', { cmd: 'c' });
+  }
+  const tSub = document.getElementById('qs-xfer-sub');
+  if (tSub) tSub.textContent = 'Cancelling...';
+  const btnCancel = document.getElementById('btn-qs-cancel');
+  if (btnCancel) btnCancel.disabled = true;
 });
 
 async function handlePeerMessage(peerId, entry, msg) {
@@ -5922,6 +5929,7 @@ function addClipboardText(text) {
 
 const CLIP_IMG_EXT = /\.(png|jpe?g|gif|webp|bmp)$/i;
 const CLIP_VID_EXT = /\.(mp4|mkv|mov|avi|webm|wmv|flv|m4v|mpg|mpeg|3gp)$/i;
+const CLIP_ICON_FILE_BIG = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><polyline points="14 3 14 8 19 8"/></svg>';
 const CLIP_ICON_VIDEO = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="3"/><polygon points="10.5 9.5 15 12 10.5 14.5" fill="currentColor" stroke="none"/></svg>';
 
 // Small preview of a picture file (null for videos, documents, missing or huge files)
@@ -6060,7 +6068,7 @@ function renderClipboardList() {
 
     const timeSpan = document.createElement('span');
     if (item.kind === 'image') {
-      timeSpan.textContent = `${formatRelativeTime(item.time)} • Image ${item.w}×${item.h}${item.bytes ? ' • ' + formatBytes(item.bytes) : ''}`;
+      timeSpan.textContent = `${formatRelativeTime(item.time)} • Image`;
     } else if (item.kind === 'files') {
       const n = item.paths.length;
       const only = n === 1 ? item.paths[0] : '';
@@ -6093,55 +6101,45 @@ function renderClipboardList() {
     actions.appendChild(delBtn);
     header.appendChild(timeSpan);
     header.appendChild(actions);
-    card.appendChild(header);
 
-    if (item.kind === 'image') {
-      const wrap = document.createElement('div');
-      wrap.className = 'clipboard-item-image';
-      const im = document.createElement('img');
-      im.src = item.thumb;
-      im.alt = 'Copied image';
-      im.draggable = false;
-      wrap.appendChild(im);
-      card.appendChild(wrap);
-    } else if (item.kind === 'files') {
-      const body = document.createElement('div');
-      body.className = 'clipboard-item-files';
-      item.paths.slice(0, 3).forEach((p, i) => {
-        const thumb = item.thumbs && item.thumbs[i];
-        if (thumb) {
-          // picture file: small preview with its name underneath
-          const box = document.createElement('div');
-          box.className = 'clipboard-item-image' + (item.paths.length > 1 ? ' small' : '');
-          const im = document.createElement('img');
-          im.src = thumb;
-          im.alt = clipFileName(p);
-          im.draggable = false;
-          box.appendChild(im);
-          body.appendChild(box);
-        } else if (CLIP_VID_EXT.test(p)) {
-          // video: no real frame preview yet, so a film tile (the file itself is not copied, only its path is kept)
-          const box = document.createElement('div');
-          box.className = 'clipboard-video-tile' + (item.paths.length > 1 ? ' small' : '');
-          box.innerHTML = CLIP_ICON_VIDEO;
-          body.appendChild(box);
-        }
-        const row = document.createElement('div');
-        row.className = 'clipboard-file-row';
-        row.innerHTML = CLIP_ICON_FILE;
-        const nm = document.createElement('span');
-        nm.textContent = clipFileName(p);
-        row.appendChild(nm);
-        body.appendChild(row);
-      });
-      if (item.paths.length > 3) {
-        const more = document.createElement('div');
-        more.className = 'clipboard-file-more';
-        more.textContent = `+ ${item.paths.length - 3} more`;
-        body.appendChild(more);
+    if (item.kind === 'image' || item.kind === 'files') {
+      // same card height as a text item: small thumbnail in front, details on the side
+      card.classList.add('clip-media');
+      const row = document.createElement('div');
+      row.className = 'clip-media-row';
+
+      const th = document.createElement('div');
+      th.className = 'clip-thumb';
+      const firstPath = item.kind === 'files' ? item.paths[0] : '';
+      const thumbSrc = item.kind === 'image' ? item.thumb : (item.thumbs && item.thumbs[0]);
+      if (thumbSrc) {
+        const im = document.createElement('img');
+        im.src = thumbSrc;
+        im.alt = '';
+        im.draggable = false;
+        th.appendChild(im);
+      } else {
+        th.innerHTML = (item.kind === 'files' && CLIP_VID_EXT.test(firstPath)) ? CLIP_ICON_VIDEO : CLIP_ICON_FILE_BIG;
       }
-      card.appendChild(body);
+
+      const info = document.createElement('div');
+      info.className = 'clip-media-info';
+      info.appendChild(header);
+      const det = document.createElement('div');
+      det.className = 'clip-media-name';
+      if (item.kind === 'image') {
+        det.textContent = `${item.w}×${item.h}${item.bytes ? ' • ' + formatBytes(item.bytes) : ''}`;
+      } else {
+        const more = item.paths.length > 1 ? `  +${item.paths.length - 1} more` : '';
+        det.textContent = clipFileName(item.paths[0]) + more;
+      }
+      info.appendChild(det);
+
+      row.appendChild(th);
+      row.appendChild(info);
+      card.appendChild(row);
     } else {
+      card.appendChild(header);
       const body = document.createElement('div');
       body.className = 'clipboard-item-text';
       body.textContent = item.text;

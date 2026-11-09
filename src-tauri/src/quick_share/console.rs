@@ -5,28 +5,25 @@
 //! lines from that channel, so they never fight over stdin.
 
 use std::sync::OnceLock;
-use tokio::sync::{mpsc, Mutex};
+use tokio::sync::mpsc;
 
-struct ConsoleChannel {
-    tx: mpsc::UnboundedSender<String>,
-    rx: Mutex<mpsc::UnboundedReceiver<String>>,
-}
+static TX: OnceLock<mpsc::UnboundedSender<String>> = OnceLock::new();
+static RX: OnceLock<tokio::sync::Mutex<mpsc::UnboundedReceiver<String>>> = OnceLock::new();
 
-fn get_channel() -> &'static ConsoleChannel {
-    static CHAN: OnceLock<ConsoleChannel> = OnceLock::new();
-    CHAN.get_or_init(|| {
+fn ensure_channel() -> (&'static mpsc::UnboundedSender<String>, &'static tokio::sync::Mutex<mpsc::UnboundedReceiver<String>>) {
+    let tx = TX.get_or_init(|| {
         let (tx, rx) = mpsc::unbounded_channel::<String>();
-        ConsoleChannel {
-            tx,
-            rx: Mutex::new(rx),
-        }
-    })
+        let _ = RX.set(tokio::sync::Mutex::new(rx));
+        tx
+    });
+    let rx = RX.get().unwrap();
+    (tx, rx)
 }
 
-/// Call once at program start (optional: also reads stdin if running in a console).
+/// Optional: read stdin if running in a terminal console
 pub fn init() {
-    let chan = get_channel();
-    let tx = chan.tx.clone();
+    let (tx, _) = ensure_channel();
+    let tx = tx.clone();
     std::thread::spawn(move || {
         let stdin = std::io::stdin();
         loop {
@@ -44,27 +41,20 @@ pub fn init() {
     });
 }
 
-/// Lets the UI "type" a line (y / n / p / r / c) exactly as if it came from the keyboard.
+/// Lets the UI send a control command (p / r / c) immediately.
 pub fn inject(line: &str) {
-    let chan = get_channel();
-    let _ = chan.tx.send(line.to_string());
+    let (tx, _) = ensure_channel();
+    let _ = tx.send(line.to_string());
 }
 
-/// Waits for the next line you type (a prompt).
-pub async fn read_line() -> Option<String> {
-    let chan = get_channel();
-    let mut rx = chan.rx.lock().await;
-    rx.recv().await
-}
-
-/// Non-blocking: returns a line only if one is already waiting (used for p / r / c during a transfer).
+/// Non-blocking: returns a command only if one is waiting (used for p / r / c during transfers).
 pub fn try_line() -> Option<String> {
-    let chan = get_channel();
-    let mut rx = chan.rx.try_lock().ok()?;
-    rx.try_recv().ok()
+    let (_, rx) = ensure_channel();
+    let mut guard = rx.try_lock().ok()?;
+    guard.try_recv().ok()
 }
 
-/// Throws away anything typed earlier (so an old Enter press is not taken as an answer).
+/// Throws away anything queued earlier.
 pub fn drain() {
     while try_line().is_some() {}
 }

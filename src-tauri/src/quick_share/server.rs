@@ -267,6 +267,7 @@ impl QuickShareServer {
         let (consent_tx, mut consent_rx) = mpsc::unbounded_channel::<bool>();
         let mut consent_task: Option<tokio::task::JoinHandle<()>> = None;
         let mut paused = false;
+        let mut pause_started: Option<Instant> = None;
         let mut cancelled = false;
         let mut cmd_tick = tokio::time::interval(Duration::from_millis(50));
         cmd_tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
@@ -280,10 +281,11 @@ impl QuickShareServer {
             // Wait for: your accept/reject decision, consent timeout, or incoming socket data.
             // (socket.readable() is cancel-safe, so keep-alives are still answered while you decide.)
             let ev = tokio::select! {
+                biased;
+                _ = cmd_tick.tick() => Ev::Cmd,
                 Some(ok) = consent_rx.recv(), if awaiting_consent => Ev::Consent(ok),
                 _ = tokio::time::sleep_until(consent_deadline), if awaiting_consent => Ev::Timeout,
                 _ = ka.tick() => Ev::KeepAlive,
-                _ = cmd_tick.tick() => Ev::Cmd,
                 // while paused we stop reading: TCP back-pressure slows the sender, keep-alives keep flowing
                 r = socket.readable(), if !paused => {
                     if r.is_err() { Ev::Closed } else { Ev::Readable }
@@ -297,7 +299,9 @@ impl QuickShareServer {
                 }
                 Ev::Consent(ok) => {
                     awaiting_consent = false;
-                    consent_task = None;
+                    if let Some(t) = consent_task.take() {
+                        t.abort();
+                    }
                     if let Ok(mut g) = CONSENT_TX.lock() {
                         *g = None;
                     }
@@ -375,6 +379,7 @@ impl QuickShareServer {
                             Command::Pause => {
                                 if !paused {
                                     paused = true;
+                                    pause_started = Some(Instant::now());
                                     println!("\n[Quick Share] PAUSED. Keeping connection alive...");
                                     crate::events::emit(serde_json::json!({ "type": "xfer_paused" }));
                                 }
@@ -382,6 +387,12 @@ impl QuickShareServer {
                             Command::Resume => {
                                 if paused {
                                     paused = false;
+                                    if let Some(p_start) = pause_started.take() {
+                                        let dur = p_start.elapsed();
+                                        for rf in active_files.values_mut() {
+                                            rf.started += dur;
+                                        }
+                                    }
                                     println!("[Quick Share] RESUMED.");
                                     crate::events::emit(serde_json::json!({ "type": "xfer_resumed" }));
                                 }
@@ -900,13 +911,6 @@ fn spawn_consent_prompt(
         }
         println!("   Total: {} file(s), {:.2} MB", files.len(), total as f64 / 1_048_576.0);
         println!("============================================================");
-        print!(" Accept? [y/N] (auto-decline in 60s): ");
-        let _ = std::io::stdout().flush();
-
-        if let Some(answer) = console::read_line().await {
-            let ok = matches!(answer.trim().to_lowercase().as_str(), "y" | "yes" | "ha");
-            let _ = tx.send(ok);
-        }
     })
 }
 
