@@ -3718,7 +3718,7 @@ onTauriEvent('quickshare-event', (event) => {
       }
 
       if (typeof updateCompactTransferPct === 'function') {
-        updateCompactTransferPct(Math.round(pctNum), speedStr);
+        updateCompactTransferPct(Math.round(pctNum), speedStr, p.name);
       }
       break;
     }
@@ -3764,7 +3764,8 @@ onTauriEvent('quickshare-event', (event) => {
       break;
     }
     case 'file_done': {
-      showToast('done', `Saved: ${p.name}`);
+      // a toast here covers the progress pill between two files of one batch: the final "All files saved" toast is enough
+      if (!appState.transferring) showToast('done', `Saved: ${p.name}`);
       break;
     }
     case 'rx_session_end': {
@@ -4840,18 +4841,24 @@ function startCompactTransferUI() {
   renderCenter();
 }
 
-function updateCompactTransferPct(pct, speed) {
+function updateCompactTransferPct(pct, speed, name) {
   document.getElementById('c-transfer-pct').textContent = speed ? `${pct}% • ${speed}` : `${pct}%`;
   const box = document.getElementById('c-transfer-anim');
   if (box && pct > 0) box.classList.remove('indeterminate');
   setXferDirectionUI();
   setXferRing(pct);
+  // one progress for the whole batch; only the file name beside it changes
+  if (name) {
+    const lb = document.getElementById('c-xfer-label');
+    if (lb) { lb.textContent = name; lb.title = name; }
+  }
 }
 
 function finishCompactTransferUI() {
   const completed = lastReportedPct >= 100;     // 100% reached = really finished (a cancel never gets there)
   const dir = appState.xferDir;
   appState.transferring = false;
+  appState.lastXferEnd = Date.now();
   lastReportedPct = -1;
   endTransferStats();
   renderCenter();
@@ -5881,8 +5888,8 @@ function clipHashString(s) {
 // Text and background items (images/files) are capped separately, so a burst of screenshots never pushes text out
 const CLIPBOARD_MAX_HIDDEN = 8;
 function trimClipboardItems() {
-  let t = 0, h = 0;
-  clipboardItems = clipboardItems.filter((it) => (it.kind === 'text' ? ++t <= CLIPBOARD_MAX : ++h <= CLIPBOARD_MAX_HIDDEN));
+  // newest first: a new copy pushes the oldest one (text, image or file) out once there are more than CLIPBOARD_MAX
+  clipboardItems = clipboardItems.slice(0, CLIPBOARD_MAX);
 }
 
 // Put a new item on top. A copy of something already in the list just moves that item to the top.
@@ -5914,6 +5921,8 @@ function addClipboardText(text) {
 }
 
 const CLIP_IMG_EXT = /\.(png|jpe?g|gif|webp|bmp)$/i;
+const CLIP_VID_EXT = /\.(mp4|mkv|mov|avi|webm|wmv|flv|m4v|mpg|mpeg|3gp)$/i;
+const CLIP_ICON_VIDEO = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="3"/><polygon points="10.5 9.5 15 12 10.5 14.5" fill="currentColor" stroke="none"/></svg>';
 
 // Small preview of a picture file (null for videos, documents, missing or huge files)
 async function makeFileThumb(path) {
@@ -6026,15 +6035,15 @@ function renderClipboardList() {
   const container = document.getElementById('clipboard-list');
   if (!container) return;
 
-  // The list only shows text. Images, screenshots, videos and copied files are still recorded in the background.
-  const visibleItems = clipboardItems.filter((it) => it.kind === 'text');
+  // text, images / screenshots and copied files (photos, videos ...) all show here
+  const visibleItems = clipboardItems;
 
   if (visibleItems.length === 0) {
     container.innerHTML = `
       <div class="clipboard-empty">
         <svg viewBox="0 0 24 24" width="22" height="22" stroke="currentColor" stroke-width="1.8" fill="none" opacity="0.4"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>
         <span>Nothing copied yet</span>
-        <small style="opacity:0.4; font-size:9.5px;">Copy some text anywhere (Ctrl+C)</small>
+        <small style="opacity:0.4; font-size:9.5px;">Copy text, an image or a file (Ctrl+C)</small>
       </div>
     `;
     return;
@@ -6054,7 +6063,9 @@ function renderClipboardList() {
       timeSpan.textContent = `${formatRelativeTime(item.time)} • Image ${item.w}×${item.h}${item.bytes ? ' • ' + formatBytes(item.bytes) : ''}`;
     } else if (item.kind === 'files') {
       const n = item.paths.length;
-      timeSpan.textContent = `${formatRelativeTime(item.time)} • ${n} file${n === 1 ? '' : 's'}`;
+      const only = n === 1 ? item.paths[0] : '';
+      const what = only ? (CLIP_IMG_EXT.test(only) ? 'Image' : CLIP_VID_EXT.test(only) ? 'Video' : 'File') : `${n} files`;
+      timeSpan.textContent = `${formatRelativeTime(item.time)} • ${what}`;
     } else {
       timeSpan.textContent = `${formatRelativeTime(item.time)} • ${item.text.length} chars`;
     }
@@ -6107,6 +6118,12 @@ function renderClipboardList() {
           im.alt = clipFileName(p);
           im.draggable = false;
           box.appendChild(im);
+          body.appendChild(box);
+        } else if (CLIP_VID_EXT.test(p)) {
+          // video: no real frame preview yet, so a film tile (the file itself is not copied, only its path is kept)
+          const box = document.createElement('div');
+          box.className = 'clipboard-video-tile' + (item.paths.length > 1 ? ' small' : '');
+          box.innerHTML = CLIP_ICON_VIDEO;
           body.appendChild(box);
         }
         const row = document.createElement('div');
@@ -6622,10 +6639,15 @@ async function handleDownloadsChanged() {
     if (dlSeenRecent.size > 400) dlSeenRecent.clear();
     dlSeeded = true;
 
+    // Inex Drop / Quick Share write their files into Downloads as .part: while a transfer is running (and a few
+    // seconds after) the transfer pill owns the island, so no "Downloading" / "Download Complete" popups and no blue line.
+    const xferBusy = !!appState.transferring || (now - (appState.lastXferEnd || 0) < 5000);
     const active = [...dlTrack.values()].some((t) => now - t.changedAt < 4000);
-    island.classList.toggle('dl-active', active && appState.currentView === 'view-compact');
+    island.classList.toggle('dl-active', active && !xferBusy && appState.currentView === 'view-compact');
 
-    if (finished) {
+    if (xferBusy) {
+      // skip the popups
+    } else if (finished) {
       dlOpenName = finished.name;
       showDeviceHud({ iconHTML: DL_DONE_SVG, plain: true, accent: 'ok', name: finished.name, tag: `Download Complete • ${dlSize(finished.size)}`, ms: 4200 });
     } else if (started) {

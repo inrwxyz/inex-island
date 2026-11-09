@@ -389,18 +389,24 @@ function startCompactTransferUI() {
   renderCenter();
 }
 
-function updateCompactTransferPct(pct, speed) {
+function updateCompactTransferPct(pct, speed, name) {
   document.getElementById('c-transfer-pct').textContent = speed ? `${pct}% • ${speed}` : `${pct}%`;
   const box = document.getElementById('c-transfer-anim');
   if (box && pct > 0) box.classList.remove('indeterminate');
   setXferDirectionUI();
   setXferRing(pct);
+  // one progress for the whole batch; only the file name beside it changes
+  if (name) {
+    const lb = document.getElementById('c-xfer-label');
+    if (lb) { lb.textContent = name; lb.title = name; }
+  }
 }
 
 function finishCompactTransferUI() {
   const completed = lastReportedPct >= 100;     // 100% reached = really finished (a cancel never gets there)
   const dir = appState.xferDir;
   appState.transferring = false;
+  appState.lastXferEnd = Date.now();
   lastReportedPct = -1;
   endTransferStats();
   renderCenter();

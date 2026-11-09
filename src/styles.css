@@ -2933,3 +2933,42 @@ body {
 .qs-device-name { font-size: 11px; max-width: 200px; }
 
 .qs-transfer-box { margin-top: 0; padding: 10px 12px; }
+
+
+/* ==================== FILE TRANSFER PILL: same size / shape as the Bluetooth + charger HUD ==================== */
+.island.state-compact.transferring.xfer-live {
+  width: 220px !important; height: 37px !important; border-radius: 19px !important; top: 7px !important;
+  background: #000 !important; border: 0 !important;
+  box-shadow: 0 0 0 0.5px rgba(255, 255, 255, 0.06), 0 14px 28px -12px rgba(0, 0, 0, 0.7) !important;
+  transition: width 0.65s var(--spring-pop), height 0.6s var(--spring-pop),
+              top 0.45s var(--ease-close), border-radius 0.5s var(--ease-close) !important;
+}
+.island:not([data-style="floating"]).state-compact.transferring.xfer-live {
+  top: 0 !important; height: 40px !important;
+  border-radius: 0 0 var(--radius) var(--radius) !important;
+  box-shadow: 0 16px 30px -14px rgba(0, 0, 0, 0.7) !important;
+}
+.island.state-compact.transferring.xfer-live .compact-bar { padding: 0 12px 0 9px !important; height: 100% !important; justify-content: center !important; }
+.island.state-compact.transferring.xfer-live #c-center-trigger { flex: 1 1 auto; min-width: 0; }
+.island.state-compact.transferring.xfer-live #c-transfer-anim { width: 100%; min-width: 0; }
+.xfer-label { overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.xfer-pct { white-space: nowrap; }
+/* no blue download line while a file transfer shows its own progress */
+.island.dl-active.state-compact.transferring::after { display: none !important; }
+
+/* cancel: soft grey circle (Mac style), turns red on hover */
+.island.state-compact.transferring.xfer-live .c-transfer-cancel-btn {
+  width: 20px; height: 20px; margin-left: auto;
+  background: rgba(255, 255, 255, 0.14); color: rgba(255, 255, 255, 0.85);
+}
+.island.state-compact.transferring.xfer-live .c-transfer-cancel-btn svg { width: 9px; height: 9px; }
+.island.state-compact.transferring.xfer-live .c-transfer-cancel-btn:hover { background: rgba(255, 69, 58, 0.9); color: #fff; transform: none; }
+.island.state-compact.transferring.xfer-live .c-transfer-cancel-btn:active { transform: scale(0.92); }
+
+/* clipboard: tile for copied videos (no frame preview) */
+.clipboard-video-tile {
+  display: flex; align-items: center; justify-content: center; height: 62px;
+  border-radius: 6px; color: rgba(255, 255, 255, 0.7);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.02)), rgba(0, 0, 0, 0.35);
+}
+.clipboard-video-tile.small { height: 36px; }

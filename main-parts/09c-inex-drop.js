@@ -628,7 +628,7 @@ onTauriEvent('quickshare-event', (event) => {
       }
 
       if (typeof updateCompactTransferPct === 'function') {
-        updateCompactTransferPct(Math.round(pctNum), speedStr);
+        updateCompactTransferPct(Math.round(pctNum), speedStr, p.name);
       }
       break;
     }
@@ -674,7 +674,8 @@ onTauriEvent('quickshare-event', (event) => {
       break;
     }
     case 'file_done': {
-      showToast('done', `Saved: ${p.name}`);
+      // a toast here covers the progress pill between two files of one batch: the final "All files saved" toast is enough
+      if (!appState.transferring) showToast('done', `Saved: ${p.name}`);
       break;
     }
     case 'rx_session_end': {

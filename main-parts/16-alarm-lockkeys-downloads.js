@@ -264,10 +264,15 @@ async function handleDownloadsChanged() {
     if (dlSeenRecent.size > 400) dlSeenRecent.clear();
     dlSeeded = true;
 
+    // Inex Drop / Quick Share write their files into Downloads as .part: while a transfer is running (and a few
+    // seconds after) the transfer pill owns the island, so no "Downloading" / "Download Complete" popups and no blue line.
+    const xferBusy = !!appState.transferring || (now - (appState.lastXferEnd || 0) < 5000);
     const active = [...dlTrack.values()].some((t) => now - t.changedAt < 4000);
-    island.classList.toggle('dl-active', active && appState.currentView === 'view-compact');
+    island.classList.toggle('dl-active', active && !xferBusy && appState.currentView === 'view-compact');
 
-    if (finished) {
+    if (xferBusy) {
+      // skip the popups
+    } else if (finished) {
       dlOpenName = finished.name;
       showDeviceHud({ iconHTML: DL_DONE_SVG, plain: true, accent: 'ok', name: finished.name, tag: `Download Complete • ${dlSize(finished.size)}`, ms: 4200 });
     } else if (started) {
