@@ -257,6 +257,8 @@ impl QuickShareServer {
         let mut byte_buffers: HashMap<i64, Vec<u8>> = HashMap::new();
         let mut active_files: HashMap<i64, ReceivingFile> = HashMap::new();
         let mut meta_files: Vec<(String, i64, i64, String)> = Vec::new(); // (name, size, payload_id, parent_folder)
+        let mut total_batch_bytes: i64 = 0;
+        let mut completed_bytes: i64 = 0;
         let mut completed_files: usize = 0;
         let mut awaiting_consent = false;
         let mut consent_deadline = tokio::time::Instant::now();
@@ -266,7 +268,7 @@ impl QuickShareServer {
         let mut consent_task: Option<tokio::task::JoinHandle<()>> = None;
         let mut paused = false;
         let mut cancelled = false;
-        let mut cmd_tick = tokio::time::interval(Duration::from_millis(250));
+        let mut cmd_tick = tokio::time::interval(Duration::from_millis(50));
         cmd_tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
         let mut ka = tokio::time::interval_at(
             tokio::time::Instant::now() + Duration::from_millis(ka_ms),
@@ -371,17 +373,17 @@ impl QuickShareServer {
                                 break 'main;
                             }
                             Command::Pause => {
-                                if !paused && !active_files.is_empty() {
+                                if !paused {
                                     paused = true;
-                                    println!("\n[Quick Share] PAUSED (sender is throttled). Type 'r' + Enter to resume, 'c' + Enter to cancel.");
-                                } else if active_files.is_empty() {
-                                    println!("[Quick Share] Nothing is being received right now.");
+                                    println!("\n[Quick Share] PAUSED. Keeping connection alive...");
+                                    crate::events::emit(serde_json::json!({ "type": "xfer_paused" }));
                                 }
                             }
                             Command::Resume => {
                                 if paused {
                                     paused = false;
                                     println!("[Quick Share] RESUMED.");
+                                    crate::events::emit(serde_json::json!({ "type": "xfer_resumed" }));
                                 }
                             }
                             Command::Other => {}
@@ -514,6 +516,7 @@ impl QuickShareServer {
                                                     }
                                                 }
                                             }
+                                            total_batch_bytes = meta_files.iter().map(|m| m.1).sum();
 
                                             if meta_files.is_empty() {
                                                 // Text / link / Wi-Fi credentials etc. are not supported yet
@@ -634,7 +637,12 @@ impl QuickShareServer {
                                     started: Instant::now(),
                                     last_print: Instant::now(),
                                 });
-                                let init_pct = if fsize > 0 { (chunk_offset as f64 / fsize as f64 * 100.0).min(100.0) } else { 0.0 };
+                                let total_received_so_far = completed_bytes + chunk_offset;
+                                let init_pct = if total_batch_bytes > 0 {
+                                    (total_received_so_far as f64 / total_batch_bytes as f64 * 100.0).min(100.0)
+                                } else {
+                                    0.0
+                                };
                                 crate::events::emit(serde_json::json!({
                                     "type": "progress", "dir": "rx", "name": safe_name,
                                     "pct": init_pct, "mbps": 0.0, "file_index": completed_files + 1, "files": meta_files.len(),
@@ -658,14 +666,19 @@ impl QuickShareServer {
                                 break 'main;
                             }
                             rf.received += body.len() as i64;
-                            if rf.size > 0 && rf.last_print.elapsed() >= Duration::from_millis(500) {
-                                let pct = (rf.received as f64 / rf.size as f64) * 100.0;
+                            if rf.size > 0 && rf.last_print.elapsed() >= Duration::from_millis(300) {
+                                let total_received_so_far = completed_bytes + rf.received;
+                                let batch_pct = if total_batch_bytes > 0 {
+                                    (total_received_so_far as f64 / total_batch_bytes as f64 * 100.0).min(100.0)
+                                } else {
+                                    (rf.received as f64 / rf.size.max(1) as f64 * 100.0).min(100.0)
+                                };
                                 let mbps = (rf.received - rf.base) as f64 / 1_048_576.0 / rf.started.elapsed().as_secs_f64().max(0.001);
-                                print!("\r[Quick Share] {}: {:.1}%  {:.1} MB/s   ", rf.name, pct.min(100.0), mbps);
+                                print!("\r[Quick Share] {}: {:.1}% (total: {:.1}%)  {:.1} MB/s   ", rf.name, (rf.received as f64 / rf.size.max(1) as f64 * 100.0).min(100.0), batch_pct, mbps);
                                 let _ = std::io::stdout().flush();
                                 crate::events::emit(serde_json::json!({
                                     "type": "progress", "dir": "rx", "name": rf.name,
-                                    "pct": pct.min(100.0), "mbps": mbps, "file_index": completed_files + 1, "files": meta_files.len(),
+                                    "pct": batch_pct, "mbps": mbps, "file_index": completed_files + 1, "files": meta_files.len(),
                                 }));
                                 rf.last_print = Instant::now();
                             }
@@ -692,6 +705,7 @@ impl QuickShareServer {
                                             "type": "file_done", "name": rf.safe_name, "path": final_path.to_string_lossy(),
                                         }));
                                         println!("[Quick Share] {:.1} MB in {:.1}s = {:.1} MB/s ({:.0} Mbps)", mb, secs, mb / secs, mb / secs * 8.0);
+                                        completed_bytes += rf.received.max(rf.size);
                                         completed_files += 1;
                                     }
                                     Err(e) => {

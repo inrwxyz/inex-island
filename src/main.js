@@ -3462,7 +3462,10 @@ function showTransferBox(title, sub, canPause) {
     pauseBtn.textContent = 'Pause';
     pauseBtn.classList.toggle('hidden', !canPause);
   }
-  if (cancelBtn) cancelBtn.classList.remove('hidden');
+  if (cancelBtn) {
+    cancelBtn.disabled = false;
+    cancelBtn.classList.remove('hidden');
+  }
 
   const pill = document.getElementById('drop-status-pill');
   if (pill) { pill.textContent = 'Transferring'; pill.className = 'status-tag ok'; }
@@ -3666,6 +3669,25 @@ onTauriEvent('quickshare-event', (event) => {
       showTransferBox('Receiving', `Receiving from ${p.device || 'phone'}...`, true);
       break;
     }
+    case 'xfer_paused': {
+      transferPaused = true;
+      const btnPause = document.getElementById('btn-qs-pause');
+      if (btnPause) btnPause.textContent = 'Resume';
+      const tSpeed = document.getElementById('qs-xfer-speed');
+      if (tSpeed) tSpeed.textContent = 'Paused';
+      const tPct = document.getElementById('qs-xfer-pct');
+      const curPct = tPct ? parseInt(tPct.textContent) || 0 : 0;
+      if (typeof updateCompactTransferPct === 'function') {
+        updateCompactTransferPct(curPct, 'Paused');
+      }
+      break;
+    }
+    case 'xfer_resumed': {
+      transferPaused = false;
+      const btnPause = document.getElementById('btn-qs-pause');
+      if (btnPause) btnPause.textContent = 'Pause';
+      break;
+    }
     case 'progress': {
       appState.xferDir = p.dir === 'rx' ? 'recv' : 'send';
       if (!inTransfer) {
@@ -3679,7 +3701,7 @@ onTauriEvent('quickshare-event', (event) => {
 
       const pctNum = Math.min(100, Math.max(0, Number(p.pct) || 0));
       const mbpsNum = Number(p.mbps) || 0;
-      const speedStr = mbpsNum > 0 ? `${mbpsNum.toFixed(1)} MB/s` : '';
+      const speedStr = transferPaused ? 'Paused' : (mbpsNum > 0 ? `${mbpsNum.toFixed(1)} MB/s` : '');
 
       const tBar = document.getElementById('qs-xfer-bar');
       const tPct = document.getElementById('qs-xfer-pct');
@@ -3729,8 +3751,11 @@ onTauriEvent('quickshare-event', (event) => {
       break;
     }
     case 'send_finished': {
-      endTransfer(3000);
-      if (lastSendSuccess) {
+      if (p.cancelled) {
+        showToast('warn', 'Transfer cancelled');
+      }
+      endTransfer(p.cancelled ? 600 : 3000);
+      if (lastSendSuccess || p.cancelled) {
         selectedFiles = [];
         try { invokeTauri('clear_staged_quick_share_files'); } catch (_) {}
         clearDiscoveredDevices();
@@ -3769,7 +3794,7 @@ onTauriEvent('quickshare-event', (event) => {
       } else if (p.error) {
         showToast('error', `Transfer error: ${p.error}`, 4000);
       }
-      endTransfer(2500);
+      endTransfer(p.cancelled ? 600 : 2500);
       break;
     }
     case 'error': {
@@ -3879,6 +3904,9 @@ function initInexDrop() {
   if (btnCancel) {
     btnCancel.addEventListener('click', () => {
       invokeTauri('control_quick_share', { cmd: 'c' });
+      const tSub = document.getElementById('qs-xfer-sub');
+      if (tSub) tSub.textContent = 'Cancelling...';
+      btnCancel.disabled = true;
     });
   }
 

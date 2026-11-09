@@ -387,17 +387,29 @@ impl QuickShareClient {
         let consent_deadline = tokio::time::Instant::now() + Duration::from_secs(120);
         let mut resumed_offsets: HashMap<i64, i64> = HashMap::new();
         loop {
-            let ev = match tokio::time::timeout_at(consent_deadline, ctl.next_event(&mut socket, &mut channel)).await {
+            if let Some(line) = console::try_line() {
+                if console::parse_command(&line) == Command::Cancel {
+                    println!("[Quick Share] Cancelled by you while waiting for phone to accept.");
+                    crate::events::emit(serde_json::json!({ "type": "send_finished", "cancelled": true }));
+                    return Ok(());
+                }
+            }
+            let ev = match tokio::time::timeout(Duration::from_millis(200), ctl.next_event(&mut socket, &mut channel)).await {
                 Ok(r) => r?,
                 Err(_) => {
-                    println!("[Quick Share] No answer from the phone within 120s. Giving up.");
-                    crate::events::status("warn", "No answer from the phone within 2 minutes.");
-                    return Ok(());
+                    if tokio::time::Instant::now() >= consent_deadline {
+                        println!("[Quick Share] No answer from the phone within 120s. Giving up.");
+                        crate::events::emit(serde_json::json!({ "type": "send_finished", "cancelled": true }));
+                        crate::events::status("warn", "No answer from the phone within 2 minutes.");
+                        return Ok(());
+                    }
+                    continue;
                 }
             };
             match ev {
                 Event::Disconnect => {
                     println!("[Quick Share] Phone ended the session before accepting (it sent DISCONNECTION).");
+                    crate::events::emit(serde_json::json!({ "type": "send_finished", "cancelled": true }));
                     crate::events::status("warn", "The phone ended the session before accepting.");
                     return Ok(());
                 }
@@ -405,6 +417,7 @@ impl QuickShareClient {
                     if let Some(nv1) = nf.v1 {
                         if nv1.r#type == Some(nearby_v1::FrameType::Cancel as i32) {
                             println!("[Quick Share] Phone CANCELLED the offer.");
+                            crate::events::emit(serde_json::json!({ "type": "send_finished", "cancelled": true }));
                             crate::events::status("warn", "The phone cancelled the offer.");
                             return Ok(());
                         }
@@ -427,6 +440,7 @@ impl QuickShareClient {
                                 break;
                             } else {
                                 println!("[Quick Share] Phone declined the transfer (status: {}).", status);
+                                crate::events::emit(serde_json::json!({ "type": "send_finished", "cancelled": true }));
                                 crate::events::status("warn", "The phone declined the transfer.");
                                 return Ok(());
                             }
@@ -465,10 +479,15 @@ impl QuickShareClient {
             let mut file_started = Instant::now();
             let mut last_print = Instant::now();
 
-            // Emit instant initial progress
+            // Emit instant initial progress without dropping back to 0%
+            let total_pct = if total_all_bytes > 0 {
+                (cumulative_sent as f64 / total_all_bytes as f64 * 100.0).min(100.0)
+            } else {
+                0.0
+            };
             crate::events::emit(serde_json::json!({
                 "type": "progress", "dir": "tx", "name": f.name,
-                "pct": if f.size > 0 { (file_sent as f64 / f.size as f64 * 100.0).min(100.0) } else { 0.0 },
+                "pct": total_pct,
                 "mbps": 0.0, "file_index": idx + 1, "files": total_files,
             }));
 
@@ -481,14 +500,15 @@ impl QuickShareClient {
                             println!("\n[Quick Share] Cancelling...");
                             let _ = send_cancel(&mut socket, &mut channel, f.payload_id, f.size as i64, file_sent as i64).await;
                             println!("[Quick Share] Transfer CANCELLED by you.");
-                            crate::events::status("warn", "Transfer cancelled.");
+                            crate::events::emit(serde_json::json!({ "type": "send_finished", "cancelled": true }));
                             return Ok(());
                         }
                         Command::Pause => {
                             println!("\n[Quick Share] PAUSED. Type 'r' + Enter to resume, 'c' + Enter to cancel.");
+                            crate::events::emit(serde_json::json!({ "type": "xfer_paused" }));
                             let pause_started = Instant::now();
                             'paused: loop {
-                                tokio::time::sleep(Duration::from_millis(200)).await;
+                                tokio::time::sleep(Duration::from_millis(50)).await;
                                 // keep the session alive and watch for the phone ending it
                                 if let Some(ev) = ctl.poll_control(&mut socket, &mut channel).await? {
                                     match ev {
@@ -506,12 +526,13 @@ impl QuickShareClient {
                                     match console::parse_command(&l2) {
                                         Command::Resume => {
                                             println!("[Quick Share] RESUMED.");
+                                            crate::events::emit(serde_json::json!({ "type": "xfer_resumed" }));
                                             break 'paused;
                                         }
                                         Command::Cancel => {
                                             let _ = send_cancel(&mut socket, &mut channel, f.payload_id, f.size as i64, file_sent as i64).await;
                                             println!("[Quick Share] Transfer CANCELLED by you.");
-                                            crate::events::status("warn", "Transfer cancelled.");
+                                            crate::events::emit(serde_json::json!({ "type": "send_finished", "cancelled": true }));
                                             return Ok(());
                                         }
                                         _ => {}
