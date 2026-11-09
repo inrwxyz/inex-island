@@ -192,24 +192,6 @@ onTauriEvent('system-resumed', () => {
   scheduleNextAlarm();
 });
 
-// ==================== 12. CAPS LOCK / NUM LOCK INDICATOR ====================
-// Rust (lock-keys-changed event) sends native Win32 low-level keyboard notifications with 0% polling.
-const CAPS_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4 5 12h4v4h6v-4h4z"/><line x1="9" y1="20" x2="15" y2="20"/></svg>';
-const NUM_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="3"/><path d="M9 8v4M9 8l-1 1M14.5 8h1.5v8"/><path d="M8 16h2"/></svg>';
-
-onTauriEvent('lock-keys-changed', (event) => {
-  const g = SET.general || {};
-  const payload = (event && event.payload) || {};
-  const { caps, num, changed } = payload;
-  if (changed === 'caps') {
-    if (!g.capsToast) return; // Strict setting: OFF means do NOTHING!
-    showDeviceHud({ iconHTML: CAPS_SVG, plain: !caps, accent: caps ? 'blue' : '', name: 'Caps Lock', tag: caps ? 'On' : 'Off', ms: 1500 });
-  } else if (changed === 'num') {
-    if (!g.numToast) return; // Strict setting: OFF means do NOTHING!
-    showDeviceHud({ iconHTML: NUM_SVG, plain: !num, accent: num ? 'blue' : '', name: 'Num Lock', tag: num ? 'On' : 'Off', ms: 1500 });
-  }
-});
-
 // ==================== 13. DOWNLOAD PROGRESS / COMPLETE HUD ====================
 // Rust (downloads-changed event) sends native Win32 directory change notifications with 0% polling.
 const DL_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 11l5 5 5-5"/><path d="M5 20h14"/></svg>';

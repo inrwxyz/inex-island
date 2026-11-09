@@ -4,7 +4,6 @@
 //!   1. WTSRegisterSessionNotification -> WM_WTSSESSION_CHANGE (Lock / Unlock)
 //!   2. AddClipboardFormatListener    -> WM_CLIPBOARDUPDATE   (Clipboard Copy)
 //!   3. WM_POWERBROADCAST             -> Power / Battery / Charger events
-//!   4. WH_KEYBOARD_LL                -> Caps Lock & Num Lock key events
 //!   5. SetWinEventHook               -> Fullscreen (Smart Mode) & PIN/Password prompts
 //!   6. WM_DISPLAYCHANGE              -> Fullscreen re-check after a resolution / monitor change
 //!   7. WM_QUERYENDSESSION/ENDSESSION -> Windows shutting down / logging off
@@ -18,11 +17,7 @@ use std::sync::atomic::{AtomicBool, AtomicIsize, Ordering};
 use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, Manager};
 use windows::Win32::Foundation::{BOOL, HWND, LPARAM, LRESULT, WPARAM};
-use windows::Win32::UI::Input::KeyboardAndMouse::{GetKeyState, VK_CAPITAL, VK_NUMLOCK};
-use windows::Win32::UI::WindowsAndMessaging::{
-    CallNextHookEx, GetClassNameW, GetWindowThreadProcessId,
-    HHOOK, KBDLLHOOKSTRUCT, WH_KEYBOARD_LL, WM_KEYUP,
-};
+use windows::Win32::UI::WindowsAndMessaging::{GetClassNameW, GetWindowThreadProcessId};
 
 #[link(name = "wtsapi32")]
 extern "system" {
@@ -36,13 +31,6 @@ extern "system" {
     fn AddClipboardFormatListener(hwnd: isize) -> i32;
     #[allow(dead_code)]
     fn RemoveClipboardFormatListener(hwnd: isize) -> i32;
-    fn SetWindowsHookExW(
-        id_hook: i32,
-        lpfn: unsafe extern "system" fn(i32, WPARAM, LPARAM) -> LRESULT,
-        hmod: isize,
-        dw_thread_id: u32,
-    ) -> isize;
-    fn UnhookWindowsHookEx(hhk: isize) -> i32;
     fn SetWinEventHook(
         event_min: u32,
         event_max: u32,
@@ -103,13 +91,10 @@ const WINEVENT_OUTOFCONTEXT: u32 = 0;
 const WINEVENT_SKIPOWNPROCESS: u32 = 2;
 
 static GLOBAL_APP: Mutex<Option<AppHandle>> = Mutex::new(None);
-static KBD_HOOK: AtomicIsize = AtomicIsize::new(0);
 static WIN_HOOK: AtomicIsize = AtomicIsize::new(0);
 // LOCATIONCHANGE hook, bound to the thread of the current foreground window only (see rehook_location)
 static LOC_HOOK: AtomicIsize = AtomicIsize::new(0);
 
-static LAST_CAPS: AtomicBool = AtomicBool::new(false);
-static LAST_NUM: AtomicBool = AtomicBool::new(false);
 static LAST_PROMPT: AtomicBool = AtomicBool::new(false);
 static LAST_FS: AtomicBool = AtomicBool::new(false);
 
@@ -199,35 +184,6 @@ unsafe extern "system" fn main_window_subclass(
         _ => {}
     }
     DefSubclassProc(hwnd, msg, wparam, lparam)
-}
-
-unsafe extern "system" fn low_level_keyboard_proc(
-    n_code: i32,
-    w_param: WPARAM,
-    l_param: LPARAM,
-) -> LRESULT {
-    if n_code >= 0 && w_param.0 as u32 == WM_KEYUP {
-        let kbd = &*(l_param.0 as *const KBDLLHOOKSTRUCT);
-        if kbd.vkCode == VK_CAPITAL.0 as u32 || kbd.vkCode == VK_NUMLOCK.0 as u32 {
-            let caps = (GetKeyState(VK_CAPITAL.0 as i32) & 1) != 0;
-            let num = (GetKeyState(VK_NUMLOCK.0 as i32) & 1) != 0;
-            let old_caps = LAST_CAPS.swap(caps, Ordering::Relaxed);
-            let old_num = LAST_NUM.swap(num, Ordering::Relaxed);
-            if caps != old_caps || num != old_num {
-                if let Ok(guard) = GLOBAL_APP.lock() {
-                    if let Some(ref app) = *guard {
-                        let _ = app.emit("lock-keys-changed", serde_json::json!({
-                            "caps": caps,
-                            "num": num,
-                            "changed": if caps != old_caps { "caps" } else { "num" }
-                        }));
-                    }
-                }
-            }
-        }
-    }
-    let hook_raw = KBD_HOOK.load(Ordering::Relaxed);
-    CallNextHookEx(HHOOK(hook_raw as *mut _), n_code, w_param, l_param)
 }
 
 /// EVENT_OBJECT_LOCATIONCHANGE fires for every window / cursor movement on the whole desktop.
@@ -371,11 +327,6 @@ pub fn setup_native_events(app: AppHandle) {
         *guard = Some(app.clone());
     }
 
-    // Initialize initial keyboard lock states
-    unsafe {
-        LAST_CAPS.store((GetKeyState(VK_CAPITAL.0 as i32) & 1) != 0, Ordering::Relaxed);
-        LAST_NUM.store((GetKeyState(VK_NUMLOCK.0 as i32) & 1) != 0, Ordering::Relaxed);
-    }
     LAST_FS.store(crate::foreground_is_fullscreen(), Ordering::Relaxed);
 
     // Attach Subclass to Main Window for WTS & Clipboard messages on the UI thread
@@ -406,13 +357,6 @@ pub fn setup_native_events(app: AppHandle) {
                 DispatchMessageW, GetMessageW, TranslateMessage, MSG,
             };
 
-            let kbd_hook = SetWindowsHookExW(
-                WH_KEYBOARD_LL.0,
-                low_level_keyboard_proc,
-                0,
-                0,
-            );
-            KBD_HOOK.store(kbd_hook, Ordering::Relaxed);
 
             let win_hook = SetWinEventHook(
                 EVENT_SYSTEM_FOREGROUND,
@@ -453,10 +397,6 @@ pub fn setup_native_events(app: AppHandle) {
                 DispatchMessageW(&msg);
             }
 
-            let kbd = KBD_HOOK.swap(0, Ordering::Relaxed);
-            if kbd != 0 {
-                let _ = UnhookWindowsHookEx(kbd);
-            }
             let win = WIN_HOOK.swap(0, Ordering::Relaxed);
             if win != 0 {
                 let _ = UnhookWinEvent(win);

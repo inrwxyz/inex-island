@@ -89,6 +89,127 @@ fn cmd(program: &str) -> Command {
     c
 }
 
+// ---------------------------------------------------------------------------------------------
+// Native Windows helpers: no cmd.exe / reg.exe / PowerShell / rundll32 helper processes.
+// ---------------------------------------------------------------------------------------------
+#[cfg(target_os = "windows")]
+fn to_wide(s: &str) -> Vec<u16> {
+    s.encode_utf16().chain(std::iter::once(0)).collect()
+}
+
+// Same as double-clicking / `start <target>`: files, folders, URLs and ms-settings: links
+#[cfg(target_os = "windows")]
+fn shell_open(target: &str) -> bool {
+    use windows::core::PCWSTR;
+    use windows::Win32::Foundation::HWND;
+    use windows::Win32::UI::Shell::ShellExecuteW;
+    use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+    let op = to_wide("open");
+    let file = to_wide(target);
+    unsafe {
+        let r = ShellExecuteW(
+            HWND::default(),
+            PCWSTR(op.as_ptr()),
+            PCWSTR(file.as_ptr()),
+            PCWSTR::null(),
+            PCWSTR::null(),
+            SW_SHOWNORMAL,
+        );
+        (r.0 as isize) > 32
+    }
+}
+
+#[cfg(target_os = "windows")]
+mod reg_native {
+    use super::to_wide;
+    use windows::core::PCWSTR;
+    use windows::Win32::Foundation::ERROR_SUCCESS;
+    use windows::Win32::System::Registry::{
+        RegCloseKey, RegDeleteValueW, RegOpenKeyExW, RegQueryValueExW, RegSetValueExW, HKEY,
+        HKEY_CURRENT_USER, KEY_QUERY_VALUE, KEY_SET_VALUE, REG_BINARY, REG_SZ,
+    };
+
+    // "HKCU\\Software\\..." -> "Software\\..."
+    fn sub(path: &str) -> Vec<u16> {
+        to_wide(path.strip_prefix("HKCU\\").unwrap_or(path))
+    }
+
+    fn open(path: &str, access: windows::Win32::System::Registry::REG_SAM_FLAGS) -> Option<HKEY> {
+        let p = sub(path);
+        let mut key = HKEY::default();
+        unsafe {
+            if RegOpenKeyExW(HKEY_CURRENT_USER, PCWSTR(p.as_ptr()), 0, access, &mut key) == ERROR_SUCCESS {
+                Some(key)
+            } else {
+                None
+            }
+        }
+    }
+
+    pub fn set_string(path: &str, name: &str, value: &str) -> bool {
+        let Some(key) = open(path, KEY_SET_VALUE) else { return false };
+        let n = to_wide(name);
+        let v = to_wide(value);
+        let bytes: Vec<u8> = v.iter().flat_map(|c| c.to_le_bytes()).collect();
+        unsafe {
+            let ok = RegSetValueExW(key, PCWSTR(n.as_ptr()), 0, REG_SZ, Some(bytes.as_slice())) == ERROR_SUCCESS;
+            let _ = RegCloseKey(key);
+            ok
+        }
+    }
+
+    pub fn set_binary(path: &str, name: &str, data: &[u8]) -> bool {
+        let Some(key) = open(path, KEY_SET_VALUE) else { return false };
+        let n = to_wide(name);
+        unsafe {
+            let ok = RegSetValueExW(key, PCWSTR(n.as_ptr()), 0, REG_BINARY, Some(data)) == ERROR_SUCCESS;
+            let _ = RegCloseKey(key);
+            ok
+        }
+    }
+
+    pub fn delete_value(path: &str, name: &str) {
+        let Some(key) = open(path, KEY_SET_VALUE) else { return };
+        let n = to_wide(name);
+        unsafe {
+            let _ = RegDeleteValueW(key, PCWSTR(n.as_ptr()));
+            let _ = RegCloseKey(key);
+        }
+    }
+
+    // The string stored in a value, None when the value (or key) does not exist
+    pub fn get_string(path: &str, name: &str) -> Option<String> {
+        let key = open(path, KEY_QUERY_VALUE)?;
+        let n = to_wide(name);
+        unsafe {
+            let mut size = 0u32;
+            let mut out = None;
+            if RegQueryValueExW(key, PCWSTR(n.as_ptr()), None, None, None, Some(&mut size as *mut u32)) == ERROR_SUCCESS {
+                let mut buf = vec![0u8; size as usize];
+                if RegQueryValueExW(
+                    key,
+                    PCWSTR(n.as_ptr()),
+                    None,
+                    None,
+                    Some(buf.as_mut_ptr()),
+                    Some(&mut size as *mut u32),
+                ) == ERROR_SUCCESS
+                {
+                    let wide: Vec<u16> = buf[..(size as usize).min(buf.len())]
+                        .chunks_exact(2)
+                        .map(|b| u16::from_le_bytes([b[0], b[1]]))
+                        .collect();
+                    out = Some(String::from_utf16_lossy(&wide).trim_end_matches('\0').to_string());
+                } else {
+                    out = Some(String::new());
+                }
+            }
+            let _ = RegCloseKey(key);
+            out
+        }
+    }
+}
+
 #[derive(Serialize, Clone)]
 struct MediaInfo {
     playing: bool,
@@ -1208,38 +1329,10 @@ fn set_keep_awake(on: bool) -> bool {
 }
 
 #[tauri::command]
-fn launch_quick_share() {
-    #[cfg(target_os = "windows")]
-    {
-        let script = r#"
-        $paths = @(
-            "$env:ProgramFiles\Google\NearbyShare\nearby_share.exe",
-            "$env:ProgramFiles\Google\Quick Share\nearby_share.exe",
-            "$env:LOCALAPPDATA\Programs\Google\Quick Share\nearby_share.exe"
-        )
-        $found = $false
-        foreach ($p in $paths) {
-            if (Test-Path $p) { Start-Process $p; $found = $true; break }
-        }
-        if (-not $found) {
-            $app = Get-StartApps | Where-Object { $_.Name -like '*Quick Share*' } | Select-Object -First 1
-            if ($app) { Start-Process "shell:AppsFolder\$($app.AppID)" }
-            else { Start-Process "ms-settings:crossdevice" }
-        }
-        "#;
-        let _ = cmd("powershell")
-            .args(["-NoProfile", "-WindowStyle", "Hidden", "-Command", script])
-            .spawn();
-    }
-}
-
-#[tauri::command]
 fn open_bt_settings() {
     #[cfg(target_os = "windows")]
     {
-        let _ = cmd("cmd")
-            .args(["/C", "start", "ms-settings:bluetooth"])
-            .spawn();
+        let _ = shell_open("ms-settings:bluetooth");
     }
 }
 
@@ -1247,9 +1340,7 @@ fn open_bt_settings() {
 fn open_location_settings() {
     #[cfg(target_os = "windows")]
     {
-        let _ = cmd("cmd")
-            .args(["/C", "start", "", "ms-settings:privacy-location"])
-            .spawn();
+        let _ = shell_open("ms-settings:privacy-location");
     }
 }
 
@@ -1266,18 +1357,17 @@ async fn get_location() -> Option<String> {
 fn open_wifi_settings() {
     #[cfg(target_os = "windows")]
     {
-        let _ = cmd("cmd")
-            .args(["/C", "start", "ms-settings:network-wifi"])
-            .spawn();
+        let _ = shell_open("ms-settings:network-wifi");
     }
 }
 
 #[tauri::command]
 fn open_url(url: String) {
     if url.starts_with("http://") || url.starts_with("https://") {
-        let _ = cmd("cmd")
-            .args(["/C", "start", "", &url])
-            .spawn();
+        #[cfg(target_os = "windows")]
+        {
+            let _ = shell_open(&url);
+        }
     }
 }
 
@@ -1285,9 +1375,13 @@ fn open_url(url: String) {
 fn lock_screen() {
     #[cfg(target_os = "windows")]
     {
-        let _ = cmd("rundll32.exe")
-            .args(["user32.dll,LockWorkStation"])
-            .spawn();
+        #[link(name = "user32")]
+        extern "system" {
+            fn LockWorkStation() -> windows::Win32::Foundation::BOOL;
+        }
+        unsafe {
+            let _ = LockWorkStation();
+        }
     }
 }
 
@@ -1295,9 +1389,7 @@ fn lock_screen() {
 fn take_snip() {
     #[cfg(target_os = "windows")]
     {
-        let _ = cmd("cmd")
-            .args(["/C", "start", "ms-screenclip:"])
-            .spawn();
+        let _ = shell_open("ms-screenclip:");
     }
 }
 
@@ -1328,22 +1420,7 @@ fn launch_quick_action(id: String) {
     }
 }
 
-
 const RUN_KEY: &str = r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run";
-
-// Caps Lock / Num Lock toggle state: [caps, num]
-#[tauri::command]
-fn lock_keys() -> [bool; 2] {
-    #[cfg(target_os = "windows")]
-    unsafe {
-        use windows::Win32::UI::Input::KeyboardAndMouse::{GetKeyState, VK_CAPITAL, VK_NUMLOCK};
-        let caps = (GetKeyState(VK_CAPITAL.0 as i32) & 1) != 0;
-        let num = (GetKeyState(VK_NUMLOCK.0 as i32) & 1) != 0;
-        return [caps, num];
-    }
-    #[cfg(not(target_os = "windows"))]
-    [false, false]
-}
 
 // True while the Windows lock screen is up (Win+L, Dynamic Lock, idle lock, sign-in screen).
 #[tauri::command]
@@ -1566,18 +1643,13 @@ fn register_autostart() -> bool {
         }
     };
     let value = format!("\"{}\" --autostart", exe);
-    let ok = cmd("reg")
-        .args(["add", RUN_KEY, "/v", "Inex Island", "/t", "REG_SZ", "/d", value.as_str(), "/f"])
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false);
+    let ok = reg_native::set_string(RUN_KEY, "Inex Island", value.as_str());
     // 02 00 00 00 ... = enabled (Windows writes 03 when the user/Windows disabled it)
-    let _ = cmd("reg")
-        .args([
-            "add", APPROVED_KEY, "/v", "Inex Island", "/t", "REG_BINARY", "/d",
-            "020000000000000000000000", "/f",
-        ])
-        .output();
+    let _ = reg_native::set_binary(
+        APPROVED_KEY,
+        "Inex Island",
+        &[0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    );
     log(&format!("autostart: register {} -> {}", value, ok));
     ok
 }
@@ -1595,12 +1667,8 @@ fn set_autostart(on: bool) -> bool {
             return ok;
         } else {
             let _ = std::fs::remove_file(&marker);
-            let _ = cmd("reg")
-                .args(["delete", RUN_KEY, "/v", "Inex Island", "/f"])
-                .output();
-            let _ = cmd("reg")
-                .args(["delete", APPROVED_KEY, "/v", "Inex Island", "/f"])
-                .output();
+            reg_native::delete_value(RUN_KEY, "Inex Island");
+            reg_native::delete_value(APPROVED_KEY, "Inex Island");
             return true;
         }
     }
@@ -1615,25 +1683,20 @@ fn set_autostart(on: bool) -> bool {
 fn get_autostart() -> bool {
     #[cfg(target_os = "windows")]
     {
-        if let Ok(out) = cmd("reg")
-            .args(["query", RUN_KEY, "/v", "Inex Island"])
-            .output()
-        {
-            return out.status.success();
-        }
+        reg_native::get_string(RUN_KEY, "Inex Island").is_some()
     }
-    false
+    #[cfg(not(target_os = "windows"))]
+    {
+        false
+    }
 }
 
 // If an earlier dev build registered itself for startup, remove that dead entry
 #[cfg(target_os = "windows")]
 fn drop_stale_autostart() {
-    if let Ok(out) = cmd("reg").args(["query", RUN_KEY, "/v", "Inex Island"]).output() {
-        let text = String::from_utf8_lossy(&out.stdout).to_lowercase();
-        if text.contains("\\target\\debug\\") {
-            let _ = cmd("reg")
-                .args(["delete", RUN_KEY, "/v", "Inex Island", "/f"])
-                .output();
+    if let Some(text) = reg_native::get_string(RUN_KEY, "Inex Island") {
+        if text.to_lowercase().contains("\\target\\debug\\") {
+            reg_native::delete_value(RUN_KEY, "Inex Island");
         }
     }
 }
@@ -1852,7 +1915,6 @@ fn main() {
             focus_island,
             island_visible,
             is_session_locked,
-            lock_keys,
             downloads::downloads_scan,
             downloads::open_download,
             open_settings,
@@ -1900,7 +1962,6 @@ fn main() {
             set_keep_awake,
             bluetooth::get_bt_devices,
             visualizer::set_visualizer_active,
-            launch_quick_share,
             open_bt_settings,
             open_wifi_settings,
             open_location_settings,

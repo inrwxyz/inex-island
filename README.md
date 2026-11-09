@@ -6,7 +6,7 @@
 [![Backend](https://img.shields.io/badge/Backend-Rust%202021-DEA584?style=flat-square&logo=rust)](https://github.com/inrwxyz/inex-island)
 [![Framework](https://img.shields.io/badge/Framework-Tauri%202-FFC131?style=flat-square&logo=tauri)](https://tauri.app/)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg?style=flat-square)](LICENSE)
-[![Release](https://img.shields.io/badge/Release-v0.3.5-brightgreen?style=flat-square)](https://github.com/inrwxyz/inex-island/releases)
+[![Release](https://img.shields.io/badge/Release-v0.3.6-brightgreen?style=flat-square)](https://github.com/inrwxyz/inex-island/releases)
 
 ---
 
@@ -68,7 +68,6 @@
 
 - 📥 **Download & System HUD Alerts**:
   - Real-time browser download tracking and finished notification with click-to-open.
-  - Caps Lock and Num Lock keyboard toggle HUDs.
   - MagSafe style charging indicator and low-battery warning alerts.
   - Clipboard copy preview HUD.
 

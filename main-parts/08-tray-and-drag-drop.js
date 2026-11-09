@@ -283,11 +283,6 @@ document.getElementById('btn-tray-inexdrop')?.addEventListener('click', async ()
   if (typeof openDropView === 'function') openDropView();
 });
 
-document.getElementById('btn-tray-quickshare')?.addEventListener('click', async () => {
-  goCompact();
-  await invokeTauri('launch_quick_share');
-});
-
 function makeChip(text, onClick) {
   const chip = document.createElement('button');
   chip.className = 'peer-chip';

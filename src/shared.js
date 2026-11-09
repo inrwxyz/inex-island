@@ -4,7 +4,7 @@
 export const KEY = 'inex.settings.v1';
 
 export const DEFAULTS = {
-  general: { launchAtLogin: false, hour24: false, autoUpdate: false, lowBatteryAlert: true, lowBattery: 20, chargeToast: true, lockToast: true, capsToast: false, numToast: false, downloadHud: false, copyToast: false },
+  general: { launchAtLogin: false, hour24: false, autoUpdate: false, lowBatteryAlert: true, lowBattery: 20, chargeToast: true, lockToast: true, downloadHud: false, copyToast: false },
   appearance: {
     notchColor: '#030305', notchOpacity: 100, notchBorderColor: '#ffffff', notchBorderOpacity: 45, cornerRadius: 13,
     menuStyle: 'transparent', menuColor: '#0b0b10', menuOpacity: 92,

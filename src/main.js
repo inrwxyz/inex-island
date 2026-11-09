@@ -2305,11 +2305,6 @@ document.getElementById('btn-tray-inexdrop')?.addEventListener('click', async ()
   if (typeof openDropView === 'function') openDropView();
 });
 
-document.getElementById('btn-tray-quickshare')?.addEventListener('click', async () => {
-  goCompact();
-  await invokeTauri('launch_quick_share');
-});
-
 function makeChip(text, onClick) {
   const chip = document.createElement('button');
   chip.className = 'peer-chip';
@@ -4884,7 +4879,7 @@ onTauriEvent('locker-unlock', (event) => {
     island.classList.add('island-locker-glow');
 
     // Kind: face / fingerprint / unlock
-    const kind = payload.type === 'fingerprint' ? 'fingerprint' : payload.type === 'charging' ? 'charging' : payload.type === 'low_battery' ? 'low_battery' : payload.type === 'alarm' ? 'alarm' : payload.type === 'transfer' ? 'transfer' : payload.type === 'bluetooth' ? 'bluetooth' : payload.type === 'caps' ? 'caps' : payload.type === 'num' ? 'num' : payload.type === 'download' ? 'download' : payload.type === 'download_done' ? 'download_done' : 'scan';
+    const kind = payload.type === 'fingerprint' ? 'fingerprint' : payload.type === 'charging' ? 'charging' : payload.type === 'low_battery' ? 'low_battery' : payload.type === 'alarm' ? 'alarm' : payload.type === 'transfer' ? 'transfer' : payload.type === 'bluetooth' ? 'bluetooth' : payload.type === 'download' ? 'download' : payload.type === 'download_done' ? 'download_done' : 'scan';
     const targetName = payload.target ? `${payload.target}` : 'Unlocked';
 
     renderCenter();
@@ -4900,12 +4895,6 @@ onTauriEvent('locker-unlock', (event) => {
       if (typeof showBtConnectHud === 'function') {
         showBtConnectHud(payload.target || 'AirPods Pro', payload.kind || 'headphones', parseInt(payload.pct, 10) || 90);
       }
-    } else if (kind === 'caps') {
-      const capsSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4 5 12h4v4h6v-4h4z"/><line x1="9" y1="20" x2="15" y2="20"/></svg>';
-      showDeviceHud({ iconHTML: capsSvg, plain: false, accent: 'blue', name: 'Caps Lock', tag: 'On', ms: 2200 });
-    } else if (kind === 'num') {
-      const numSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="3"/><path d="M9 8v4M9 8l-1 1M14.5 8h1.5v8"/><path d="M8 16h2"/></svg>';
-      showDeviceHud({ iconHTML: numSvg, plain: false, accent: 'blue', name: 'Num Lock', tag: 'On', ms: 2200 });
     } else if (kind === 'download') {
       const dlSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 11l5 5 5-5"/><path d="M5 20h14"/></svg>';
       showDeviceHud({ iconHTML: dlSvg, plain: true, accent: 'blue', name: payload.target || 'Inex-Island-Setup.exe', tag: 'Downloading • 3.5 MB', ms: 2500 });
@@ -6740,24 +6729,6 @@ onTauriEvent('system-resumed', () => {
     }
   }
   scheduleNextAlarm();
-});
-
-// ==================== 12. CAPS LOCK / NUM LOCK INDICATOR ====================
-// Rust (lock-keys-changed event) sends native Win32 low-level keyboard notifications with 0% polling.
-const CAPS_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4 5 12h4v4h6v-4h4z"/><line x1="9" y1="20" x2="15" y2="20"/></svg>';
-const NUM_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="3"/><path d="M9 8v4M9 8l-1 1M14.5 8h1.5v8"/><path d="M8 16h2"/></svg>';
-
-onTauriEvent('lock-keys-changed', (event) => {
-  const g = SET.general || {};
-  const payload = (event && event.payload) || {};
-  const { caps, num, changed } = payload;
-  if (changed === 'caps') {
-    if (!g.capsToast) return; // Strict setting: OFF means do NOTHING!
-    showDeviceHud({ iconHTML: CAPS_SVG, plain: !caps, accent: caps ? 'blue' : '', name: 'Caps Lock', tag: caps ? 'On' : 'Off', ms: 1500 });
-  } else if (changed === 'num') {
-    if (!g.numToast) return; // Strict setting: OFF means do NOTHING!
-    showDeviceHud({ iconHTML: NUM_SVG, plain: !num, accent: num ? 'blue' : '', name: 'Num Lock', tag: num ? 'On' : 'Off', ms: 1500 });
-  }
 });
 
 // ==================== 13. DOWNLOAD PROGRESS / COMPLETE HUD ====================

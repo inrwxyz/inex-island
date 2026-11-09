@@ -139,8 +139,6 @@ const PAGES = [
       { path: 'general.autoUpdate', type: 'toggle', icon: 'spark', t: 'Auto Update', d: 'Automatically check and notify for updates' },
       { path: 'general.hour24', type: 'toggle', icon: 'clock', t: '24-Hour Time', d: 'Display military 24-hour time' },
       { path: 'general.lockToast', type: 'toggle', icon: 'power', t: 'Unlock Animation', d: 'Reveal animation after Windows unlock' },
-      { path: 'general.capsToast', type: 'toggle', icon: 'lock', t: 'Caps Lock Indicator', d: 'Island pops up when Caps Lock is turned on or off' },
-      { path: 'general.numToast', type: 'toggle', icon: 'lock', t: 'Num Lock Indicator', d: 'Island pops up when Num Lock is turned on or off' },
       { path: 'general.downloadHud', type: 'toggle', icon: 'download', t: 'Download Notification', d: 'Island shows when a browser download starts and finishes (Downloads folder)' },
       { path: 'general.copyToast', type: 'toggle', icon: 'spark', t: 'Clipboard Copy Notification', d: 'Island popup preview when text, an image or a file is copied' },
       { path: 'general.chargeToast', type: 'toggle', icon: 'battery', t: 'Charger Notification', d: 'Island popup when laptop charger is connected' },
