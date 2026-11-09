@@ -43,7 +43,7 @@ export const ALL_ACTION_TILES = {
   explorer: { id: 'explorer', label: 'File Explorer', desc: 'Browse folders & drives', icon: 'folder' },
   restart: { id: 'restart', label: 'Restart Island', desc: 'Restart Inex Island engine', icon: 'refresh' },
   notepad: { id: 'notepad', label: 'Quick Notes', desc: 'Floating note editor', icon: 'clipboard' },
-  drop: { id: 'drop', label: 'Inex Drop', desc: 'Local Wi-Fi file transfer', icon: 'folder' }
+  drop: { id: 'drop', label: 'Inex Drop', desc: 'Nearby file sharing with Android & Windows', icon: 'folder' }
 };
 
 // Control-panel slots: id + label. The island (main.js) holds the behaviour of each id.

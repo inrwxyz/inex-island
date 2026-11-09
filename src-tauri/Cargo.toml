@@ -8,13 +8,36 @@ edition = "2021"
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
+prost-build = "0.13"
+protoc-bin-vendored = "3"
 
 [dependencies]
 tauri = { version = "2", features = ["tray-icon"] }
 tauri-plugin-updater = "2"
+tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 rustfft = "6"
+prost = "0.13"
+prost-types = "0.13"
+ring = "0.17"
+p256 = { version = "0.13", features = ["ecdh", "pem"] }
+aes-gcm = "0.10"
+hkdf = "0.12"
+sha2 = "0.10"
+base64 = "0.22"
+rand = "0.8"
+socket2 = "0.5"
+mdns-sd = "0.21.7"
+aes = "0.8"
+cbc = { version = "0.1", features = ["alloc"] }
+hmac = "0.12"
+libaes = "0.7.0"
+rfd = "0.15"
+
+[features]
+default = ["ble"]
+ble = []
 
 [target.'cfg(windows)'.dependencies]
 windows-core = "0.58"
@@ -35,6 +58,7 @@ windows = { version = "0.58", features = [
     "Win32_NetworkManagement_IpHelper",
     "Win32_Media_Audio_Endpoints",
     "Win32_System_Com",
+    "Win32_System_WinRT",
     "Win32_System_Com_StructuredStorage",
     "Win32_UI_Shell_PropertiesSystem",
     "Win32_UI_Shell",
@@ -44,6 +68,7 @@ windows = { version = "0.58", features = [
     "Media_Control",
     "Devices_Radios",
     "Devices_Bluetooth",
+    "Devices_Bluetooth_Advertisement",
     "Devices_Geolocation",
     "Win32_Devices_Bluetooth",
     "Win32_Devices_DeviceAndDriverInstallation",
@@ -64,3 +89,11 @@ windows = { version = "0.58", features = [
 
 [target.'cfg(windows)'.dependencies.wmi]
 version = "0.14"
+
+[profile.dev]
+opt-level = 2
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1

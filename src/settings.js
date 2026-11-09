@@ -142,7 +142,7 @@ const PAGES = [
       { path: 'general.capsToast', type: 'toggle', icon: 'lock', t: 'Caps Lock Indicator', d: 'Island pops up when Caps Lock is turned on or off' },
       { path: 'general.numToast', type: 'toggle', icon: 'lock', t: 'Num Lock Indicator', d: 'Island pops up when Num Lock is turned on or off' },
       { path: 'general.downloadHud', type: 'toggle', icon: 'download', t: 'Download Notification', d: 'Island shows when a browser download starts and finishes (Downloads folder)' },
-      { path: 'general.copyToast', type: 'toggle', icon: 'spark', t: 'Clipboard Copy Notification', d: 'Island popup preview when text is copied' },
+      { path: 'general.copyToast', type: 'toggle', icon: 'spark', t: 'Clipboard Copy Notification', d: 'Island popup preview when text, an image or a file is copied' },
       { path: 'general.chargeToast', type: 'toggle', icon: 'battery', t: 'Charger Notification', d: 'Island popup when laptop charger is connected' },
       { path: 'general.lowBatteryAlert', type: 'toggle', icon: 'battery', t: 'Low Battery Alert', d: 'Alert when PC reaches low battery threshold' },
       { path: 'general.lowBattery', type: 'range', icon: 'battery', t: 'Alert Level', d: 'Threshold to trigger low battery warning', min: 5, max: 50, step: 5, unit: '%', showIf: (s) => s.general.lowBatteryAlert }

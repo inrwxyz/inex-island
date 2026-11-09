@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod bluetooth;
+mod clipboard;
 mod downloads;
 mod audio;
 mod brightness;
@@ -11,7 +12,8 @@ mod privacy;
 mod shelf;
 mod visualizer;
 mod wifi;
-mod inex_drop;
+pub mod quick_share;
+pub use quick_share::{console, crypto, events, mdns, protos};
 #[cfg(target_os = "windows")]
 mod native_events;
 #[cfg(target_os = "windows")]
@@ -1841,6 +1843,10 @@ fn main() {
             resize_island,
             clipboard_seq,
             get_clipboard_text,
+            clipboard::get_clipboard_image,
+            clipboard::get_clipboard_files,
+            clipboard::set_clipboard_files,
+            clipboard::read_image_file,
             get_net_speed,
             privacy::privacy_watch_start,
             focus_island,
@@ -1918,12 +1924,26 @@ fn main() {
             net::stage_begin,
             net::stage_end,
             setup_shelf_drop,
-            inex_drop::start_inex_drop,
-            inex_drop::stop_inex_drop,
-            inex_drop::get_inex_drop_status,
-            inex_drop::stage_file_for_phone,
-            inex_drop::clear_staged_files,
-            inex_drop::respond_inex_transfer,
+            quick_share::start_quick_share,
+            quick_share::stop_quick_share,
+            quick_share::get_quick_share_status,
+            quick_share::start_quick_share_scan,
+            quick_share::stop_quick_share_scan,
+            quick_share::send_quick_share_files,
+            quick_share::respond_quick_share_offer,
+            quick_share::control_quick_share,
+            quick_share::open_quick_share_downloads,
+            quick_share::pick_quick_share_files,
+            quick_share::pick_quick_share_folder,
+            quick_share::stage_quick_share_files,
+            quick_share::get_staged_quick_share_files,
+            quick_share::clear_staged_quick_share_files,
+            quick_share::start_inex_drop,
+            quick_share::stop_inex_drop,
+            quick_share::get_inex_drop_status,
+            quick_share::stage_file_for_phone,
+            quick_share::clear_staged_files,
+            quick_share::respond_inex_transfer,
             check_update,
             get_app_version,
             apply_update

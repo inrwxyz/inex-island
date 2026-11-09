@@ -336,30 +336,93 @@
       </div>
     </div>
 
-    <!-- ==================== 7b. INEX DROP (Offline Wi-Fi / Hotspot Phone Transfer) ==================== -->
+    <!-- ==================== 7b. INEX DROP (Native Protocol File Sharing) ==================== -->
     <div id="view-inexdrop" class="view">
       <div class="subview-header">
         <button class="back-btn icon-back" data-back="view-control" title="Back"><svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg><svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v10M8 8l4-4 4 4M4 14v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg></button>
-        <span id="drop-countdown-badge" class="p2p-expiry-badge hidden" title="Auto-closing in">01:00</span>
-        <button id="btn-drop-disconnect" class="p2p-exit-btn hidden" title="Disconnect">Disconnect</button>
         <span id="drop-status-pill" class="status-tag">Off</span>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <label class="ios-switch" title="Toggle Inex Drop">
+            <input type="checkbox" id="qs-master-toggle" />
+            <span class="slider"></span>
+          </label>
+        </div>
       </div>
 
       <div class="drop-body" id="drop-body">
+        <!-- State 1: Idle (Off) -->
         <div id="drop-state-idle" class="drop-state-box">
           <div class="drop-idle-ico">
             <svg viewBox="0 0 24 24" width="38" height="38" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round"><path d="M12 2v10M8 8l4-4 4 4M4 14v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg>
           </div>
           <div class="drop-idle-title">Inex Drop is Off</div>
-          <div class="drop-idle-sub">Send & receive files offline over Wi-Fi or Hotspot</div>
+          <div class="drop-idle-sub">Send & receive files with Android & Windows devices nearby</div>
           <button id="btn-drop-start" class="pair-btn" style="margin-top:10px; width:130px;">Turn On</button>
         </div>
 
-        <div id="drop-state-waiting" class="drop-state-box hidden">
-          <div class="drop-qr-wrap" id="drop-qr-container"></div>
-          <div class="drop-qr-hint" id="drop-qr-hint">Scan with phone camera to connect</div>
+        <!-- State 2: Active / Ready (On) -->
+        <div id="drop-state-active" class="drop-state-box hidden qs-active">
+          <!-- One slim line: who we are + open Downloads -->
+          <div class="qs-status-line">
+            <span class="dot pulse"></span>
+            <span class="qs-status-text">Visible as <b id="qs-my-name">Inex Island PC</b></span>
+            <button id="btn-qs-open-downloads" class="qs-mini-ico" title="Saved to Downloads (click to open)">
+              <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+            </button>
+          </div>
+
+          <!-- Hidden while a transfer runs, so the progress box always has room -->
+          <div id="qs-pick-area" class="qs-pick-area">
+            <div class="qs-pick-row">
+              <button id="btn-qs-pick-files" class="qs-pick-btn">
+                <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                <span>Files</span>
+              </button>
+              <button id="btn-qs-pick-folder" class="qs-pick-btn">
+                <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                <span>Folder</span>
+              </button>
+            </div>
+
+            <!-- Selected: just a count, tap to see what it is -->
+            <div id="qs-selected-box" class="qs-sel-chip hidden">
+              <button id="btn-qs-sel-toggle" class="qs-sel-toggle" title="Show what is selected">
+                <span id="qs-selected-text">0 items</span>
+                <svg class="qs-chev" viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+              </button>
+              <button id="btn-qs-clear-sel" class="qs-clear-btn" title="Clear selection">✕</button>
+            </div>
+            <div id="qs-selected-list" class="qs-sel-list hidden"></div>
+
+            <div id="qs-scan-hint" class="qs-scan-hint">
+              <span class="radar"></span>
+              <span id="qs-scan-text">Pick files to find nearby devices</span>
+            </div>
+            <div id="qs-devices-list" class="qs-devices-list smooth-scroll-list"></div>
+          </div>
+
+          <!-- Active Transfer Box (Progress & Speed) -->
+          <div id="qs-transfer-box" class="qs-transfer-box hidden">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <strong id="qs-xfer-title" style="font-size:11.5px;color:var(--menu-fg);">Transferring...</strong>
+              <span id="qs-xfer-speed" style="font-size:10.5px;color:var(--mac-accent);font-weight:600;">0.0 MB/s</span>
+            </div>
+            <div id="qs-xfer-sub" style="font-size:10px;color:var(--menu-fg-dim);margin:2px 0 5px;text-overflow:ellipsis;overflow:hidden;white-space:nowrap;">Connecting...</div>
+            <div id="qs-xfer-pin" class="pin hidden" style="font-size:20px;letter-spacing:4px;margin:2px 0 4px;color:var(--mac-accent);text-align:center;font-weight:700;"></div>
+            <div style="width:100%;height:6px;border-radius:3px;background:rgba(255,255,255,0.1);overflow:hidden;margin-bottom:6px;">
+              <div id="qs-xfer-bar" style="width:0%;height:100%;background:var(--mac-accent);border-radius:3px;transition:width 0.2s ease;"></div>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <span id="qs-xfer-pct" style="font-size:10px;color:var(--menu-fg-dim);">0%</span>
+              <div style="display:flex;gap:6px;">
+                <button id="btn-qs-pause" class="pair-btn" style="height:21px;padding:0 8px;font-size:10px;">Pause</button>
+                <button id="btn-qs-cancel" class="pair-btn" style="height:21px;padding:0 8px;font-size:10px;background:rgba(255,69,58,0.2);color:#ff453a;">Cancel</button>
+              </div>
+            </div>
+          </div>
         </div>
 
+        <!-- State 3: Incoming File Offer Prompt (Accept / Decline) -->
         <div id="drop-state-prompt" class="drop-state-box hidden">
           <div class="drop-prompt-card">
             <div class="drop-prompt-icon-bubble" id="prompt-file-icon">
@@ -368,7 +431,8 @@
             <div class="drop-prompt-dev">
               <span id="prompt-sender-name">Android Phone</span>
             </div>
-            <div class="drop-prompt-headline">wants to send you</div>
+            <div class="drop-prompt-headline">wants to share files</div>
+            <div id="prompt-pin" style="font-size:19px;letter-spacing:4px;margin:2px 0 6px;color:var(--mac-accent);font-weight:700;">----</div>
             <div class="drop-prompt-filebox">
               <span id="prompt-file-name" class="prompt-fname">file.mp4</span>
               <small id="prompt-file-size" class="prompt-fsize">12 MB</small>
@@ -376,34 +440,6 @@
             <div class="drop-prompt-actions">
               <button id="btn-prompt-accept" class="pair-btn prompt-accept-btn">Accept</button>
               <button id="btn-prompt-decline" class="pair-btn prompt-decline-btn">Decline</button>
-            </div>
-          </div>
-        </div>
-
-        <div id="drop-state-connected" class="drop-state-box hidden">
-          <div class="drop-conn-card">
-            <div class="drop-dev-ico">
-              <svg viewBox="0 0 24 24" width="22" height="22" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"><rect x="7" y="2" width="10" height="20" rx="2"/><line x1="11" y1="18" x2="13" y2="18"/></svg>
-            </div>
-            <div class="drop-dev-info">
-              <strong id="drop-dev-name">Phone</strong>
-              <small id="drop-dev-ip">Connected • Ready</small>
-            </div>
-          </div>
-          <div class="drop-actions-card">
-            <div class="drop-act-row">
-              <span>Files staged in Tray:</span>
-              <strong id="drop-tray-count">0</strong>
-            </div>
-            <button id="btn-drop-push" class="pair-btn" style="margin-top:6px;width:100%;">Push Tray Files to Phone</button>
-          </div>
-          <div id="drop-rx-progress" class="hidden" style="margin-top:8px;text-align:left;">
-            <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:3px;">
-              <span id="drop-rx-name">Receiving...</span>
-              <span id="drop-rx-pct">0%</span>
-            </div>
-            <div style="width:100%;height:6px;border-radius:3px;background:rgba(255,255,255,0.1);overflow:hidden;">
-              <div id="drop-rx-bar" style="width:0%;height:100%;background:var(--mac-accent);border-radius:3px;"></div>
             </div>
           </div>
         </div>
@@ -558,7 +594,7 @@
         <div id="clipboard-list" class="clipboard-list">
           <div class="clipboard-empty">
             <svg viewBox="0 0 24 24" width="22" height="22" stroke="currentColor" stroke-width="1.8" fill="none" opacity="0.4"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>
-            <span>No copied text yet</span>
+            <span>Nothing copied yet</span>
           </div>
         </div>
       </div>

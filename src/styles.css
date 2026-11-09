@@ -180,7 +180,7 @@ body {
 .island.state-compact.transferring {
   width: 186px;
 }
-.island.state-compact.transferring.xfer-live { width: 214px; }
+.island.state-compact.transferring.xfer-live { width: 226px; }
 .island.state-compact.has-toast {
   width: 196px;
 }
@@ -1564,6 +1564,51 @@ body {
   color: #ff453a;
   background: rgba(255, 69, 58, 0.15);
 }
+.clipboard-item-image {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.35);
+  background-image:
+    linear-gradient(45deg, rgba(255,255,255,0.04) 25%, transparent 25%, transparent 75%, rgba(255,255,255,0.04) 75%),
+    linear-gradient(45deg, rgba(255,255,255,0.04) 25%, transparent 25%, transparent 75%, rgba(255,255,255,0.04) 75%);
+  background-size: 10px 10px;
+  background-position: 0 0, 5px 5px;
+  border-radius: 6px;
+  overflow: hidden;
+}
+.clipboard-item-image img {
+  display: block;
+  max-width: 100%;
+  max-height: 84px;
+  object-fit: contain;
+  pointer-events: none;
+}
+.clipboard-item-image.small img { max-height: 44px; }
+.clipboard-item-files {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.clipboard-file-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: #f1f5f9;
+  min-width: 0;
+}
+.clipboard-file-row svg { flex: none; opacity: 0.6; }
+.clipboard-file-row span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.clipboard-file-more {
+  font-size: 9.5px;
+  color: rgba(255, 255, 255, 0.4);
+  padding-left: 20px;
+}
 .clipboard-empty {
   display: flex;
   flex-direction: column;
@@ -2751,3 +2796,140 @@ body {
 .hud-action-btn.decline:hover { background: rgba(255, 69, 58, 0.3); }
 
 .drop-prompt-icon-bubble svg { width: 16px; height: 16px; }
+
+/* ==================== QUICK SHARE UI ENHANCEMENTS ==================== */
+.dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #30d158; }
+.dot.pulse { animation: dotPulse 1.6s infinite; }
+@keyframes dotPulse { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.35; transform: scale(0.85); } }
+
+.radar { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--mac-accent);
+         box-shadow: 0 0 0 0 var(--mac-accent); animation: radarRipple 1.6s infinite; flex-shrink: 0; }
+@keyframes radarRipple { 0% { box-shadow: 0 0 0 0 rgba(74, 158, 255, 0.55); } 100% { box-shadow: 0 0 0 10px rgba(74, 158, 255, 0); } }
+
+.qs-status-bar {
+  width: 100%; display: flex; align-items: center; justify-content: space-between;
+  padding: 5px 8px; border-radius: 10px; background: color-mix(in srgb, var(--menu-fg) 6%, transparent);
+  box-sizing: border-box; margin-bottom: 2px;
+}
+.qs-card {
+  width: 100%; border-radius: 12px; padding: 8px 10px;
+  background: color-mix(in srgb, var(--menu-fg) 6%, transparent);
+  text-align: left; box-sizing: border-box;
+}
+.qs-sel-box {
+  display: flex; justify-content: space-between; align-items: center;
+  background: rgba(0, 0, 0, 0.3); border-radius: 8px; padding: 3px 8px;
+  font-size: 10.5px; margin-bottom: 4px; color: var(--menu-fg);
+}
+.qs-clear-btn {
+  background: transparent; border: 0; color: var(--menu-fg-dim); cursor: pointer;
+  font-size: 11px; padding: 0 4px; line-height: 1;
+}
+.qs-clear-btn:hover { color: #ff453a; }
+
+.qs-scan-hint {
+  font-size: 10px; color: var(--menu-fg-dim); display: flex; align-items: center; gap: 6px;
+  margin: 4px 0 6px;
+}
+
+.qs-devices-list {
+  max-height: 125px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px;
+  width: 100%; box-sizing: border-box; padding-bottom: 6px;
+}
+.qs-device-item {
+  display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 10px;
+  background: color-mix(in srgb, var(--menu-fg) 6%, transparent);
+  border: 1px solid rgba(255, 255, 255, 0.05); cursor: pointer;
+  transition: all 0.15s ease; width: 100%; box-sizing: border-box; text-align: left;
+}
+.qs-device-item:hover {
+  background: color-mix(in srgb, var(--mac-accent) 22%, transparent);
+  border-color: var(--mac-accent);
+}
+.qs-device-avatar {
+  width: 26px; height: 26px; border-radius: 50%;
+  background: color-mix(in srgb, var(--mac-accent) 22%, transparent);
+  color: var(--mac-accent); display: grid; place-items: center; font-size: 13px; flex-shrink: 0;
+}
+.qs-device-name {
+  font-size: 11px; font-weight: 600; color: var(--menu-fg);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 170px;
+}
+.qs-device-sub { font-size: 9px; color: var(--menu-fg-dim); }
+
+.qs-transfer-box {
+  width: 100%; padding: 8px 10px; border-radius: 12px;
+  background: color-mix(in srgb, var(--menu-fg) 8%, transparent);
+  margin-top: 6px; text-align: left; box-sizing: border-box;
+}
+
+
+/* ==================== INEX DROP: compact layout ==================== */
+/* The window is resized to 268px for this view, so the island itself must be that tall too
+   (before, the island stayed 204px and the bottom of the view was cut off). */
+.island.state-sub:has(#view-inexdrop.active) { height: 264px; }
+
+.drop-body:has(#drop-state-active:not(.hidden)) {
+  justify-content: flex-start; align-items: stretch;
+  flex: 1; min-height: 0; overflow: hidden; padding: 0 12px 10px;
+}
+.drop-body:has(#drop-state-active:not(.hidden)) > .drop-state-box { flex: 1; min-height: 0; align-items: stretch; }
+
+.qs-active { display: flex; flex-direction: column; gap: 6px; text-align: left; }
+.qs-active.hidden { display: none !important; }
+
+.qs-status-line { display: flex; align-items: center; gap: 6px; min-width: 0; padding: 0 2px; flex: none; }
+.qs-status-line .dot { width: 6px; height: 6px; flex: none; }
+.qs-status-text {
+  flex: 1; min-width: 0; font-size: 10px; color: var(--menu-fg-dim);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.qs-status-text b { color: var(--menu-fg); font-weight: 600; }
+.qs-mini-ico {
+  flex: none; width: 20px; height: 20px; border: 0; border-radius: 6px; cursor: pointer;
+  display: grid; place-items: center; background: transparent; color: var(--menu-fg-dim);
+}
+.qs-mini-ico:hover { background: color-mix(in srgb, var(--menu-fg) 10%, transparent); color: var(--menu-fg); }
+
+.qs-pick-area { display: flex; flex-direction: column; gap: 6px; flex: 1; min-height: 0; }
+.qs-active.is-xfer .qs-pick-area { display: none; }
+
+.qs-pick-row { display: flex; gap: 6px; flex: none; }
+.qs-pick-btn {
+  flex: 1; height: 24px; border: 0; border-radius: 8px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; gap: 5px;
+  font-size: 10.5px; font-weight: 600; color: var(--menu-fg);
+  background: color-mix(in srgb, var(--menu-fg) 8%, transparent);
+  transition: background 0.15s ease;
+}
+.qs-pick-btn:hover { background: color-mix(in srgb, var(--mac-accent) 24%, transparent); }
+
+.qs-sel-chip {
+  display: flex; align-items: center; justify-content: space-between; gap: 4px; flex: none;
+  height: 22px; padding: 0 4px 0 8px; border-radius: 8px;
+  background: color-mix(in srgb, var(--menu-fg) 5%, transparent);
+}
+.qs-sel-toggle {
+  flex: 1; min-width: 0; display: flex; align-items: center; gap: 5px; border: 0; padding: 0;
+  background: transparent; color: var(--menu-fg); font-size: 10.5px; cursor: pointer; text-align: left;
+}
+.qs-sel-toggle span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.qs-chev { flex: none; opacity: 0.55; transition: transform 0.2s ease; }
+.qs-sel-chip.open .qs-chev { transform: rotate(180deg); }
+.qs-sel-list {
+  flex: none; max-height: 58px; overflow-y: auto; padding: 2px 8px; border-radius: 8px;
+  background: color-mix(in srgb, var(--menu-fg) 4%, transparent);
+}
+.qs-sel-row { font-size: 10px; line-height: 1.7; color: var(--menu-fg-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.qs-scan-hint { margin: 0; flex: none; padding: 0 2px; font-size: 9.5px; }
+.qs-scan-hint.idle .radar { display: none; }
+.qs-scan-hint .radar { width: 6px; height: 6px; }
+
+.qs-devices-list { flex: 1; min-height: 0; max-height: none; padding-bottom: 0; gap: 3px; }
+.qs-device-item { padding: 4px 8px; gap: 8px; border-radius: 9px; }
+.qs-device-avatar { width: 22px; height: 22px; font-size: 11px; }
+.qs-device-avatar svg { width: 12px; height: 12px; }
+.qs-device-name { font-size: 11px; max-width: 200px; }
+
+.qs-transfer-box { margin-top: 0; padding: 10px 12px; }
