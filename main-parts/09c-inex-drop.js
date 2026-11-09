@@ -754,9 +754,14 @@ function initInexDrop() {
     });
   }
 
+  let isPickingFiles = false;
   const btnPickFiles = document.getElementById('btn-qs-pick-files');
   if (btnPickFiles) {
-    btnPickFiles.addEventListener('click', async () => {
+    btnPickFiles.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      if (isPickingFiles) return;
+      isPickingFiles = true;
+      appState.keepOpen = true;
       try {
         const picked = await invokeTauri('pick_quick_share_files');
         if (Array.isArray(picked) && picked.length > 0) {
@@ -766,13 +771,21 @@ function initInexDrop() {
         }
       } catch (err) {
         console.error('pick files err:', err);
+      } finally {
+        isPickingFiles = false;
+        setTimeout(() => { appState.keepOpen = false; }, 350);
       }
     });
   }
 
+  let isPickingFolder = false;
   const btnPickFolder = document.getElementById('btn-qs-pick-folder');
   if (btnPickFolder) {
-    btnPickFolder.addEventListener('click', async () => {
+    btnPickFolder.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      if (isPickingFolder) return;
+      isPickingFolder = true;
+      appState.keepOpen = true;
       try {
         const folder = await invokeTauri('pick_quick_share_folder');
         if (folder) {
@@ -782,6 +795,9 @@ function initInexDrop() {
         }
       } catch (err) {
         console.error('pick folder err:', err);
+      } finally {
+        isPickingFolder = false;
+        setTimeout(() => { appState.keepOpen = false; }, 350);
       }
     });
   }

@@ -321,33 +321,43 @@ pub fn open_quick_share_downloads() {
 }
 
 #[tauri::command]
-pub async fn pick_quick_share_files() -> Vec<String> {
-    tauri::async_runtime::spawn_blocking(|| {
-        rfd::FileDialog::new()
-            .set_title("Quick Share - Choose Files to Send")
-            .pick_files()
-            .map(|paths| {
-                paths
-                    .into_iter()
-                    .map(|p| p.to_string_lossy().to_string())
-                    .collect()
-            })
-            .unwrap_or_default()
-    })
-    .await
-    .unwrap_or_default()
+pub async fn pick_quick_share_files(window: tauri::WebviewWindow) -> Vec<String> {
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    std::thread::Builder::new()
+        .name("pick-files-thread".into())
+        .spawn(move || {
+            let res = rfd::FileDialog::new()
+                .set_title("Quick Share - Choose Files to Send")
+                .set_parent(&window)
+                .pick_files()
+                .map(|paths| {
+                    paths
+                        .into_iter()
+                        .map(|p| p.to_string_lossy().to_string())
+                        .collect()
+                })
+                .unwrap_or_default();
+            let _ = tx.send(res);
+        })
+        .ok();
+    rx.await.unwrap_or_default()
 }
 
 #[tauri::command]
-pub async fn pick_quick_share_folder() -> Option<String> {
-    tauri::async_runtime::spawn_blocking(|| {
-        rfd::FileDialog::new()
-            .set_title("Quick Share - Choose Folder to Send")
-            .pick_folder()
-            .map(|p| p.to_string_lossy().to_string())
-    })
-    .await
-    .unwrap_or_default()
+pub async fn pick_quick_share_folder(window: tauri::WebviewWindow) -> Option<String> {
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    std::thread::Builder::new()
+        .name("pick-folder-thread".into())
+        .spawn(move || {
+            let res = rfd::FileDialog::new()
+                .set_title("Quick Share - Choose Folder to Send")
+                .set_parent(&window)
+                .pick_folder()
+                .map(|p| p.to_string_lossy().to_string());
+            let _ = tx.send(res);
+        })
+        .ok();
+    rx.await.unwrap_or_default()
 }
 
 #[tauri::command]
