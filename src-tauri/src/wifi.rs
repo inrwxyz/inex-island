@@ -865,18 +865,6 @@ pub async fn get_wifi_networks() -> WifiScan {
 }
 
 #[tauri::command]
-pub async fn wifi_scan() -> Result<(), String> {
-    tauri::async_runtime::spawn_blocking(|| -> Result<(), String> {
-        let sess = Session::open()?;
-        let guid = sess.first_adapter()?;
-        sess.kick_scan(&guid, 0);
-        Ok(())
-    })
-    .await
-    .map_err(|e| e.to_string())?
-}
-
-#[tauri::command]
 pub async fn connect_wifi_network(ssid: String) -> Result<bool, String> {
     tauri::async_runtime::spawn_blocking(move || connect_saved_sync(&ssid))
         .await

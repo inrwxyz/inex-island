@@ -4,7 +4,7 @@
 export const KEY = 'inex.settings.v1';
 
 export const DEFAULTS = {
-  general: { launchAtLogin: false, hour24: false, autoUpdate: false, lowBatteryAlert: true, lowBattery: 20, chargeToast: true, lockToast: true, downloadHud: false, copyToast: false },
+  general: { launchAtLogin: false, hour24: false, autoUpdate: false, lowBatteryAlert: true, lowBattery: 20, chargeToast: true, lockToast: true, copyToast: false },
   appearance: {
     notchColor: '#030305', notchOpacity: 100, notchBorderColor: '#ffffff', notchBorderOpacity: 45, cornerRadius: 13,
     menuStyle: 'transparent', menuColor: '#0b0b10', menuOpacity: 92,
@@ -16,7 +16,7 @@ export const DEFAULTS = {
     mode: 'smart', style: 'attached', musicMode: true, compactMode: true, ambientGlow: true, compactGlow: true,
     calendarTimer: true, timerSound: true, eqSync: true, eqSensitivity: 100
   },
-  weather: { enabled: true, unit: 'C' },
+  weather: { enabled: true, unit: 'C', city: '' },
   widgets: { left: 'weather', right: 'ram' },
   slots: { a: 'wifi', b: 'drop', c: 'bt', d: 'tray' },
   menu: {
@@ -38,9 +38,6 @@ export const ALL_ACTION_TILES = {
   settings: { id: 'settings', label: 'Settings', desc: 'Open Inex Island settings', icon: 'gear' },
   alarm: { id: 'alarm', label: 'Alarm', desc: 'Wake-up / clock alarms with snooze', icon: 'bell' },
   calc: { id: 'calc', label: 'Calculator', desc: 'Windows Calculator tool', icon: 'calc' },
-  taskmgr: { id: 'taskmgr', label: 'Task Manager', desc: 'Process and performance monitor', icon: 'activity' },
-  terminal: { id: 'terminal', label: 'Terminal', desc: 'Command Prompt / PowerShell', icon: 'terminal' },
-  explorer: { id: 'explorer', label: 'File Explorer', desc: 'Browse folders & drives', icon: 'folder' },
   restart: { id: 'restart', label: 'Restart Island', desc: 'Restart Inex Island engine', icon: 'refresh' },
   notepad: { id: 'notepad', label: 'Quick Notes', desc: 'Floating note editor', icon: 'clipboard' },
   drop: { id: 'drop', label: 'Inex Drop', desc: 'Nearby file sharing with Android & Windows', icon: 'folder' }

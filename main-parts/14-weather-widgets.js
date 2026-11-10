@@ -81,8 +81,41 @@ try {
   }
 } catch (_) {}
 
+// fetch with a time limit: one hanging request must never keep the weather "busy" for ever
+function wxFetch(url, ms = 7000) {
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), ms);
+  return fetch(url, { signal: ctl.signal }).finally(() => clearTimeout(t));
+}
+
+// City typed in Settings -> lat/lon through Open-Meteo's free geocoding (no key). Runs only when the city changes.
+async function geocodeCity(name) {
+  const q = name.toLowerCase();
+  try {
+    const sv = JSON.parse(localStorage.getItem('inex.geo') || 'null');
+    if (sv && sv.q === q && sv.loc) return sv.loc;
+  } catch (_) {}
+  const res = await wxFetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(name)}&count=1&language=en&format=json`);
+  if (!res.ok) return null;
+  const d = await res.json();
+  const r = d && d.results && d.results[0];
+  if (!r || !isFinite(+r.latitude) || !isFinite(+r.longitude)) return null;
+  const loc = { lat: +r.latitude, lon: +r.longitude, city: r.name || name };
+  try { localStorage.setItem('inex.geo', JSON.stringify({ q, loc })); } catch (_) {}
+  return loc;
+}
+
 // Fast IP-based geolocation (no Windows Location COM delays or process locks)
 async function detectLocation() {
+  const cityQ = ((SET.weather && SET.weather.city) || '').trim();
+  if (cityQ) {
+    if (weather.cityLoc && weather.cityQ === cityQ) return weather.cityLoc;
+    try {
+      const g = await geocodeCity(cityQ);
+      if (g) { weather.cityQ = cityQ; weather.cityLoc = g; return g; }
+    } catch (_) {}
+    // city not found / offline: fall back to the automatic IP location below
+  }
   const LOC_TTL = 6 * 60 * 60 * 1000, FAIL_TTL = 5 * 60 * 1000;
   if (!weather.loc) {
     try {
@@ -96,7 +129,7 @@ async function detectLocation() {
   let loc = null;
   const tries = [
     async () => {
-      const res = await fetch('https://ipapi.co/json/');
+      const res = await wxFetch('https://ipapi.co/json/');
       if (res.ok) {
         const d = await res.json();
         const lat = d.latitude || d.lat, lon = d.longitude || d.lon;
@@ -105,7 +138,7 @@ async function detectLocation() {
       return null;
     },
     async () => {
-      const res = await fetch('https://ipwho.is/');
+      const res = await wxFetch('https://ipwho.is/');
       if (res.ok) {
         const d = await res.json();
         if (d && d.success !== false) return { lat: +d.latitude, lon: +d.longitude, city: d.city || '' };
@@ -113,7 +146,15 @@ async function detectLocation() {
       return null;
     },
     async () => {
-      const res = await fetch('https://freeipapi.com/api/json');
+      const res = await wxFetch('http://ip-api.com/json/?fields=status,lat,lon,city');
+      if (res.ok) {
+        const d = await res.json();
+        if (d && d.status === 'success') return { lat: +d.lat, lon: +d.lon, city: d.city || '' };
+      }
+      return null;
+    },
+    async () => {
+      const res = await wxFetch('https://freeipapi.com/api/json');
       if (res.ok) {
         const d = await res.json();
         if (d && d.latitude && d.longitude) return { lat: +d.latitude, lon: +d.longitude, city: d.cityName || '' };
@@ -134,8 +175,13 @@ async function detectLocation() {
     try { localStorage.setItem('inex.loc', JSON.stringify({ loc, at: weather.locAt })); } catch (_) {}
   } else {
     weather.locFailAt = Date.now();
+    // every lookup failed: keep using the last known place instead of showing nothing
+    try {
+      const old = JSON.parse(localStorage.getItem('inex.loc') || 'null');
+      if (old && old.loc) weather.loc = old.loc;
+    } catch (_) {}
   }
-  return loc;
+  return loc || weather.loc;
 }
 
 async function refreshWeather() {
@@ -163,7 +209,7 @@ async function refreshWeather() {
     let tempStr = '', code = 0, isDay = true;
     try {
       const unitParam = unit === 'F' ? '&temperature_unit=fahrenheit' : '';
-      const wRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${loc.lat}&longitude=${loc.lon}&current=temperature_2m,weather_code,is_day&timezone=auto${unitParam}`);
+      const wRes = await wxFetch(`https://api.open-meteo.com/v1/forecast?latitude=${loc.lat}&longitude=${loc.lon}&current=temperature_2m,weather_code,is_day&timezone=auto${unitParam}`);
       if (wRes.ok) {
         const wData = await wRes.json();
         const tVal = wData?.current?.temperature_2m;
@@ -177,7 +223,7 @@ async function refreshWeather() {
 
     if (!tempStr) {
       try {
-        const r = await fetch(`https://wttr.in/${ck}?format=j1`);
+        const r = await wxFetch(`https://wttr.in/${ck}?format=j1`);
         if (r.ok) {
           const cur = (await r.json())?.current_condition?.[0];
           const val = cur ? (unit === 'F' ? cur.temp_F : cur.temp_C) : undefined;

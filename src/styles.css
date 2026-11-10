@@ -1492,8 +1492,8 @@ body {
   padding-right: 2px;
 }
 .clipboard-item {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: color-mix(in srgb, var(--menu-fg) 6%, transparent);
+  border: 1px solid color-mix(in srgb, var(--menu-fg) 10%, transparent);
   border-radius: 9px;
   padding: 7px 9px;
   display: flex;
@@ -1505,8 +1505,8 @@ body {
   user-select: none;
 }
 .clipboard-item:hover {
-  background: rgba(255, 255, 255, 0.09);
-  border-color: rgba(255, 255, 255, 0.2);
+  background: color-mix(in srgb, var(--menu-fg) 10%, transparent);
+  border-color: color-mix(in srgb, var(--menu-fg) 20%, transparent);
   transform: translateY(-1px);
 }
 .clipboard-item.copied {
@@ -1518,12 +1518,12 @@ body {
   align-items: center;
   justify-content: space-between;
   font-size: 9px;
-  color: rgba(255, 255, 255, 0.45);
+  color: var(--menu-fg-dim);
   font-weight: 500;
 }
 .clipboard-item-text {
   font-size: 11px;
-  color: #f1f5f9;
+  color: var(--menu-fg);
   line-height: 1.35;
   white-space: pre-wrap;
   word-break: break-word;
@@ -1552,7 +1552,7 @@ body {
 .clipboard-del-btn {
   background: transparent;
   border: 0;
-  color: rgba(255, 255, 255, 0.35);
+  color: var(--menu-fg-dim);
   cursor: pointer;
   padding: 1px 4px;
   font-size: 10px;
@@ -1568,10 +1568,10 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.35);
+  background: color-mix(in srgb, var(--menu-fg) 8%, transparent);
   background-image:
-    linear-gradient(45deg, rgba(255,255,255,0.04) 25%, transparent 25%, transparent 75%, rgba(255,255,255,0.04) 75%),
-    linear-gradient(45deg, rgba(255,255,255,0.04) 25%, transparent 25%, transparent 75%, rgba(255,255,255,0.04) 75%);
+    linear-gradient(45deg, color-mix(in srgb, var(--menu-fg) 5%, transparent) 25%, transparent 25%, transparent 75%, color-mix(in srgb, var(--menu-fg) 5%, transparent) 75%),
+    linear-gradient(45deg, color-mix(in srgb, var(--menu-fg) 5%, transparent) 25%, transparent 25%, transparent 75%, color-mix(in srgb, var(--menu-fg) 5%, transparent) 75%);
   background-size: 10px 10px;
   background-position: 0 0, 5px 5px;
   border-radius: 6px;
@@ -1595,7 +1595,7 @@ body {
   align-items: center;
   gap: 6px;
   font-size: 11px;
-  color: #f1f5f9;
+  color: var(--menu-fg);
   min-width: 0;
 }
 .clipboard-file-row svg { flex: none; opacity: 0.6; }
@@ -1606,7 +1606,7 @@ body {
 }
 .clipboard-file-more {
   font-size: 9.5px;
-  color: rgba(255, 255, 255, 0.4);
+  color: var(--menu-fg-dim);
   padding-left: 20px;
 }
 .clipboard-empty {
@@ -1616,7 +1616,7 @@ body {
   justify-content: center;
   padding: 34px 10px;
   gap: 6px;
-  color: rgba(255, 255, 255, 0.4);
+  color: var(--menu-fg-dim);
   font-size: 11px;
   text-align: center;
 }
@@ -2570,19 +2570,10 @@ body {
 .alarm-snooze-btn:hover { background: rgba(255, 255, 255, 0.22); }
 .c-alarm-hud { gap: 6px; }
 
-/* ==================== Caps/Num Lock + Download HUD extras ==================== */
-.bt-hud-icon.blue { background: rgba(10, 132, 255, 0.2); color: #4da3ff; }
-.bt-hud-icon.blue svg { filter: drop-shadow(0 0 5px rgba(10, 132, 255, 0.6)); }
+/* ==================== HUD accent extras ==================== */
 .bt-hud-icon.ok { background: rgba(48, 209, 88, 0.18); color: #30d158; }
 .bt-hud-icon.ok svg { filter: drop-shadow(0 0 5px rgba(48, 209, 88, 0.55)); }
 .bt-hud-tag { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-/* download running: thin blue sweep along the bottom edge of the pill */
-.island.dl-active.state-compact:not(.bt-hud-active):not(.biometric-active):not(.alarm-active)::after {
-  content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 2px; pointer-events: none;
-  background: linear-gradient(90deg, transparent 0%, #0a84ff 50%, transparent 100%); background-size: 45% 100%; background-repeat: no-repeat;
-  animation: dlSweep 1.3s ease-in-out infinite;
-}
-@keyframes dlSweep { 0% { background-position: -50% 0; } 100% { background-position: 150% 0; } }
 
 
 /* ===== Mac Control Center style (default look) ===== */
@@ -2957,8 +2948,6 @@ body {
 .island.state-compact.transferring.xfer-live #c-transfer-anim { width: 100%; min-width: 0; }
 .xfer-label { overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 .xfer-pct { white-space: nowrap; }
-/* no blue download line while a file transfer shows its own progress */
-.island.dl-active.state-compact.transferring::after { display: none !important; }
 
 /* cancel: soft grey circle (Mac style), turns red on hover */
 .island.state-compact.transferring.xfer-live .c-transfer-cancel-btn {
@@ -2972,8 +2961,8 @@ body {
 /* clipboard: tile for copied videos (no frame preview) */
 .clipboard-video-tile {
   display: flex; align-items: center; justify-content: center; height: 62px;
-  border-radius: 6px; color: rgba(255, 255, 255, 0.7);
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.02)), rgba(0, 0, 0, 0.35);
+  border-radius: 6px; color: var(--menu-fg-dim);
+  background: color-mix(in srgb, var(--menu-fg) 8%, transparent);
 }
 .clipboard-video-tile.small { height: 36px; }
 
@@ -2982,12 +2971,12 @@ body {
 .clip-thumb {
   flex: none; width: 40px; height: 40px; border-radius: 8px; overflow: hidden;
   display: flex; align-items: center; justify-content: center;
-  color: rgba(255, 255, 255, 0.7); background: rgba(0, 0, 0, 0.35);
+  color: var(--menu-fg-dim); background: color-mix(in srgb, var(--menu-fg) 8%, transparent);
 }
 .clip-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; pointer-events: none; }
 .clip-media-info { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .clip-media-info .clipboard-item-header { margin: 0; }
-.clip-media-name { font-size: 11px; color: #f1f5f9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.clip-media-name { font-size: 11px; color: var(--menu-fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* ==================== INEX DROP SIDE RAIL (Quick Share <-> P2P) ==================== */
 .drop-rail {

@@ -2,7 +2,6 @@
 
 mod bluetooth;
 mod clipboard;
-mod downloads;
 mod audio;
 mod brightness;
 mod live;
@@ -23,7 +22,6 @@ use serde::Serialize;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::path::PathBuf;
-use std::process::Command;
 use std::time::Duration;
 use tauri::{
     menu::{Menu, MenuItem},
@@ -70,142 +68,147 @@ fn system_shutting_down() -> bool {
     false
 }
 
-// Every helper process starts without a console window
-fn cmd(program: &str) -> Command {
-    #[allow(unused_mut)]
-    let mut c = Command::new(program);
-    #[cfg(target_os = "windows")]
-    {
-        use std::os::windows::process::CommandExt;
-        // CREATE_NO_WINDOW; PowerShell helpers also run at BELOW_NORMAL priority so they can
-        // never make the desktop or the island stutter.
-        let flags: u32 = if program.eq_ignore_ascii_case("powershell") {
-            0x0800_0000 | 0x0000_4000
-        } else {
-            0x0800_0000
-        };
-        c.creation_flags(flags);
-    }
-    c
-}
-
-// ---------------------------------------------------------------------------------------------
-// Native Windows helpers: no cmd.exe / reg.exe / PowerShell / rundll32 helper processes.
-// ---------------------------------------------------------------------------------------------
+// Opens a file, folder, URL or ms-settings: page the way Explorer would (ShellExecuteW).
+// No cmd.exe / powershell / helper process is started, and nothing is run through a shell,
+// so a URL can never be taken for a command (no injection). Returns true when Windows took it.
 #[cfg(target_os = "windows")]
-fn to_wide(s: &str) -> Vec<u16> {
-    s.encode_utf16().chain(std::iter::once(0)).collect()
-}
-
-// Same as double-clicking / `start <target>`: files, folders, URLs and ms-settings: links
-#[cfg(target_os = "windows")]
-fn shell_open(target: &str) -> bool {
-    use windows::core::PCWSTR;
-    use windows::Win32::Foundation::HWND;
+pub(crate) fn shell_open(target: &str) -> bool {
+    use windows::core::{w, HSTRING, PCWSTR};
     use windows::Win32::UI::Shell::ShellExecuteW;
     use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
-    let op = to_wide("open");
-    let file = to_wide(target);
+    let t = HSTRING::from(target);
     unsafe {
-        let r = ShellExecuteW(
-            HWND::default(),
-            PCWSTR(op.as_ptr()),
-            PCWSTR(file.as_ptr()),
-            PCWSTR::null(),
-            PCWSTR::null(),
-            SW_SHOWNORMAL,
-        );
-        (r.0 as isize) > 32
+        let r = ShellExecuteW(None, w!("open"), PCWSTR(t.as_ptr()), None, None, SW_SHOWNORMAL);
+        (r.0 as isize) > 32 // ShellExecute reports success with a value above 32
     }
 }
 
+#[cfg(not(target_os = "windows"))]
+pub(crate) fn shell_open(_target: &str) -> bool {
+    false
+}
+
+// Windows' own registry API (advapi32) for the HKCU keys the app needs. Replaces reg.exe.
 #[cfg(target_os = "windows")]
-mod reg_native {
-    use super::to_wide;
-    use windows::core::PCWSTR;
-    use windows::Win32::Foundation::ERROR_SUCCESS;
-    use windows::Win32::System::Registry::{
-        RegCloseKey, RegDeleteValueW, RegOpenKeyExW, RegQueryValueExW, RegSetValueExW, HKEY,
-        HKEY_CURRENT_USER, KEY_QUERY_VALUE, KEY_SET_VALUE, REG_BINARY, REG_SZ,
-    };
+mod winreg {
+    use std::ffi::c_void;
 
-    // "HKCU\\Software\\..." -> "Software\\..."
-    fn sub(path: &str) -> Vec<u16> {
-        to_wide(path.strip_prefix("HKCU\\").unwrap_or(path))
+    #[link(name = "advapi32")]
+    extern "system" {
+        fn RegCreateKeyExW(
+            hkey: isize,
+            sub_key: *const u16,
+            reserved: u32,
+            class: *const u16,
+            options: u32,
+            sam: u32,
+            security: *const c_void,
+            result: *mut isize,
+            disposition: *mut u32,
+        ) -> i32;
+        fn RegOpenKeyExW(hkey: isize, sub_key: *const u16, options: u32, sam: u32, result: *mut isize) -> i32;
+        fn RegSetValueExW(hkey: isize, name: *const u16, reserved: u32, kind: u32, data: *const u8, len: u32) -> i32;
+        fn RegQueryValueExW(
+            hkey: isize,
+            name: *const u16,
+            reserved: *mut u32,
+            kind: *mut u32,
+            data: *mut u8,
+            len: *mut u32,
+        ) -> i32;
+        fn RegDeleteValueW(hkey: isize, name: *const u16) -> i32;
+        fn RegCloseKey(hkey: isize) -> i32;
     }
 
-    fn open(path: &str, access: windows::Win32::System::Registry::REG_SAM_FLAGS) -> Option<HKEY> {
-        let p = sub(path);
-        let mut key = HKEY::default();
+    // HKEY_CURRENT_USER is the sign-extended 0x80000001
+    const HKCU: isize = 0x8000_0001u32 as i32 as isize;
+    const KEY_QUERY_VALUE: u32 = 0x0001;
+    const KEY_SET_VALUE: u32 = 0x0002;
+    const REG_SZ: u32 = 1;
+    const REG_EXPAND_SZ: u32 = 2;
+    const REG_BINARY: u32 = 3;
+    const ERROR_SUCCESS: i32 = 0;
+    const ERROR_FILE_NOT_FOUND: i32 = 2;
+
+    fn wide(s: &str) -> Vec<u16> {
+        s.encode_utf16().chain(std::iter::once(0)).collect()
+    }
+
+    fn set_raw(subkey: &str, name: &str, kind: u32, data: &[u8]) -> bool {
         unsafe {
-            if RegOpenKeyExW(HKEY_CURRENT_USER, PCWSTR(p.as_ptr()), 0, access, &mut key) == ERROR_SUCCESS {
-                Some(key)
-            } else {
-                None
+            let sk = wide(subkey);
+            let nm = wide(name);
+            let mut h: isize = 0;
+            if RegCreateKeyExW(HKCU, sk.as_ptr(), 0, std::ptr::null(), 0, KEY_SET_VALUE, std::ptr::null(), &mut h, std::ptr::null_mut())
+                != ERROR_SUCCESS
+            {
+                return false;
             }
+            let rc = RegSetValueExW(h, nm.as_ptr(), 0, kind, data.as_ptr(), data.len() as u32);
+            RegCloseKey(h);
+            rc == ERROR_SUCCESS
         }
     }
 
-    pub fn set_string(path: &str, name: &str, value: &str) -> bool {
-        let Some(key) = open(path, KEY_SET_VALUE) else { return false };
-        let n = to_wide(name);
-        let v = to_wide(value);
-        let bytes: Vec<u8> = v.iter().flat_map(|c| c.to_le_bytes()).collect();
-        unsafe {
-            let ok = RegSetValueExW(key, PCWSTR(n.as_ptr()), 0, REG_SZ, Some(bytes.as_slice())) == ERROR_SUCCESS;
-            let _ = RegCloseKey(key);
-            ok
-        }
+    /// Writes a REG_SZ value (the key is created when it does not exist yet).
+    pub fn set_string(subkey: &str, name: &str, value: &str) -> bool {
+        let w = wide(value);
+        let bytes: Vec<u8> = w.iter().flat_map(|c| c.to_le_bytes()).collect();
+        set_raw(subkey, name, REG_SZ, &bytes)
     }
 
-    pub fn set_binary(path: &str, name: &str, data: &[u8]) -> bool {
-        let Some(key) = open(path, KEY_SET_VALUE) else { return false };
-        let n = to_wide(name);
-        unsafe {
-            let ok = RegSetValueExW(key, PCWSTR(n.as_ptr()), 0, REG_BINARY, Some(data)) == ERROR_SUCCESS;
-            let _ = RegCloseKey(key);
-            ok
-        }
+    /// Writes a REG_BINARY value.
+    pub fn set_binary(subkey: &str, name: &str, data: &[u8]) -> bool {
+        set_raw(subkey, name, REG_BINARY, data)
     }
 
-    pub fn delete_value(path: &str, name: &str) {
-        let Some(key) = open(path, KEY_SET_VALUE) else { return };
-        let n = to_wide(name);
+    /// Reads a REG_SZ / REG_EXPAND_SZ value. None when the key or the value is missing.
+    pub fn get_string(subkey: &str, name: &str) -> Option<String> {
         unsafe {
-            let _ = RegDeleteValueW(key, PCWSTR(n.as_ptr()));
-            let _ = RegCloseKey(key);
-        }
-    }
-
-    // The string stored in a value, None when the value (or key) does not exist
-    pub fn get_string(path: &str, name: &str) -> Option<String> {
-        let key = open(path, KEY_QUERY_VALUE)?;
-        let n = to_wide(name);
-        unsafe {
-            let mut size = 0u32;
+            let sk = wide(subkey);
+            let nm = wide(name);
+            let mut h: isize = 0;
+            if RegOpenKeyExW(HKCU, sk.as_ptr(), 0, KEY_QUERY_VALUE, &mut h) != ERROR_SUCCESS {
+                return None;
+            }
+            let mut kind: u32 = 0;
+            let mut len: u32 = 0;
             let mut out = None;
-            if RegQueryValueExW(key, PCWSTR(n.as_ptr()), None, None, None, Some(&mut size as *mut u32)) == ERROR_SUCCESS {
-                let mut buf = vec![0u8; size as usize];
-                if RegQueryValueExW(
-                    key,
-                    PCWSTR(n.as_ptr()),
-                    None,
-                    None,
-                    Some(buf.as_mut_ptr()),
-                    Some(&mut size as *mut u32),
-                ) == ERROR_SUCCESS
-                {
-                    let wide: Vec<u16> = buf[..(size as usize).min(buf.len())]
+            if RegQueryValueExW(h, nm.as_ptr(), std::ptr::null_mut(), &mut kind, std::ptr::null_mut(), &mut len) == ERROR_SUCCESS
+                && (kind == REG_SZ || kind == REG_EXPAND_SZ)
+            {
+                let mut buf = vec![0u8; len as usize + 2];
+                let mut len2 = len;
+                if RegQueryValueExW(h, nm.as_ptr(), std::ptr::null_mut(), &mut kind, buf.as_mut_ptr(), &mut len2) == ERROR_SUCCESS {
+                    let u: Vec<u16> = buf[..len2 as usize]
                         .chunks_exact(2)
-                        .map(|b| u16::from_le_bytes([b[0], b[1]]))
+                        .map(|c| u16::from_le_bytes([c[0], c[1]]))
+                        .take_while(|&c| c != 0)
                         .collect();
-                    out = Some(String::from_utf16_lossy(&wide).trim_end_matches('\0').to_string());
-                } else {
-                    out = Some(String::new());
+                    out = Some(String::from_utf16_lossy(&u));
                 }
             }
-            let _ = RegCloseKey(key);
+            RegCloseKey(h);
             out
+        }
+    }
+
+    /// Deletes a value. A value (or key) that is already gone counts as success.
+    pub fn delete_value(subkey: &str, name: &str) -> bool {
+        unsafe {
+            let sk = wide(subkey);
+            let nm = wide(name);
+            let mut h: isize = 0;
+            let rc = RegOpenKeyExW(HKCU, sk.as_ptr(), 0, KEY_SET_VALUE, &mut h);
+            if rc == ERROR_FILE_NOT_FOUND {
+                return true;
+            }
+            if rc != ERROR_SUCCESS {
+                return false;
+            }
+            let rc = RegDeleteValueW(h, nm.as_ptr());
+            RegCloseKey(h);
+            rc == ERROR_SUCCESS || rc == ERROR_FILE_NOT_FOUND
         }
     }
 }
@@ -1280,14 +1283,6 @@ async fn set_mic_muted(muted: bool) -> bool {
     false
 }
 
-#[tauri::command]
-fn launch_notepad() {
-    #[cfg(target_os = "windows")]
-    {
-        let _ = cmd("notepad.exe").spawn();
-    }
-}
-
 // Keep the screen awake. SetThreadExecutionState is per thread, so one parked thread owns the
 // request. It sleeps on a channel (0 % CPU) and releases the request when the sender is dropped.
 static KEEP_AWAKE: std::sync::Mutex<Option<std::sync::mpsc::Sender<()>>> =
@@ -1330,153 +1325,54 @@ fn set_keep_awake(on: bool) -> bool {
 
 #[tauri::command]
 fn open_bt_settings() {
-    #[cfg(target_os = "windows")]
-    {
-        let _ = shell_open("ms-settings:bluetooth");
-    }
+    shell_open("ms-settings:bluetooth");
 }
 
 #[tauri::command]
 fn open_location_settings() {
-    #[cfg(target_os = "windows")]
-    {
-        let _ = shell_open("ms-settings:privacy-location");
-    }
-}
-
-// Where this PC is, from the Windows Location service (Windows.Devices.Geolocation).
-// One short call, no helper process; the island remembers the answer for hours.
-// Returns "lat,lon|" or None when Location is off / not allowed for desktop apps
-// (the island then falls back to the place of the internet connection).
-#[tauri::command]
-async fn get_location() -> Option<String> {
-    None
+    shell_open("ms-settings:privacy-location");
 }
 
 #[tauri::command]
 fn open_wifi_settings() {
-    #[cfg(target_os = "windows")]
-    {
-        let _ = shell_open("ms-settings:network-wifi");
-    }
+    shell_open("ms-settings:network-wifi");
 }
 
 #[tauri::command]
 fn open_url(url: String) {
-    if url.starts_with("http://") || url.starts_with("https://") {
-        #[cfg(target_os = "windows")]
-        {
-            let _ = shell_open(&url);
-        }
+    // Only web links, and no control characters. ShellExecuteW never goes through cmd.exe,
+    // so the text is handed to the default browser as it is and can not run anything.
+    if (url.starts_with("http://") || url.starts_with("https://")) && !url.chars().any(|c| c.is_control()) {
+        shell_open(&url);
     }
 }
 
 #[tauri::command]
 fn lock_screen() {
+    // LockWorkStation() locks the session directly (no rundll32)
     #[cfg(target_os = "windows")]
-    {
+    unsafe {
         #[link(name = "user32")]
         extern "system" {
-            fn LockWorkStation() -> windows::Win32::Foundation::BOOL;
+            fn LockWorkStation() -> i32;
         }
-        unsafe {
-            let _ = LockWorkStation();
-        }
+        let _ = LockWorkStation();
     }
 }
 
 #[tauri::command]
 fn take_snip() {
-    #[cfg(target_os = "windows")]
-    {
-        let _ = shell_open("ms-screenclip:");
-    }
+    shell_open("ms-screenclip:");
 }
 
 #[tauri::command]
 fn launch_quick_action(id: String) {
-    #[cfg(target_os = "windows")]
-    {
-        match id.as_str() {
-            "calc" => {
-                let _ = cmd("calc.exe").spawn();
-            }
-            "taskmgr" => {
-                let _ = cmd("taskmgr.exe").spawn();
-            }
-            "terminal" => {
-                if cmd("wt.exe").spawn().is_err() {
-                    let _ = std::process::Command::new("cmd.exe").arg("/C").arg("start").arg("cmd.exe").spawn();
-                }
-            }
-            "notepad" => {
-                let _ = cmd("notepad.exe").spawn();
-            }
-            "explorer" => {
-                let _ = cmd("explorer.exe").spawn();
-            }
-            _ => {}
-        }
+    // Only the Calculator tile still opens an outside app (through the shell, no cmd.exe).
+    if id == "calc" {
+        shell_open("calc.exe");
     }
 }
 
-const RUN_KEY: &str = r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run";
-
-// True while the Windows lock screen is up (Win+L, Dynamic Lock, idle lock, sign-in screen).
-#[tauri::command]
-fn is_session_locked() -> bool {
-    #[cfg(target_os = "windows")]
-    unsafe {
-        #[link(name = "wtsapi32")]
-        extern "system" {
-            fn WTSQuerySessionInformationW(
-                h: isize,
-                session: u32,
-                class: i32,
-                buf: *mut *mut u16,
-                len: *mut u32,
-            ) -> i32;
-            fn WTSFreeMemory(p: *mut core::ffi::c_void);
-        }
-        #[link(name = "user32")]
-        extern "system" {
-            fn OpenInputDesktop(flags: u32, inherit: i32, access: u32) -> isize;
-            fn CloseDesktop(h: isize) -> i32;
-        }
-        // 1) Session info: SessionFlags == 0 means locked (not fooled by UAC prompts).
-        // WTSINFOEXW = { DWORD Level; <8-byte aligned union> }, and the LEVEL1 struct inside starts with
-        // SessionId (4) + SessionState (4) before SessionFlags. The union is 8-byte aligned (it holds
-        // LARGE_INTEGERs), so SessionFlags sits at offset 16, NOT 12 (offset 12 is SessionState, which is
-        // 0 for every active session and made the PC look locked all the time).
-        let mut p: *mut u16 = std::ptr::null_mut();
-        let mut n: u32 = 0;
-        if WTSQuerySessionInformationW(0, 0xFFFF_FFFF, 25, &mut p, &mut n) != 0 && !p.is_null() {
-            let flags = if n >= 20 {
-                Some(*((p as *const u8).add(16) as *const i32))
-            } else {
-                None
-            };
-            WTSFreeMemory(p as *mut core::ffi::c_void);
-            if let Some(f) = flags {
-                return f == 0;
-            }
-        }
-        // 2) Fallback: the input desktop can not be opened while the lock screen is up
-        let h = OpenInputDesktop(0, 0, 0x0100);
-        if h == 0 {
-            return true;
-        }
-        CloseDesktop(h);
-        return false;
-    }
-    #[cfg(not(target_os = "windows"))]
-    false
-}
-
-#[tauri::command]
-fn island_visible(window: WebviewWindow) -> bool {
-    window.is_visible().unwrap_or(true)
-}
 
 #[tauri::command]
 fn focus_island(window: WebviewWindow) {
@@ -1610,8 +1506,14 @@ fn settings_changed(app: AppHandle, json: String) {
     let _ = app.emit("settings-changed", json);
 }
 
-const APPROVED_KEY: &str =
-    r"HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run";
+// Autostart lives in two HKCU keys: Run (the command) and StartupApproved\Run (the on/off flag
+// shown in Windows' Startup Apps list). Both are read and written with the registry API.
+#[cfg(target_os = "windows")]
+const RUN_SUBKEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Run";
+#[cfg(target_os = "windows")]
+const APPROVED_SUBKEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run";
+#[cfg(target_os = "windows")]
+const AUTOSTART_NAME: &str = "Inex Island";
 
 // The exe that should start at login. A dev build (target\\debug) can not start alone, so for
 // dev the real release exe (made by `npm run build`) is used instead.
@@ -1643,13 +1545,9 @@ fn register_autostart() -> bool {
         }
     };
     let value = format!("\"{}\" --autostart", exe);
-    let ok = reg_native::set_string(RUN_KEY, "Inex Island", value.as_str());
+    let ok = winreg::set_string(RUN_SUBKEY, AUTOSTART_NAME, &value);
     // 02 00 00 00 ... = enabled (Windows writes 03 when the user/Windows disabled it)
-    let _ = reg_native::set_binary(
-        APPROVED_KEY,
-        "Inex Island",
-        &[0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-    );
+    let _ = winreg::set_binary(APPROVED_SUBKEY, AUTOSTART_NAME, &[0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
     log(&format!("autostart: register {} -> {}", value, ok));
     ok
 }
@@ -1667,8 +1565,8 @@ fn set_autostart(on: bool) -> bool {
             return ok;
         } else {
             let _ = std::fs::remove_file(&marker);
-            reg_native::delete_value(RUN_KEY, "Inex Island");
-            reg_native::delete_value(APPROVED_KEY, "Inex Island");
+            let _ = winreg::delete_value(RUN_SUBKEY, AUTOSTART_NAME);
+            let _ = winreg::delete_value(APPROVED_SUBKEY, AUTOSTART_NAME);
             return true;
         }
     }
@@ -1683,7 +1581,7 @@ fn set_autostart(on: bool) -> bool {
 fn get_autostart() -> bool {
     #[cfg(target_os = "windows")]
     {
-        reg_native::get_string(RUN_KEY, "Inex Island").is_some()
+        winreg::get_string(RUN_SUBKEY, AUTOSTART_NAME).is_some()
     }
     #[cfg(not(target_os = "windows"))]
     {
@@ -1694,9 +1592,9 @@ fn get_autostart() -> bool {
 // If an earlier dev build registered itself for startup, remove that dead entry
 #[cfg(target_os = "windows")]
 fn drop_stale_autostart() {
-    if let Some(text) = reg_native::get_string(RUN_KEY, "Inex Island") {
+    if let Some(text) = winreg::get_string(RUN_SUBKEY, AUTOSTART_NAME) {
         if text.to_lowercase().contains("\\target\\debug\\") {
-            reg_native::delete_value(RUN_KEY, "Inex Island");
+            let _ = winreg::delete_value(RUN_SUBKEY, AUTOSTART_NAME);
         }
     }
 }
@@ -1829,7 +1727,6 @@ fn main() {
             {
                 native_events::setup_native_events(app.handle().clone());
                 audio_events::start(app.handle().clone());
-                downloads::start_downloads_watcher(app.handle().clone());
             }
 
             if let Some(window) = app.get_webview_window("main") {
@@ -1913,10 +1810,6 @@ fn main() {
             get_net_speed,
             privacy::privacy_watch_start,
             focus_island,
-            island_visible,
-            is_session_locked,
-            downloads::downloads_scan,
-            downloads::open_download,
             open_settings,
             close_settings,
             drag_settings,
@@ -1948,7 +1841,6 @@ fn main() {
             get_sys_stats,
             get_sys_load,
             wifi::get_wifi_networks,
-            wifi::wifi_scan,
             wifi::connect_wifi_network,
             wifi::wifi_join,
             wifi::wifi_forget,
@@ -1958,7 +1850,6 @@ fn main() {
             bt_backend,
             get_mic_muted,
             set_mic_muted,
-            launch_notepad,
             set_keep_awake,
             bluetooth::get_bt_devices,
             visualizer::set_visualizer_active,
@@ -1966,7 +1857,6 @@ fn main() {
             open_wifi_settings,
             open_location_settings,
             open_url,
-            get_location,
             lock_screen,
             take_snip,
             launch_quick_action,
@@ -1981,9 +1871,6 @@ fn main() {
             net::recv_end,
             net::recv_abort,
             net::drag_out_file,
-            net::native_prompt,
-            net::stage_begin,
-            net::stage_end,
             setup_shelf_drop,
             quick_share::start_quick_share,
             quick_share::stop_quick_share,
@@ -1999,11 +1886,11 @@ fn main() {
             quick_share::stage_quick_share_files,
             quick_share::get_staged_quick_share_files,
             quick_share::clear_staged_quick_share_files,
+            quick_share::stage_file_for_phone,
+            quick_share::clear_staged_files,
             quick_share::start_inex_drop,
             quick_share::stop_inex_drop,
             quick_share::get_inex_drop_status,
-            quick_share::stage_file_for_phone,
-            quick_share::clear_staged_files,
             quick_share::respond_inex_transfer,
             check_update,
             get_app_version,

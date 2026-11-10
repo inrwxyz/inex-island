@@ -4,10 +4,10 @@
 //!   1. WTSRegisterSessionNotification -> WM_WTSSESSION_CHANGE (Lock / Unlock)
 //!   2. AddClipboardFormatListener    -> WM_CLIPBOARDUPDATE   (Clipboard Copy)
 //!   3. WM_POWERBROADCAST             -> Power / Battery / Charger events
-//!   5. SetWinEventHook               -> Fullscreen (Smart Mode) & PIN/Password prompts
-//!   6. WM_DISPLAYCHANGE              -> Fullscreen re-check after a resolution / monitor change
-//!   7. WM_QUERYENDSESSION/ENDSESSION -> Windows shutting down / logging off
-//!   8. RegisterPowerSettingNotification -> exact battery % and AC/DC source changes
+//!   4. SetWinEventHook               -> Fullscreen (Smart Mode) & PIN/Password prompts
+//!   5. WM_DISPLAYCHANGE              -> Fullscreen re-check after a resolution / monitor change
+//!   6. WM_QUERYENDSESSION/ENDSESSION -> Windows shutting down / logging off
+//!   7. RegisterPowerSettingNotification -> exact battery % and AC/DC source changes
 //!
 //! Result: 0.0% CPU when idle!
 
@@ -17,7 +17,9 @@ use std::sync::atomic::{AtomicBool, AtomicIsize, Ordering};
 use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, Manager};
 use windows::Win32::Foundation::{BOOL, HWND, LPARAM, LRESULT, WPARAM};
-use windows::Win32::UI::WindowsAndMessaging::{GetClassNameW, GetWindowThreadProcessId};
+use windows::Win32::UI::WindowsAndMessaging::{
+    GetClassNameW, GetWindowThreadProcessId,
+};
 
 #[link(name = "wtsapi32")]
 extern "system" {
@@ -350,13 +352,12 @@ pub fn setup_native_events(app: AppHandle) {
         }
     });
 
-    // Run Low-Level Keyboard Hook & WinEventHook in a dedicated background thread with message loop
+    // Run the WinEventHooks in a dedicated background thread with message loop
     std::thread::spawn(move || {
         unsafe {
             use windows::Win32::UI::WindowsAndMessaging::{
                 DispatchMessageW, GetMessageW, TranslateMessage, MSG,
             };
-
 
             let win_hook = SetWinEventHook(
                 EVENT_SYSTEM_FOREGROUND,

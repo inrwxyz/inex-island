@@ -163,7 +163,9 @@ function switchView(viewId, stateClass, winWidth, winHeight) {
     }
   }
 
-  invokeTauri('resize_island', { width: winWidth, height: effH });
+  let win = { width: winWidth, height: effH };
+  if (viewId === 'view-compact' && typeof compactWindowSize === 'function') win = compactWindowSize(win);
+  invokeTauri('resize_island', win);
 
   if (viewId === 'view-compact' && appState.timerStartPending) {
     appState.timerStartPending = false;

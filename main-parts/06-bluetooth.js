@@ -338,6 +338,18 @@ function hudWindowSize() {
 // (Before, only the CSS size matched: the OS window stayed 265x36, so these pills were clipped and looked smaller.)
 function popupIsBusy() { return !!(appState.transferring || appState.prompting || appState.lockerPrompting || appState.toast); }
 
+// Window for the compact view: the HUD-size window while a status popup (transfer / toast / prompt) is open,
+// the small notch window otherwise. Used when the menu closes or Settings change, so those never shrink the window
+// under an open popup (that clipped the transfer pill until another status resized it again).
+function compactWindowSize(win) {
+  if (popupIsBusy() && !(island.classList.contains('alarm-active') || island.classList.contains('bt-hud-active')
+      || island.classList.contains('biometric-active') || island.classList.contains('bio-hud'))) {
+    popupWinOn = true;
+    return hudWindowSize();
+  }
+  return win;
+}
+
 function hudRestoreWindow() {
   if (!hudCanShow() || appState.alarmActive) return;   // the timer-end card keeps its own window size
   if (popupIsBusy()) { tryInvoke('resize_island', hudWindowSize()); return; }   // a popup is still open: keep the HUD-size window

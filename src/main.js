@@ -238,7 +238,9 @@ function switchView(viewId, stateClass, winWidth, winHeight) {
     }
   }
 
-  invokeTauri('resize_island', { width: winWidth, height: effH });
+  let win = { width: winWidth, height: effH };
+  if (viewId === 'view-compact' && typeof compactWindowSize === 'function') win = compactWindowSize(win);
+  invokeTauri('resize_island', win);
 
   if (viewId === 'view-compact' && appState.timerStartPending) {
     appState.timerStartPending = false;
@@ -817,7 +819,6 @@ island.addEventListener('mouseleave', () => {
 // 4. Control Center Navigation & Sub-Menus
 // (Clock in main menu is display-only; subviews navigate back via their left back-arrow)
 
-const BARS = ['▁', '▂▃', '▂▄▅', '▂▄▆█', '▂▄▆█'];
 const ROW_ICON = {
   link: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>',
   unlink: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.84 12.25l1.72-1.71a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M5.17 11.75l-1.71 1.71a5 5 0 0 0 7.07 7.07l1.71-1.71"/><line x1="8" y1="2" x2="8" y2="5"/><line x1="2" y1="8" x2="5" y2="8"/><line x1="16" y1="19" x2="16" y2="22"/><line x1="19" y1="16" x2="22" y2="16"/></svg>'
@@ -1518,6 +1519,18 @@ function hudWindowSize() {
 // (Before, only the CSS size matched: the OS window stayed 265x36, so these pills were clipped and looked smaller.)
 function popupIsBusy() { return !!(appState.transferring || appState.prompting || appState.lockerPrompting || appState.toast); }
 
+// Window for the compact view: the HUD-size window while a status popup (transfer / toast / prompt) is open,
+// the small notch window otherwise. Used when the menu closes or Settings change, so those never shrink the window
+// under an open popup (that clipped the transfer pill until another status resized it again).
+function compactWindowSize(win) {
+  if (popupIsBusy() && !(island.classList.contains('alarm-active') || island.classList.contains('bt-hud-active')
+      || island.classList.contains('biometric-active') || island.classList.contains('bio-hud'))) {
+    popupWinOn = true;
+    return hudWindowSize();
+  }
+  return win;
+}
+
 function hudRestoreWindow() {
   if (!hudCanShow() || appState.alarmActive) return;   // the timer-end card keeps its own window size
   if (popupIsBusy()) { tryInvoke('resize_island', hudWindowSize()); return; }   // a popup is still open: keep the HUD-size window
@@ -1768,9 +1781,6 @@ const ACTION_TILE_ICONS = {
   settings: '<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1 2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83 2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',
   alarm: '<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>',
   calc: '<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" y1="6" x2="16" y2="6"/><line x1="16" y1="14" x2="16" y2="18"/><path d="M8 10h.01M12 10h.01M16 10h.01M8 14h.01M12 14h.01M8 18h.01M12 18h.01"/></svg>',
-  taskmgr: '<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>',
-  terminal: '<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>',
-  explorer: '<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>',
   restart: '<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/></svg>',
   notepad: '<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><path d="M16 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8z"/><path d="M15 3v5h5"/><path d="M8 13h8M8 17h5"/></svg>',
   drop: '<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"><path d="M12 2v10M8 8l4-4 4 4M4 14v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg>'
@@ -1786,9 +1796,6 @@ const ACTION_TILE_TITLES = {
   settings: 'Open Settings',
   alarm: 'Alarm',
   calc: 'Calculator',
-  taskmgr: 'Task Manager',
-  terminal: 'Terminal / Command Prompt',
-  explorer: 'File Explorer',
   restart: 'Restart Inex Island',
   notepad: 'Quick Notes',
   drop: 'Inex Drop'
@@ -4122,13 +4129,6 @@ async function invokeRaw(cmd, bytes, headers) {
   return null;
 }
 
-function toArrayBuffer(b) {
-  if (b instanceof ArrayBuffer) return b;
-  if (ArrayBuffer.isView(b)) return b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength);
-  if (Array.isArray(b)) return new Uint8Array(b).buffer;
-  return null;
-}
-
 function waitBuffered(dc, limit) {
   return new Promise((resolve) => {
     if (dc.readyState !== 'open' || dc.bufferedAmount <= limit) return resolve();
@@ -4879,7 +4879,7 @@ onTauriEvent('locker-unlock', (event) => {
     island.classList.add('island-locker-glow');
 
     // Kind: face / fingerprint / unlock
-    const kind = payload.type === 'fingerprint' ? 'fingerprint' : payload.type === 'charging' ? 'charging' : payload.type === 'low_battery' ? 'low_battery' : payload.type === 'alarm' ? 'alarm' : payload.type === 'transfer' ? 'transfer' : payload.type === 'bluetooth' ? 'bluetooth' : payload.type === 'download' ? 'download' : payload.type === 'download_done' ? 'download_done' : 'scan';
+    const kind = payload.type === 'fingerprint' ? 'fingerprint' : payload.type === 'charging' ? 'charging' : payload.type === 'low_battery' ? 'low_battery' : payload.type === 'alarm' ? 'alarm' : payload.type === 'transfer' ? 'transfer' : payload.type === 'bluetooth' ? 'bluetooth' : 'scan';
     const targetName = payload.target ? `${payload.target}` : 'Unlocked';
 
     renderCenter();
@@ -4895,12 +4895,6 @@ onTauriEvent('locker-unlock', (event) => {
       if (typeof showBtConnectHud === 'function') {
         showBtConnectHud(payload.target || 'AirPods Pro', payload.kind || 'headphones', parseInt(payload.pct, 10) || 90);
       }
-    } else if (kind === 'download') {
-      const dlSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 11l5 5 5-5"/><path d="M5 20h14"/></svg>';
-      showDeviceHud({ iconHTML: dlSvg, plain: true, accent: 'blue', name: payload.target || 'Inex-Island-Setup.exe', tag: 'Downloading • 3.5 MB', ms: 2500 });
-    } else if (kind === 'download_done') {
-      const dlDoneSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline class="clip-tick" points="5 12.5 10 17.5 19 7"/></svg>';
-      showDeviceHud({ iconHTML: dlDoneSvg, plain: true, accent: 'ok', name: payload.target || 'Inex-Island-Setup.exe', tag: 'Download Complete • 3.5 MB', ms: 4000 });
     } else if (kind === 'transfer') {
       clearInterval(testTransferTimer);
       appState.xferDir = payload.dir === 'recv' ? 'recv' : 'send';
@@ -5587,10 +5581,6 @@ function syncEq() {
   eqKick();
 }
 
-function chime() {
-  invokeTauri('play_alarm_sound').catch(() => {});
-}
-
 
 
 
@@ -5678,8 +5668,41 @@ try {
   }
 } catch (_) {}
 
+// fetch with a time limit: one hanging request must never keep the weather "busy" for ever
+function wxFetch(url, ms = 7000) {
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), ms);
+  return fetch(url, { signal: ctl.signal }).finally(() => clearTimeout(t));
+}
+
+// City typed in Settings -> lat/lon through Open-Meteo's free geocoding (no key). Runs only when the city changes.
+async function geocodeCity(name) {
+  const q = name.toLowerCase();
+  try {
+    const sv = JSON.parse(localStorage.getItem('inex.geo') || 'null');
+    if (sv && sv.q === q && sv.loc) return sv.loc;
+  } catch (_) {}
+  const res = await wxFetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(name)}&count=1&language=en&format=json`);
+  if (!res.ok) return null;
+  const d = await res.json();
+  const r = d && d.results && d.results[0];
+  if (!r || !isFinite(+r.latitude) || !isFinite(+r.longitude)) return null;
+  const loc = { lat: +r.latitude, lon: +r.longitude, city: r.name || name };
+  try { localStorage.setItem('inex.geo', JSON.stringify({ q, loc })); } catch (_) {}
+  return loc;
+}
+
 // Fast IP-based geolocation (no Windows Location COM delays or process locks)
 async function detectLocation() {
+  const cityQ = ((SET.weather && SET.weather.city) || '').trim();
+  if (cityQ) {
+    if (weather.cityLoc && weather.cityQ === cityQ) return weather.cityLoc;
+    try {
+      const g = await geocodeCity(cityQ);
+      if (g) { weather.cityQ = cityQ; weather.cityLoc = g; return g; }
+    } catch (_) {}
+    // city not found / offline: fall back to the automatic IP location below
+  }
   const LOC_TTL = 6 * 60 * 60 * 1000, FAIL_TTL = 5 * 60 * 1000;
   if (!weather.loc) {
     try {
@@ -5693,7 +5716,7 @@ async function detectLocation() {
   let loc = null;
   const tries = [
     async () => {
-      const res = await fetch('https://ipapi.co/json/');
+      const res = await wxFetch('https://ipapi.co/json/');
       if (res.ok) {
         const d = await res.json();
         const lat = d.latitude || d.lat, lon = d.longitude || d.lon;
@@ -5702,7 +5725,7 @@ async function detectLocation() {
       return null;
     },
     async () => {
-      const res = await fetch('https://ipwho.is/');
+      const res = await wxFetch('https://ipwho.is/');
       if (res.ok) {
         const d = await res.json();
         if (d && d.success !== false) return { lat: +d.latitude, lon: +d.longitude, city: d.city || '' };
@@ -5710,7 +5733,15 @@ async function detectLocation() {
       return null;
     },
     async () => {
-      const res = await fetch('https://freeipapi.com/api/json');
+      const res = await wxFetch('http://ip-api.com/json/?fields=status,lat,lon,city');
+      if (res.ok) {
+        const d = await res.json();
+        if (d && d.status === 'success') return { lat: +d.lat, lon: +d.lon, city: d.city || '' };
+      }
+      return null;
+    },
+    async () => {
+      const res = await wxFetch('https://freeipapi.com/api/json');
       if (res.ok) {
         const d = await res.json();
         if (d && d.latitude && d.longitude) return { lat: +d.latitude, lon: +d.longitude, city: d.cityName || '' };
@@ -5731,8 +5762,13 @@ async function detectLocation() {
     try { localStorage.setItem('inex.loc', JSON.stringify({ loc, at: weather.locAt })); } catch (_) {}
   } else {
     weather.locFailAt = Date.now();
+    // every lookup failed: keep using the last known place instead of showing nothing
+    try {
+      const old = JSON.parse(localStorage.getItem('inex.loc') || 'null');
+      if (old && old.loc) weather.loc = old.loc;
+    } catch (_) {}
   }
-  return loc;
+  return loc || weather.loc;
 }
 
 async function refreshWeather() {
@@ -5760,7 +5796,7 @@ async function refreshWeather() {
     let tempStr = '', code = 0, isDay = true;
     try {
       const unitParam = unit === 'F' ? '&temperature_unit=fahrenheit' : '';
-      const wRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${loc.lat}&longitude=${loc.lon}&current=temperature_2m,weather_code,is_day&timezone=auto${unitParam}`);
+      const wRes = await wxFetch(`https://api.open-meteo.com/v1/forecast?latitude=${loc.lat}&longitude=${loc.lon}&current=temperature_2m,weather_code,is_day&timezone=auto${unitParam}`);
       if (wRes.ok) {
         const wData = await wRes.json();
         const tVal = wData?.current?.temperature_2m;
@@ -5774,7 +5810,7 @@ async function refreshWeather() {
 
     if (!tempStr) {
       try {
-        const r = await fetch(`https://wttr.in/${ck}?format=j1`);
+        const r = await wxFetch(`https://wttr.in/${ck}?format=j1`);
         if (r.ok) {
           const cur = (await r.json())?.current_condition?.[0];
           const val = cur ? (unit === 'F' ? cur.temp_F : cur.temp_C) : undefined;
@@ -6058,8 +6094,6 @@ function clipHashString(s) {
   return (h >>> 0).toString(16) + ':' + s.length;
 }
 
-// Text and background items (images/files) are capped separately, so a burst of screenshots never pushes text out
-const CLIPBOARD_MAX_HIDDEN = 8;
 function trimClipboardItems() {
   // newest first: a new copy pushes the oldest one (text, image or file) out once there are more than CLIPBOARD_MAX
   clipboardItems = clipboardItems.slice(0, CLIPBOARD_MAX);
@@ -6203,7 +6237,6 @@ async function addClipboardImage(dataUrl) {
 }
 
 // ---------- drawing ----------
-const CLIP_ICON_FILE = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><polyline points="14 3 14 8 19 8"/></svg>';
 
 function renderClipboardList() {
   const container = document.getElementById('clipboard-list');
@@ -6481,7 +6514,8 @@ function applySettings() {
   if (appState.currentView === 'view-compact' || !appState.currentView) {
     clearTimeout(resizeDebounce);
     resizeDebounce = setTimeout(() => {
-      invokeTauri('resize_island', { width: 265, height: isFloating ? 48 : 36 });
+      const small = { width: 265, height: isFloating ? 48 : 36 };
+      invokeTauri('resize_island', typeof compactWindowSize === 'function' ? compactWindowSize(small) : small);
     }, 35);
   } else if (appState.lastWin) {
     clearTimeout(resizeDebounce);
@@ -6729,84 +6763,4 @@ onTauriEvent('system-resumed', () => {
     }
   }
   scheduleNextAlarm();
-});
-
-// ==================== 13. DOWNLOAD PROGRESS / COMPLETE HUD ====================
-// Rust (downloads-changed event) sends native Win32 directory change notifications with 0% polling.
-const DL_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 11l5 5 5-5"/><path d="M5 20h14"/></svg>';
-const DL_DONE_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline class="clip-tick" points="5 12.5 10 17.5 19 7"/></svg>';
-const dlTrack = new Map();       // partial file name -> { size, changedAt, firstAt }
-const dlSeenRecent = new Set();
-let dlSeeded = false;
-let dlOpenName = null;           // finished file the HUD would open on click
-let dlScanBusy = false;
-
-function dlSize(b) {
-  if (b >= 1073741824) return (b / 1073741824).toFixed(1) + ' GB';
-  if (b >= 1048576) return (b / 1048576).toFixed(1) + ' MB';
-  return Math.max(1, Math.round(b / 1024)) + ' KB';
-}
-function dlClean(name) {
-  const n = name.replace(/\.(crdownload|part|opdownload|download|partial)$/i, '');
-  return /^unconfirmed \d+/i.test(n) ? 'New download' : n;
-}
-
-async function handleDownloadsChanged() {
-  if (dlScanBusy) return;
-  if (!(SET.general && SET.general.downloadHud)) {
-    island.classList.remove('dl-active'); dlTrack.clear(); dlSeeded = false; return;
-  }
-  dlScanBusy = true;
-  try {
-    const r = await tryInvoke('downloads_scan', {});
-    if (!r || !Array.isArray(r.partials)) return;
-    const now = Date.now();
-    const cur = new Set();
-    let started = null;
-    for (const f of r.partials) {
-      cur.add(f.name);
-      const t = dlTrack.get(f.name);
-      if (!t) {
-        dlTrack.set(f.name, { size: f.size, changedAt: now, firstAt: now });
-        if (dlSeeded && f.age_secs <= 15 && !started) started = f;
-      } else if (f.size !== t.size) { t.size = f.size; t.changedAt = now; }
-    }
-    // vanished partial = finished (or cancelled): finished only if a fresh file appeared
-    let finished = null;
-    for (const [name, t] of [...dlTrack]) {
-      if (cur.has(name)) continue;
-      dlTrack.delete(name);
-      if (!dlSeeded || now - t.firstAt < 1000) continue;
-      const base = dlClean(name).toLowerCase();
-      const fresh = (r.recent || []).filter((f) => f.age_secs <= 20 && !dlSeenRecent.has(f.name));
-      finished = fresh.find((f) => f.name.toLowerCase() === base) || fresh[0] || null;
-    }
-    (r.recent || []).forEach((f) => dlSeenRecent.add(f.name));
-    if (dlSeenRecent.size > 400) dlSeenRecent.clear();
-    dlSeeded = true;
-
-    // Inex Drop / Quick Share write their files into Downloads as .part: while a transfer is running (and a few
-    // seconds after) the transfer pill owns the island, so no "Downloading" / "Download Complete" popups and no blue line.
-    const xferBusy = !!appState.transferring || (now - (appState.lastXferEnd || 0) < 5000);
-    const active = [...dlTrack.values()].some((t) => now - t.changedAt < 4000);
-    island.classList.toggle('dl-active', active && !xferBusy && appState.currentView === 'view-compact');
-
-    if (xferBusy) {
-      // skip the popups
-    } else if (finished) {
-      dlOpenName = finished.name;
-      showDeviceHud({ iconHTML: DL_DONE_SVG, plain: true, accent: 'ok', name: finished.name, tag: `Download Complete • ${dlSize(finished.size)}`, ms: 4200 });
-    } else if (started) {
-      showDeviceHud({ iconHTML: DL_SVG, plain: true, accent: 'blue', name: dlClean(started.name), tag: `Downloading • ${dlSize(started.size)}`, ms: 2200 });
-    }
-  } finally {
-    dlScanBusy = false;
-  }
-}
-onTauriEvent('downloads-changed', handleDownloadsChanged);
-document.getElementById('c-bt-hud')?.addEventListener('click', (e) => {
-  if (!dlOpenName || !island.classList.contains('bt-hud-active')) return;
-  if (!document.getElementById('bt-hud-name') || document.getElementById('bt-hud-name').textContent !== dlOpenName) return;
-  e.stopPropagation();
-  invokeTauri('open_download', { name: dlOpenName });
 });

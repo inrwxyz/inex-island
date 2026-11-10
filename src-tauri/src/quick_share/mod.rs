@@ -315,9 +315,8 @@ pub fn control_quick_share(cmd: String) {
 #[tauri::command]
 pub fn open_quick_share_downloads() {
     let eng = get_engine();
-    let _ = std::process::Command::new("explorer")
-        .arg(&eng.downloads_dir)
-        .spawn();
+    // opens the folder through the shell (no explorer.exe helper process)
+    crate::shell_open(&eng.downloads_dir.to_string_lossy());
 }
 
 #[tauri::command]

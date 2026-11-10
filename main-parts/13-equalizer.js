@@ -93,10 +93,6 @@ function syncEq() {
   eqKick();
 }
 
-function chime() {
-  invokeTauri('play_alarm_sound').catch(() => {});
-}
-
 
 
 

@@ -17,13 +17,6 @@ async function invokeRaw(cmd, bytes, headers) {
   return null;
 }
 
-function toArrayBuffer(b) {
-  if (b instanceof ArrayBuffer) return b;
-  if (ArrayBuffer.isView(b)) return b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength);
-  if (Array.isArray(b)) return new Uint8Array(b).buffer;
-  return null;
-}
-
 function waitBuffered(dc, limit) {
   return new Promise((resolve) => {
     if (dc.readyState !== 'open' || dc.bufferedAmount <= limit) return resolve();

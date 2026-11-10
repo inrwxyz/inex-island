@@ -212,48 +212,6 @@ pub async fn drag_out_file(app: tauri::AppHandle, path: String) -> bool {
     }
 }
 
-// Is a Windows password / PIN / credential prompt in front? ("password" or "")
-#[tauri::command]
-pub async fn native_prompt() -> String {
-    #[cfg(target_os = "windows")]
-    {
-        use windows::core::PWSTR;
-        use windows::Win32::Foundation::{CloseHandle, HWND};
-        use windows::Win32::System::Threading::{
-            OpenProcess, QueryFullProcessImageNameW, PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION,
-        };
-        use windows::Win32::UI::WindowsAndMessaging::{GetClassNameW, GetForegroundWindow, GetWindowThreadProcessId};
-        unsafe {
-            let hwnd = GetForegroundWindow();
-            if hwnd == HWND::default() {
-                return String::new();
-            }
-            let mut class_buf = [0u16; 128];
-            let cn = GetClassNameW(hwnd, &mut class_buf);
-            let class = String::from_utf16_lossy(&class_buf[..cn.max(0) as usize]).to_lowercase();
-
-            let mut pid = 0u32;
-            GetWindowThreadProcessId(hwnd, Some(&mut pid));
-            let mut exe = String::new();
-            if let Ok(h) = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid) {
-                let mut buf = [0u16; 520];
-                let mut len = buf.len() as u32;
-                if QueryFullProcessImageNameW(h, PROCESS_NAME_WIN32, PWSTR(buf.as_mut_ptr()), &mut len).is_ok() {
-                    exe = String::from_utf16_lossy(&buf[..len as usize]).to_lowercase();
-                }
-                let _ = CloseHandle(h);
-            }
-            let is_prompt = exe.ends_with("credentialuibroker.exe")
-                || exe.ends_with("credwiz.exe")
-                || exe.ends_with("consent.exe")
-                || class.contains("credential dialog");
-            return if is_prompt { "password".to_string() } else { String::new() };
-        }
-    }
-    #[cfg(not(target_os = "windows"))]
-    String::new()
-}
-
 // ---- tray staging: temp copy of a dropped file, so it can be dragged out again ----
 fn stage_root() -> PathBuf {
     std::env::temp_dir().join("InexTray")
@@ -263,31 +221,3 @@ pub fn clean_stage() {
     let _ = std::fs::remove_dir_all(stage_root());
 }
 
-#[tauri::command]
-pub fn stage_begin(file_name: String) -> Result<String, String> {
-    let name = clean_name(&file_name);
-    let id = NEXT_ID.fetch_add(1, Ordering::SeqCst);
-    let dir = stage_root().join(id.to_string());
-    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    let part = dir.join(&name);
-    let file = File::create(&part).map_err(|e| e.to_string())?;
-    recv_map()
-        .lock()
-        .map_err(|e| e.to_string())?
-        .insert(id, RecvFile { file, part, dir, name });
-    Ok(id.to_string())
-}
-
-#[tauri::command]
-pub fn stage_end(id: String) -> Result<String, String> {
-    let id: u64 = id.parse().map_err(|_| "bad id".to_string())?;
-    let rf = recv_map()
-        .lock()
-        .map_err(|e| e.to_string())?
-        .remove(&id)
-        .ok_or_else(|| "unknown id".to_string())?;
-    let RecvFile { mut file, part, .. } = rf;
-    let _ = file.flush();
-    drop(file);
-    Ok(part.to_string_lossy().to_string())
-}

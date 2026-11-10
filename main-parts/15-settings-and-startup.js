@@ -19,7 +19,8 @@ function applySettings() {
   if (appState.currentView === 'view-compact' || !appState.currentView) {
     clearTimeout(resizeDebounce);
     resizeDebounce = setTimeout(() => {
-      invokeTauri('resize_island', { width: 265, height: isFloating ? 48 : 36 });
+      const small = { width: 265, height: isFloating ? 48 : 36 };
+      invokeTauri('resize_island', typeof compactWindowSize === 'function' ? compactWindowSize(small) : small);
     }, 35);
   } else if (appState.lastWin) {
     clearTimeout(resizeDebounce);

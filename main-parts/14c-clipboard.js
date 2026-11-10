@@ -110,8 +110,6 @@ function clipHashString(s) {
   return (h >>> 0).toString(16) + ':' + s.length;
 }
 
-// Text and background items (images/files) are capped separately, so a burst of screenshots never pushes text out
-const CLIPBOARD_MAX_HIDDEN = 8;
 function trimClipboardItems() {
   // newest first: a new copy pushes the oldest one (text, image or file) out once there are more than CLIPBOARD_MAX
   clipboardItems = clipboardItems.slice(0, CLIPBOARD_MAX);
@@ -255,7 +253,6 @@ async function addClipboardImage(dataUrl) {
 }
 
 // ---------- drawing ----------
-const CLIP_ICON_FILE = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><polyline points="14 3 14 8 19 8"/></svg>';
 
 function renderClipboardList() {
   const container = document.getElementById('clipboard-list');
