@@ -87,6 +87,9 @@ function triggerBiometricMorph(type, label) {
   if (!box || !glyph || !txt) return;
 
   clearTimeout(bioTimer); clearTimeout(bioAnimPhaseTimer); clearTimeout(bioStartTimer); clearTimeout(bioEndTimer);
+  // a pending "shrink the popup window" timer (left by the locker prompt that just closed) must not cut the morph
+  if (typeof popupWinT !== 'undefined') clearTimeout(popupWinT);
+  if (typeof popupWinOn !== 'undefined') popupWinOn = false;
   // a device HUD may be open: close it instantly
   clearTimeout(btHudTimer); clearTimeout(btHudStartT); clearTimeout(btHudBackT);
   island.classList.remove('bt-hud-active', 'hud-out', 'hud-back');

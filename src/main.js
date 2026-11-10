@@ -1548,7 +1548,14 @@ function syncPopupWindow(busy) {
     tryInvoke('resize_island', hudWindowSize());
   } else if (popupWinOn) {
     // let the pill finish shrinking before the window gets small again
-    popupWinT = setTimeout(() => { popupWinOn = false; if (!popupIsBusy()) hudRestoreWindow(); }, 650);
+    popupWinT = setTimeout(() => {
+      popupWinOn = false;
+      // a biometric morph / device HUD / alarm may have started during the 650 ms wait (e.g. the locker prompt closes
+      // and the unlock morph begins right away): they own the window now, shrinking it here clipped the animation
+      if (island.classList.contains('bio-hud') || island.classList.contains('biometric-active') || island.classList.contains('hud-pre')
+          || island.classList.contains('bt-hud-active') || island.classList.contains('alarm-active') || appState.alarmActive) return;
+      if (!popupIsBusy()) hudRestoreWindow();
+    }, 650);
   }
 }
 
@@ -4718,6 +4725,9 @@ function triggerBiometricMorph(type, label) {
   if (!box || !glyph || !txt) return;
 
   clearTimeout(bioTimer); clearTimeout(bioAnimPhaseTimer); clearTimeout(bioStartTimer); clearTimeout(bioEndTimer);
+  // a pending "shrink the popup window" timer (left by the locker prompt that just closed) must not cut the morph
+  if (typeof popupWinT !== 'undefined') clearTimeout(popupWinT);
+  if (typeof popupWinOn !== 'undefined') popupWinOn = false;
   // a device HUD may be open: close it instantly
   clearTimeout(btHudTimer); clearTimeout(btHudStartT); clearTimeout(btHudBackT);
   island.classList.remove('bt-hud-active', 'hud-out', 'hud-back');
