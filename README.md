@@ -8,8 +8,16 @@ Built with Tauri 2 and Rust.
 ![Platform](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D6?style=flat-square&logo=windows)
 ![Tauri](https://img.shields.io/badge/Tauri-2-FFC131?style=flat-square&logo=tauri)
 ![Rust](https://img.shields.io/badge/Rust-2021-DEA584?style=flat-square&logo=rust)
-![Version](https://img.shields.io/badge/version-0.3.6-brightgreen?style=flat-square)
+![Version](https://img.shields.io/badge/version-0.4.0-brightgreen?style=flat-square)
 ![License](https://img.shields.io/badge/license-GPLv3-blue?style=flat-square)
+
+<br/>
+
+### Bezel Notch & Interface Overview
+<img src="assets/inex-island-bezel.png" alt="Inex Island Bezel Notch Showcase" width="100%" />
+
+### Floating Island Mode
+<img src="assets/inex-island-floating.png" alt="Inex Island Floating Mode Showcase" width="100%" />
 
 </div>
 
