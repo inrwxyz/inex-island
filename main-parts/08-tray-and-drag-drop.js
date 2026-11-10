@@ -42,7 +42,7 @@ function onNativeDrop(p) {
   if (p.type === 'enter' || p.type === 'over') {
     clearTimeout(dropLeaveTimeout);
     if (!appState.draggingOut && appState.currentView !== 'view-drop') {
-      switchView('view-drop', 'state-drop', 200, 92);
+      switchView('view-drop', 'state-drop', ISLAND_WIN_W, 92);
     }
   } else if (p.type === 'leave') {
     clearTimeout(dropLeaveTimeout);

@@ -57,6 +57,7 @@ const appState = {
 // WebRTC Connection Store: peerId -> { pc, dc, name, makingOffer, outgoingQueue }
 const rtcPeers = new Map();
 
+const ISLAND_WIN_W = 316;
 const MEDIA_H = 166;
 const MEDIA_H_VOL = 198;
 

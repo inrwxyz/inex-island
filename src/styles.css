@@ -72,6 +72,7 @@ body {
   border: 1px solid var(--notch-line, var(--line));
   border-top: none;
   margin-top: 0 !important;
+  top: 0;
   transform-origin: top center;
   transition: width 0.55s var(--spring), height 0.55s var(--spring),
               transform 0.28s var(--spring), opacity 0.22s ease,
@@ -107,6 +108,17 @@ body {
               transform 0.32s cubic-bezier(0.16, 1, 0.3, 1),
               border-radius 0.45s var(--ease-close), opacity 0.25s ease,
               border-color 0.22s ease, background 0.25s ease, top 0.4s var(--ease-close);
+}
+
+/* Menu -> pill (media player closing etc.): always the smooth no-bounce close curve.
+   The pill variants above (media-active, has-badges, hover...) use --spring-pop, which is a GROW spring:
+   when shrinking it undershoots the target size and bounces back, which showed as a jerk after the
+   island had returned to its place. menu-closing is set by switchView() for the length of the shrink. */
+.island.state-compact.menu-closing {
+  transition: width 0.5s var(--ease-close), height 0.5s var(--ease-close),
+              transform 0.32s cubic-bezier(0.16, 1, 0.3, 1),
+              border-radius 0.45s var(--ease-close), opacity 0.25s ease,
+              border-color 0.22s ease, background 0.25s ease, top 0.4s var(--ease-close) !important;
 }
 
 /* Floating Island Style: floats slightly below the screen top, always a fully round pill.

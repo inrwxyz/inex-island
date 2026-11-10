@@ -124,7 +124,7 @@ function renderQuickActionTiles() {
       });
     } else if (id === 'clipboard') {
       btn.addEventListener('click', () => {
-        switchView('view-clipboard', 'state-sub', 320, 260);
+        switchView('view-clipboard', 'state-sub', ISLAND_WIN_W, 260);
         if (typeof openClipboardView === 'function') openClipboardView();
       });
     } else if (id === 'lock') {

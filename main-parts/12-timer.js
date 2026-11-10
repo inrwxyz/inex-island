@@ -63,7 +63,8 @@ function triggerTimerAlarm(opts) {
   island.classList.toggle('alarm-full', idle);
 
   // 1) window big enough, 2) old content blurs away, 3) island springs open
-  tryInvoke('resize_island', { width: 256, height: 56 });  // same window as the device HUD
+  if (typeof cancelCloseEase === 'function') cancelCloseEase();
+  tryInvoke('resize_island', { width: ISLAND_WIN_W, height: hudIsFloating() ? 64 : 56 });  // same width as compact/HUDs so never jumps sideways
   island.classList.add('hud-pre');
   alarmStartT = setTimeout(() => {
     island.classList.remove('hud-pre');
@@ -110,7 +111,7 @@ function dismissTimerAlarm() {
       renderCenter();
       updateClocks();
       refreshMedia();
-    }, 560);
+    }, 600);
   }, 170);
 }
 

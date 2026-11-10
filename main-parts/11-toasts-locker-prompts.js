@@ -101,7 +101,8 @@ function triggerBiometricMorph(type, label) {
   box.classList.remove('hidden');
 
   // 1) window big enough, 2) old content blurs away, 3) island springs into the rounded square
-  tryInvoke('resize_island', { width: 265, height: 112 });
+  if (typeof cancelCloseEase === 'function') cancelCloseEase();
+  tryInvoke('resize_island', { width: ISLAND_WIN_W, height: 112 });
   island.classList.add('hud-pre');
   bioStartTimer = setTimeout(() => {
     island.classList.remove('hud-pre');

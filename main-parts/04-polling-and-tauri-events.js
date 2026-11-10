@@ -214,11 +214,19 @@ document.getElementById('c-peer-badge').addEventListener('click', (e) => {
   openP2PView();
 });
 
+// Small delay + real hover check: while the window resizes the pointer can touch the edge for one frame,
+// which fired mouseleave and closed the media player right after it opened.
+let _leaveT = null;
+island.addEventListener('mouseenter', () => clearTimeout(_leaveT));
 island.addEventListener('mouseleave', () => {
   if (appState.keepOpen) return;      // typing a Wi-Fi password: do not collapse
-  if (appState.currentView !== 'view-compact') {
-    goCompact();
-  }
+  clearTimeout(_leaveT);
+  _leaveT = setTimeout(() => {
+    if (appState.keepOpen || island.matches(':hover')) return;
+    if (appState.currentView !== 'view-compact') {
+      goCompact();
+    }
+  }, 140);
 });
 
 // 4. Control Center Navigation & Sub-Menus

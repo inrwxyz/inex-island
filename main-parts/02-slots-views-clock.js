@@ -122,15 +122,59 @@ async function toggleMic() {
 document.getElementById('tile-mic').addEventListener('click', () => SLOT_DEFS.mic.click());
 document.getElementById('tile-notepad').addEventListener('click', () => SLOT_DEFS.notepad.click());
 
+let _wasCompactBusy = false;
 function updateCompactStateClasses() {
   const isPrompt = !!(appState.prompting || appState.lockerPrompting);
-  const isBusy = appState.transferring || isPrompt || appState.toast;
+  const isBusy = !!(appState.transferring || isPrompt || appState.toast);
   const hasBadges = appState.trayFiles.length > 0 || appState.peers.length > 0;
+  if (_wasCompactBusy && !isBusy && island.classList.contains('state-compact') &&
+      !island.classList.contains('bt-hud-active') && !island.classList.contains('alarm-active') &&
+      !island.classList.contains('biometric-active')) {
+    triggerCloseEase(650);
+  } else if (!_wasCompactBusy && isBusy) {
+    cancelCloseEase();
+  }
+  _wasCompactBusy = isBusy;
   island.classList.toggle('has-toast', !!appState.toast);
   island.classList.toggle('has-badges', hasBadges && !appState.mediaPlaying && !isBusy);
   island.classList.toggle('media-active', !!appState.mediaPlaying && !isBusy);
 }
 
+// Window resize that never cuts the island while it is still shrinking:
+// growing = instant, shrinking = the window stays big until the CSS close animation has finished.
+// Also keeps OS window width fixed at ISLAND_WIN_W so height-only resizes never shift HWND sideways.
+let _winT = null;
+function smoothResize(win) {
+  clearTimeout(_winT);
+  const cur = appState.lastWin ? { ...appState.lastWin } : null;
+  const target = { width: ISLAND_WIN_W, height: win.height };
+  if (cur && (target.width < cur.width || target.height < cur.height)) {
+    invokeTauri('resize_island', { width: Math.max(cur.width, target.width), height: Math.max(cur.height, target.height) });
+    _winT = setTimeout(() => {
+      const c = island.classList;
+      // a HUD / alarm owns the window right now: do not shrink under it
+      if (appState.currentView === 'view-compact' &&
+          (c.contains('bt-hud-active') || c.contains('hud-pre') || c.contains('hud-back') ||
+           c.contains('biometric-active') || c.contains('bio-hud') || c.contains('alarm-active'))) return;
+      let w = target;
+      if (appState.currentView === 'view-compact' && typeof compactWindowSize === 'function') w = compactWindowSize(target);
+      invokeTauri('resize_island', w);
+    }, 520);
+  } else {
+    invokeTauri('resize_island', target);
+  }
+}
+
+let _menuCloseT = null;
+function triggerCloseEase(ms) {
+  clearTimeout(_menuCloseT);
+  island.classList.add('menu-closing');
+  _menuCloseT = setTimeout(() => island.classList.remove('menu-closing'), ms || 700);
+}
+function cancelCloseEase() {
+  clearTimeout(_menuCloseT);
+  island.classList.remove('menu-closing');
+}
 function switchView(viewId, stateClass, winWidth, winHeight) {
   appState.keepOpen = false;
   if (appState.currentView === 'view-bt' && viewId !== 'view-bt') {
@@ -140,6 +184,15 @@ function switchView(viewId, stateClass, winWidth, winHeight) {
   document.querySelectorAll('.view').forEach((v) => v.classList.remove('active'));
   const target = document.getElementById(viewId);
   if (target) target.classList.add('active');
+
+  // Menu -> pill: tag the island for the length of the shrink so CSS can use the no-bounce close curve
+  // (the "media playing" pill otherwise uses the grow-spring, which undershoots the target size and bounces back).
+  const wasCompact = island.classList.contains('state-compact');
+  if (stateClass === 'state-compact' && !wasCompact) {
+    triggerCloseEase(700);
+  } else {
+    cancelCloseEase();
+  }
 
   island.classList.remove(
     'state-compact', 'state-drop', 'state-control',
@@ -165,7 +218,7 @@ function switchView(viewId, stateClass, winWidth, winHeight) {
 
   let win = { width: winWidth, height: effH };
   if (viewId === 'view-compact' && typeof compactWindowSize === 'function') win = compactWindowSize(win);
-  invokeTauri('resize_island', win);
+  smoothResize(win);
 
   if (viewId === 'view-compact' && appState.timerStartPending) {
     appState.timerStartPending = false;
@@ -183,7 +236,9 @@ function openMedia() {
 function goCompact() {
   island.classList.remove('vol-open');
   document.getElementById('tray-peer-picker').classList.add('hidden');
-  switchView('view-compact', 'state-compact', 265, 36);
+  // Keep OS window width fixed at ISLAND_WIN_W across every view and only shrink height:
+  // changing window width moves the centered HWND sideways and makes WebView2 paint a stale shifted frame.
+  switchView('view-compact', 'state-compact', ISLAND_WIN_W, 36);
 }
 
 // 1. Live Clock + Media Progress Tick

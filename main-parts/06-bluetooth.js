@@ -331,8 +331,9 @@ function hudCanShow() { return appState.currentView === 'view-compact'; }   // n
 // Too small a window cuts the bottom of the pill off (the text line under the name vanishes).
 function hudUiScale() { return Math.max(0.8, ((SET.appearance && SET.appearance.scale) || 100) / 100); }
 function hudWindowSize() {
-  const k = hudUiScale();
-  return { width: Math.ceil(256 * k) + 8, height: Math.ceil((hudIsFloating() ? 64 : 54) * k) };
+  // Keep OS window width invariant (ISLAND_WIN_W) so HUD open/close is height-only and never jumps sideways;
+  // invokeTauri() already applies SET.appearance.scale to both width and height.
+  return { width: ISLAND_WIN_W, height: hudIsFloating() ? 64 : 54 };
 }
 // Transfer / toast / lock-prompt popups use the SAME window as the Bluetooth HUD.
 // (Before, only the CSS size matched: the OS window stayed 265x36, so these pills were clipped and looked smaller.)
@@ -353,7 +354,7 @@ function compactWindowSize(win) {
 function hudRestoreWindow() {
   if (!hudCanShow() || appState.alarmActive) return;   // the timer-end card keeps its own window size
   if (popupIsBusy()) { tryInvoke('resize_island', hudWindowSize()); return; }   // a popup is still open: keep the HUD-size window
-  tryInvoke('resize_island', { width: 265, height: hudIsFloating() ? 48 : 36 });
+  tryInvoke('resize_island', { width: ISLAND_WIN_W, height: hudIsFloating() ? 48 : 36 });
 }
 
 let popupWinOn = false, popupWinT = null;
@@ -449,6 +450,7 @@ function showDeviceHud(o) {
   }
 
   const win = hudWindowSize();
+  if (typeof cancelCloseEase === 'function') cancelCloseEase();
   if (alreadyOpen) {
     // the pill is already out (e.g. next file request right after "saved"): keep it open, only swap the content
     tryInvoke('resize_island', win);
@@ -494,7 +496,7 @@ function hideDeviceHud(instant) {
       island.classList.remove('hud-back');
       hudRestoreWindow();
       renderCenter(); updateClocks(); refreshMedia();
-    }, 560);
+    }, 600);
   }, 170);
 }
 

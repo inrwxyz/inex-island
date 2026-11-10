@@ -58,6 +58,7 @@ const appState = {
 // WebRTC Connection Store: peerId -> { pc, dc, name, makingOffer, outgoingQueue }
 const rtcPeers = new Map();
 
+const ISLAND_WIN_W = 316;
 const MEDIA_H = 166;
 const MEDIA_H_VOL = 198;
 
@@ -197,15 +198,59 @@ async function toggleMic() {
 document.getElementById('tile-mic').addEventListener('click', () => SLOT_DEFS.mic.click());
 document.getElementById('tile-notepad').addEventListener('click', () => SLOT_DEFS.notepad.click());
 
+let _wasCompactBusy = false;
 function updateCompactStateClasses() {
   const isPrompt = !!(appState.prompting || appState.lockerPrompting);
-  const isBusy = appState.transferring || isPrompt || appState.toast;
+  const isBusy = !!(appState.transferring || isPrompt || appState.toast);
   const hasBadges = appState.trayFiles.length > 0 || appState.peers.length > 0;
+  if (_wasCompactBusy && !isBusy && island.classList.contains('state-compact') &&
+      !island.classList.contains('bt-hud-active') && !island.classList.contains('alarm-active') &&
+      !island.classList.contains('biometric-active')) {
+    triggerCloseEase(650);
+  } else if (!_wasCompactBusy && isBusy) {
+    cancelCloseEase();
+  }
+  _wasCompactBusy = isBusy;
   island.classList.toggle('has-toast', !!appState.toast);
   island.classList.toggle('has-badges', hasBadges && !appState.mediaPlaying && !isBusy);
   island.classList.toggle('media-active', !!appState.mediaPlaying && !isBusy);
 }
 
+// Window resize that never cuts the island while it is still shrinking:
+// growing = instant, shrinking = the window stays big until the CSS close animation has finished.
+// Also keeps OS window width fixed at ISLAND_WIN_W so height-only resizes never shift HWND sideways.
+let _winT = null;
+function smoothResize(win) {
+  clearTimeout(_winT);
+  const cur = appState.lastWin ? { ...appState.lastWin } : null;
+  const target = { width: ISLAND_WIN_W, height: win.height };
+  if (cur && (target.width < cur.width || target.height < cur.height)) {
+    invokeTauri('resize_island', { width: Math.max(cur.width, target.width), height: Math.max(cur.height, target.height) });
+    _winT = setTimeout(() => {
+      const c = island.classList;
+      // a HUD / alarm owns the window right now: do not shrink under it
+      if (appState.currentView === 'view-compact' &&
+          (c.contains('bt-hud-active') || c.contains('hud-pre') || c.contains('hud-back') ||
+           c.contains('biometric-active') || c.contains('bio-hud') || c.contains('alarm-active'))) return;
+      let w = target;
+      if (appState.currentView === 'view-compact' && typeof compactWindowSize === 'function') w = compactWindowSize(target);
+      invokeTauri('resize_island', w);
+    }, 520);
+  } else {
+    invokeTauri('resize_island', target);
+  }
+}
+
+let _menuCloseT = null;
+function triggerCloseEase(ms) {
+  clearTimeout(_menuCloseT);
+  island.classList.add('menu-closing');
+  _menuCloseT = setTimeout(() => island.classList.remove('menu-closing'), ms || 700);
+}
+function cancelCloseEase() {
+  clearTimeout(_menuCloseT);
+  island.classList.remove('menu-closing');
+}
 function switchView(viewId, stateClass, winWidth, winHeight) {
   appState.keepOpen = false;
   if (appState.currentView === 'view-bt' && viewId !== 'view-bt') {
@@ -215,6 +260,15 @@ function switchView(viewId, stateClass, winWidth, winHeight) {
   document.querySelectorAll('.view').forEach((v) => v.classList.remove('active'));
   const target = document.getElementById(viewId);
   if (target) target.classList.add('active');
+
+  // Menu -> pill: tag the island for the length of the shrink so CSS can use the no-bounce close curve
+  // (the "media playing" pill otherwise uses the grow-spring, which undershoots the target size and bounces back).
+  const wasCompact = island.classList.contains('state-compact');
+  if (stateClass === 'state-compact' && !wasCompact) {
+    triggerCloseEase(700);
+  } else {
+    cancelCloseEase();
+  }
 
   island.classList.remove(
     'state-compact', 'state-drop', 'state-control',
@@ -240,7 +294,7 @@ function switchView(viewId, stateClass, winWidth, winHeight) {
 
   let win = { width: winWidth, height: effH };
   if (viewId === 'view-compact' && typeof compactWindowSize === 'function') win = compactWindowSize(win);
-  invokeTauri('resize_island', win);
+  smoothResize(win);
 
   if (viewId === 'view-compact' && appState.timerStartPending) {
     appState.timerStartPending = false;
@@ -258,7 +312,9 @@ function openMedia() {
 function goCompact() {
   island.classList.remove('vol-open');
   document.getElementById('tray-peer-picker').classList.add('hidden');
-  switchView('view-compact', 'state-compact', 265, 36);
+  // Keep OS window width fixed at ISLAND_WIN_W across every view and only shrink height:
+  // changing window width moves the centered HWND sideways and makes WebView2 paint a stale shifted frame.
+  switchView('view-compact', 'state-compact', ISLAND_WIN_W, 36);
 }
 
 // 1. Live Clock + Media Progress Tick
@@ -809,11 +865,19 @@ document.getElementById('c-peer-badge').addEventListener('click', (e) => {
   openP2PView();
 });
 
+// Small delay + real hover check: while the window resizes the pointer can touch the edge for one frame,
+// which fired mouseleave and closed the media player right after it opened.
+let _leaveT = null;
+island.addEventListener('mouseenter', () => clearTimeout(_leaveT));
 island.addEventListener('mouseleave', () => {
   if (appState.keepOpen) return;      // typing a Wi-Fi password: do not collapse
-  if (appState.currentView !== 'view-compact') {
-    goCompact();
-  }
+  clearTimeout(_leaveT);
+  _leaveT = setTimeout(() => {
+    if (appState.keepOpen || island.matches(':hover')) return;
+    if (appState.currentView !== 'view-compact') {
+      goCompact();
+    }
+  }, 140);
 });
 
 // 4. Control Center Navigation & Sub-Menus
@@ -1512,8 +1576,9 @@ function hudCanShow() { return appState.currentView === 'view-compact'; }   // n
 // Too small a window cuts the bottom of the pill off (the text line under the name vanishes).
 function hudUiScale() { return Math.max(0.8, ((SET.appearance && SET.appearance.scale) || 100) / 100); }
 function hudWindowSize() {
-  const k = hudUiScale();
-  return { width: Math.ceil(256 * k) + 8, height: Math.ceil((hudIsFloating() ? 64 : 54) * k) };
+  // Keep OS window width invariant (ISLAND_WIN_W) so HUD open/close is height-only and never jumps sideways;
+  // invokeTauri() already applies SET.appearance.scale to both width and height.
+  return { width: ISLAND_WIN_W, height: hudIsFloating() ? 64 : 54 };
 }
 // Transfer / toast / lock-prompt popups use the SAME window as the Bluetooth HUD.
 // (Before, only the CSS size matched: the OS window stayed 265x36, so these pills were clipped and looked smaller.)
@@ -1534,7 +1599,7 @@ function compactWindowSize(win) {
 function hudRestoreWindow() {
   if (!hudCanShow() || appState.alarmActive) return;   // the timer-end card keeps its own window size
   if (popupIsBusy()) { tryInvoke('resize_island', hudWindowSize()); return; }   // a popup is still open: keep the HUD-size window
-  tryInvoke('resize_island', { width: 265, height: hudIsFloating() ? 48 : 36 });
+  tryInvoke('resize_island', { width: ISLAND_WIN_W, height: hudIsFloating() ? 48 : 36 });
 }
 
 let popupWinOn = false, popupWinT = null;
@@ -1630,6 +1695,7 @@ function showDeviceHud(o) {
   }
 
   const win = hudWindowSize();
+  if (typeof cancelCloseEase === 'function') cancelCloseEase();
   if (alreadyOpen) {
     // the pill is already out (e.g. next file request right after "saved"): keep it open, only swap the content
     tryInvoke('resize_island', win);
@@ -1675,7 +1741,7 @@ function hideDeviceHud(instant) {
       island.classList.remove('hud-back');
       hudRestoreWindow();
       renderCenter(); updateClocks(); refreshMedia();
-    }, 560);
+    }, 600);
   }, 170);
 }
 
@@ -1860,7 +1926,7 @@ function renderQuickActionTiles() {
       });
     } else if (id === 'clipboard') {
       btn.addEventListener('click', () => {
-        switchView('view-clipboard', 'state-sub', 320, 260);
+        switchView('view-clipboard', 'state-sub', ISLAND_WIN_W, 260);
         if (typeof openClipboardView === 'function') openClipboardView();
       });
     } else if (id === 'lock') {
@@ -2078,7 +2144,7 @@ function onNativeDrop(p) {
   if (p.type === 'enter' || p.type === 'over') {
     clearTimeout(dropLeaveTimeout);
     if (!appState.draggingOut && appState.currentView !== 'view-drop') {
-      switchView('view-drop', 'state-drop', 200, 92);
+      switchView('view-drop', 'state-drop', ISLAND_WIN_W, 92);
     }
   } else if (p.type === 'leave') {
     clearTimeout(dropLeaveTimeout);
@@ -4739,7 +4805,8 @@ function triggerBiometricMorph(type, label) {
   box.classList.remove('hidden');
 
   // 1) window big enough, 2) old content blurs away, 3) island springs into the rounded square
-  tryInvoke('resize_island', { width: 265, height: 112 });
+  if (typeof cancelCloseEase === 'function') cancelCloseEase();
+  tryInvoke('resize_island', { width: ISLAND_WIN_W, height: 112 });
   island.classList.add('hud-pre');
   bioStartTimer = setTimeout(() => {
     island.classList.remove('hud-pre');
@@ -5162,7 +5229,8 @@ function triggerTimerAlarm(opts) {
   island.classList.toggle('alarm-full', idle);
 
   // 1) window big enough, 2) old content blurs away, 3) island springs open
-  tryInvoke('resize_island', { width: 256, height: 56 });  // same window as the device HUD
+  if (typeof cancelCloseEase === 'function') cancelCloseEase();
+  tryInvoke('resize_island', { width: ISLAND_WIN_W, height: hudIsFloating() ? 64 : 56 });  // same width as compact/HUDs so never jumps sideways
   island.classList.add('hud-pre');
   alarmStartT = setTimeout(() => {
     island.classList.remove('hud-pre');
@@ -5209,7 +5277,7 @@ function dismissTimerAlarm() {
       renderCenter();
       updateClocks();
       refreshMedia();
-    }, 560);
+    }, 600);
   }, 170);
 }
 
@@ -6524,7 +6592,7 @@ function applySettings() {
   if (appState.currentView === 'view-compact' || !appState.currentView) {
     clearTimeout(resizeDebounce);
     resizeDebounce = setTimeout(() => {
-      const small = { width: 265, height: isFloating ? 48 : 36 };
+      const small = { width: ISLAND_WIN_W, height: isFloating ? 48 : 36 };
       invokeTauri('resize_island', typeof compactWindowSize === 'function' ? compactWindowSize(small) : small);
     }, 35);
   } else if (appState.lastWin) {

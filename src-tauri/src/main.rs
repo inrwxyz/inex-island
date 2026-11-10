@@ -302,6 +302,33 @@ fn place_island(window: &WebviewWindow, width: f64, height: f64) -> bool {
         let left = monitor.position().x as f64 / scale;
         let top = monitor.position().y as f64 / scale;
         let x = left + (screen_width - width) / 2.0;
+        // Windows: size + position in ONE call. Two separate calls (set_size, then set_position) made the
+        // pill jump sideways for a frame on every open/close, which looked like shaking left and right.
+        #[cfg(target_os = "windows")]
+        {
+            use windows::Win32::Foundation::HWND;
+            use windows::Win32::UI::WindowsAndMessaging::{
+                SetWindowPos, SWP_NOACTIVATE, SWP_NOOWNERZORDER, SWP_NOZORDER,
+            };
+            if let Ok(h) = window.hwnd() {
+                let hwnd = HWND(h.0 as *mut core::ffi::c_void);
+                let ok = unsafe {
+                    SetWindowPos(
+                        hwnd,
+                        HWND::default(),
+                        (x * scale).round() as i32,
+                        (top * scale).round() as i32,
+                        (width * scale).round() as i32,
+                        (height * scale).round() as i32,
+                        SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOOWNERZORDER,
+                    )
+                    .is_ok()
+                };
+                if ok {
+                    return true;
+                }
+            }
+        }
         let _ = window.set_size(LogicalSize::new(width, height));
         let _ = window.set_position(LogicalPosition::new(x, top));
         return true;
@@ -1736,11 +1763,11 @@ fn main() {
                 // so it never appears in the wrong spot. The page plays the intro animation.
                 let w = window.clone();
                 std::thread::spawn(move || {
-                    let mut placed = place_island(&w, 290.0, 44.0);
+                    let mut placed = place_island(&w, 316.0, 44.0);
                     let mut tries = 0;
                     while !placed && tries < 10 {
                         std::thread::sleep(Duration::from_millis(50));
-                        placed = place_island(&w, 290.0, 44.0);
+                        placed = place_island(&w, 316.0, 44.0);
                         tries += 1;
                     }
                     let _ = w.show();
