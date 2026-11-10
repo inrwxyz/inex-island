@@ -66,13 +66,23 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) refr
   island.classList.remove('intro-pre', 'intro-play');
 })();
 
-// Background Auto-Update check (runs ~25s after boot if Auto Update is enabled)
+// Auto Update: checked ONCE, ~25 s after the app starts. If Auto Update is ON and a new version
+// exists it downloads, installs and restarts by itself. No repeated polling.
+// (When OFF, nothing happens here: the user updates from Settings > About.)
 setTimeout(async () => {
   if (!SET.general?.autoUpdate) return;
   try {
     const res = await invokeTauri('check_update');
-    if (res && res.available && res.latest_version) {
-      showToast('spark', `Update v${res.latest_version} available! Open Settings`, 6000);
+    if (!(res && res.available && res.latest_version)) return;
+    // busy with a transfer / prompt: do not restart now, it will update on the next launch
+    if (appState.transferring || appState.prompting || appState.lockerPrompting) return;
+    showToast('spark', `Updating to v${res.latest_version}...`, 4000);
+    const ok = await invokeTauri('apply_update');
+    if (ok) {
+      showToast('spark', 'Update installed. Restarting...', 2500);
+      setTimeout(() => invokeTauri('restart_app'), 2500);
     }
-  } catch (_) {}
+  } catch (e) {
+    console.warn('auto update failed:', e);
+  }
 }, 25000);

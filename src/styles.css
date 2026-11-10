@@ -2172,7 +2172,7 @@ body {
 .island.state-compact.biometric-active {
   width: 92px !important; height: 92px !important; border-radius: 33px !important; top: 10px !important;
   background: #000 !important; border: 0 !important;
-  box-shadow: 0 0 0 0.5px rgba(255, 255, 255, 0.07), 0 26px 50px -14px rgba(0, 0, 0, 0.75) !important;
+  box-shadow: none !important;
   transition: width 0.6s cubic-bezier(0.34, 1.5, 0.64, 1), height 0.6s cubic-bezier(0.34, 1.5, 0.64, 1),
               top 0.5s cubic-bezier(0.22, 1, 0.36, 1), border-radius 0.5s cubic-bezier(0.22, 1, 0.36, 1) !important;
 }
@@ -2250,7 +2250,7 @@ body {
 .island.state-compact.bt-hud-active {
   width: 220px !important; height: 37px !important; border-radius: 19px !important; top: 7px !important;
   background: #000 !important; border: 0 !important;
-  box-shadow: 0 0 0 0.5px rgba(255, 255, 255, 0.06), 0 14px 28px -12px rgba(0, 0, 0, 0.7) !important;
+  box-shadow: none !important;
   transition: width 0.65s var(--spring-pop), height 0.6s var(--spring-pop),
               top 0.45s var(--ease-close), border-radius 0.5s var(--ease-close) !important;
 }
@@ -2301,7 +2301,7 @@ body {
   top: 0 !important;
   height: 40px !important;
   border-radius: 0 0 var(--radius) var(--radius) !important;   /* exactly the collapsed notch's corners (Settings > Corner Roundness) */
-  box-shadow: 0 16px 30px -14px rgba(0, 0, 0, 0.7) !important;
+  box-shadow: none !important;
 }
 .island:not([data-style="floating"]).state-compact:is(.bt-hud-active, .alarm-active) .compact-bar { padding: 0 13px 0 10px !important; }
 
@@ -2330,7 +2330,7 @@ body {
   top: 7px !important;
   background: #000 !important;
   border: 0 !important;
-  box-shadow: 0 0 0 1px rgba(255, 159, 10, 0.4), 0 14px 28px -12px rgba(0, 0, 0, 0.7) !important;   /* amber border only, no glow */
+  box-shadow: 0 0 0 1px rgba(255, 159, 10, 0.4) !important;   /* amber border only, no glow */
   transition: width 0.65s var(--spring-pop), height 0.6s var(--spring-pop),
               top 0.45s var(--ease-close), border-radius 0.5s var(--ease-close) !important;
 }
@@ -2931,14 +2931,14 @@ body {
 .island.state-compact:is(.transferring, .has-toast, .incoming-open):not(.biometric-active):not(.bt-hud-active):not(.alarm-active) {
   width: 220px !important; height: 37px !important; border-radius: 19px !important; top: 7px !important;
   background: #000 !important; border: 0 !important;
-  box-shadow: 0 0 0 0.5px rgba(255, 255, 255, 0.06), 0 14px 28px -12px rgba(0, 0, 0, 0.7) !important;
+  box-shadow: none !important;
   transition: width 0.65s var(--spring-pop), height 0.6s var(--spring-pop),
               top 0.45s var(--ease-close), border-radius 0.5s var(--ease-close) !important;
 }
 .island:not([data-style="floating"]).state-compact:is(.transferring, .has-toast, .incoming-open):not(.biometric-active):not(.bt-hud-active):not(.alarm-active) {
   top: 0 !important; height: 40px !important;
   border-radius: 0 0 var(--radius) var(--radius) !important;
-  box-shadow: 0 16px 30px -14px rgba(0, 0, 0, 0.7) !important;
+  box-shadow: none !important;
 }
 .island.state-compact:is(.transferring, .has-toast, .incoming-open):not(.biometric-active):not(.bt-hud-active):not(.alarm-active) .compact-bar {
   padding: 0 12px 0 9px !important; height: 100% !important; justify-content: center !important;

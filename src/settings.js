@@ -134,7 +134,7 @@ const PAGES = [
   { id: 'system', label: 'System', icon: 'gear', sections: [
     { title: 'Startup & Alerts', rows: [
       { path: 'general.launchAtLogin', type: 'toggle', icon: 'power', t: 'Launch at Login', d: 'Start Inex Island automatically with Windows', onChange: (v) => invoke('set_autostart', { on: v }) },
-      { path: 'general.autoUpdate', type: 'toggle', icon: 'spark', t: 'Auto Update', d: 'Automatically check and notify for updates' },
+      { path: 'general.autoUpdate', type: 'toggle', icon: 'spark', t: 'Auto Update', d: 'Download and install new versions automatically, then restart. Off = update from About' },
       { path: 'general.hour24', type: 'toggle', icon: 'clock', t: '24-Hour Time', d: 'Display military 24-hour time' },
       { path: 'general.lockToast', type: 'toggle', icon: 'power', t: 'Unlock Animation', d: 'Reveal animation after Windows unlock' },
       { path: 'general.copyToast', type: 'toggle', icon: 'spark', t: 'Clipboard Copy Notification', d: 'Island popup preview when text, an image or a file is copied' },
@@ -334,51 +334,75 @@ invoke('get_app_version').then((v) => {
   }
 });
 
-let updateStatusMsg = localStorage.getItem('inex.update.status') || `Inex Island is up to date (v${currentAppVer})`;
-let updateCheckTime = localStorage.getItem('inex.update.time') || 'Checked today';
+// ---------- Updates ----------
+// state: idle | checking | uptodate | available | installing | error
+let updateState = 'idle';
+let updateLatest = '';
+let updateCheckTime = '';
+let updateCheckedAt = 0;
 
-let isUpdating = false;
-async function checkUpdatesAction() {
-  if (isUpdating) return;
-  toast('Checking for updates...');
-  isUpdating = true;
+async function checkForUpdate(manual) {
+  if (updateState === 'checking' || updateState === 'installing') return;
+  // opening About again within 10 min: reuse the last result, no new network check
+  if (!manual && updateCheckedAt && Date.now() - updateCheckedAt < 10 * 60 * 1000) return;
+  updateState = 'checking';
+  if (current === 'about') renderPage();
   try {
     const res = await invoke('check_update');
     if (res && res.available && res.latest_version) {
-      updateStatusMsg = `Downloading & installing v${res.latest_version}...`;
-      toast(`Found v${res.latest_version}! Downloading update...`);
-      renderPage();
-      try {
-        const installed = await invoke('apply_update');
-        if (installed) {
-          updateStatusMsg = `Update v${res.latest_version} installed! Restarting...`;
-          toast('Update complete! Restarting Inex Island...');
-          renderPage();
-          setTimeout(() => invoke('restart_app'), 1500);
-          return;
-        }
-      } catch (err) {
-        console.warn('Update apply failed:', err);
-        toast('Update download failed. Please try again.');
-      }
+      updateState = 'available';
+      updateLatest = res.latest_version;
+      if (manual) toast(`v${res.latest_version} found. Click the version to update`);
     } else if (res && res.error) {
       console.warn('Update check error:', res.error);
-      toast('Could not check updates. Check your connection.');
+      updateState = 'error';
+      if (manual) toast('Could not check updates. Check your connection.');
     } else {
-      const ver = res?.current_version || currentAppVer;
-      updateStatusMsg = `Inex Island is up to date (v${ver})`;
-      toast('You are on the latest version!');
+      updateState = 'uptodate';
+      if (res && res.current_version) currentAppVer = res.current_version;
+      if (manual) toast('You are on the latest version!');
     }
   } catch (e) {
     console.warn('check_update failed:', e);
-    toast('You are on the latest version!');
-  } finally {
-    isUpdating = false;
-    const now = new Date();
-    updateCheckTime = `Checked ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
-    localStorage.setItem('inex.update.status', updateStatusMsg);
-    localStorage.setItem('inex.update.time', updateCheckTime);
-    renderPage();
+    updateState = 'error';
+    if (manual) toast('Could not check updates. Check your connection.');
+  }
+  updateCheckedAt = Date.now();
+  updateCheckTime = `Checked ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+  if (current === 'about') renderPage();
+}
+
+async function installUpdate() {
+  if (updateState !== 'available') return;
+  updateState = 'installing';
+  renderPage();
+  try {
+    const ok = await invoke('apply_update');
+    if (ok) {
+      toast('Update installed! Restarting Inex Island...');
+      setTimeout(() => invoke('restart_app'), 1200);
+      return;
+    }
+    updateState = 'uptodate';
+  } catch (err) {
+    console.warn('Update apply failed:', err);
+    toast('Update failed. Please try again.');
+    updateState = 'available';
+  }
+  renderPage();
+}
+
+// "Check for Updates" row: only checks and shows the version, it does NOT install by itself
+function checkUpdatesAction() { checkForUpdate(true); }
+
+function updateBannerInfo() {
+  switch (updateState) {
+    case 'checking':   return { cls: 'checking', text: 'Checking for updates...', sub: '' };
+    case 'available':  return { cls: 'available', text: `Version v${updateLatest} is available`, sub: 'Click here to update' };
+    case 'installing': return { cls: 'installing', text: `Downloading & installing v${updateLatest}...`, sub: 'Inex Island will restart when done' };
+    case 'error':      return { cls: 'error', text: 'Could not check for updates', sub: updateCheckTime || 'Check your connection' };
+    case 'uptodate':   return { cls: '', text: `Inex Island is up to date (v${currentAppVer})`, sub: updateCheckTime };
+    default:           return { cls: '', text: `Inex Island v${currentAppVer}`, sub: '' };
   }
 }
 
@@ -398,6 +422,7 @@ function renderNav() {
       }
       renderNav();
       renderPage(true);
+      if (current === 'about') checkForUpdate(false);   // About: check for a new version and show it
     });
     nav.append(b);
   });
@@ -880,14 +905,19 @@ function renderPage(resetScroll) {
           <span class="pill pill-green">v${currentAppVer} Stable</span>
         </div>
       </div>
-      <div class="update-banner">
-        <div class="up-dot"></div>
-        <div class="up-info">
-          <div class="up-status">${updateStatusMsg}</div>
-          <div class="up-time">${updateCheckTime}</div>
-        </div>
+      <div class="update-banner"><div class="up-dot"></div>
+        <div class="up-info"><div class="up-status"></div><div class="up-time"></div></div>
       </div>
     `;
+    const ub = updateBannerInfo();
+    const bannerEl = a.querySelector('.update-banner');
+    if (ub.cls) bannerEl.classList.add(ub.cls);
+    a.querySelector('.up-status').textContent = ub.text;
+    a.querySelector('.up-time').textContent = ub.sub;
+    if (updateState === 'available') {
+      bannerEl.setAttribute('role', 'button');
+      bannerEl.addEventListener('click', installUpdate);
+    }
     main.append(a);
   }
   page.sections.filter((sec) => !sec.showIf || sec.showIf(S)).forEach((sec) => {
