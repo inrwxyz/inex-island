@@ -1069,3 +1069,39 @@ main {
 .qa-customize, .qa-done { flex: none; }
 .qa-done { margin-top: 12px; }
 .tile-manager-card .tiles-grid + .tile-group-header { margin-top: 16px; }
+
+
+/* Inex-styled confirm dialog (replaces the browser confirm box) */
+.dlg-back {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+}
+.dlg {
+  width: min(320px, calc(100% - 40px));
+  background: #0c0c12;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 12px;
+  padding: 16px 16px 14px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.8);
+}
+.dlg-title { font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 6px; }
+.dlg-msg { font-size: 11.5px; line-height: 1.45; color: var(--dim); margin-bottom: 14px; }
+.dlg-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.dlg-btn {
+  padding: 6px 14px;
+  border-radius: 8px;
+  font-size: 11.5px;
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  color: var(--text);
+  transition: background 0.15s ease;
+}
+.dlg-btn:hover { background: rgba(255, 255, 255, 0.13); }
+.dlg-btn.primary { background: #f4f4f6; color: #050508; border-color: transparent; }
+.dlg-btn.primary:hover { background: #ffffff; }

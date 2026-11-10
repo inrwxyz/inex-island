@@ -112,9 +112,9 @@ const PAGES = [
       { path: 'appearance.borderOpacity', type: 'range', icon: 'drop', t: 'Menu Border Strength', d: 'Outline visibility of expanded menus', min: 10, max: 100, step: 5, unit: '%' }
     ] },
     { title: '2x2 Slots', rows: [
-      { path: 'slots.a', type: 'select', icon: 'widgets', t: 'Slot 1 (Top-Left)', d: 'Default is Wi-Fi', options: SLOT_OPTIONS, onChange: slotChange('a') },
-      { path: 'slots.b', type: 'select', icon: 'widgets', t: 'Slot 2 (Top-Right)', d: 'Default is Inex Drop', options: SLOT_OPTIONS, onChange: slotChange('b') },
-      { path: 'slots.c', type: 'select', icon: 'widgets', t: 'Slot 3 (Bottom-Left)', d: 'Default is Bluetooth', options: SLOT_OPTIONS, onChange: slotChange('c') },
+      { path: 'slots.a', type: 'select', icon: 'widgets', t: 'Slot 1 (Top-Left)', d: 'Default is Bluetooth', options: SLOT_OPTIONS, onChange: slotChange('a') },
+      { path: 'slots.b', type: 'select', icon: 'widgets', t: 'Slot 2 (Top-Right)', d: 'Default is Wi-Fi', options: SLOT_OPTIONS, onChange: slotChange('b') },
+      { path: 'slots.c', type: 'select', icon: 'widgets', t: 'Slot 3 (Bottom-Left)', d: 'Default is Inex Drop', options: SLOT_OPTIONS, onChange: slotChange('c') },
       { path: 'slots.d', type: 'select', icon: 'widgets', t: 'Slot 4 (Bottom-Right)', d: 'Default is File Tray', options: SLOT_OPTIONS, onChange: slotChange('d') }
     ] },
     { title: 'Motion', rows: [
@@ -196,7 +196,7 @@ function debouncedCommit(path, value, onChange) {
 // Two control-panel slots can never hold the same item: picking one that another slot has swaps them.
 function slotChange(currentKey) {
   return (v, prev) => {
-    if (!S.slots) S.slots = { a: 'wifi', b: 'drop', c: 'bt', d: 'tray' };
+    if (!S.slots) S.slots = { a: 'bt', b: 'wifi', c: 'drop', d: 'tray' };
     const keys = ['a', 'b', 'c', 'd'];
     for (const k of keys) {
       if (k !== currentKey && S.slots[k] === v) {
@@ -935,8 +935,33 @@ function renderPage(resetScroll) {
 }
 
 // ---------- actions ----------
-function resetAll() {
-  if (!confirm('Reset all settings to defaults?')) return;
+// Inex-styled replacement for the browser confirm() box (no "tauri.localhost says").
+// Usage: if (!(await askConfirm('Title', 'Message', 'OK label'))) return;
+function askConfirm(title, message, okLabel = 'OK', cancelLabel = 'Cancel') {
+  return new Promise((resolve) => {
+    const back = el('div', 'dlg-back');
+    const box = el('div', 'dlg');
+    const h = el('div', 'dlg-title'); h.textContent = title;
+    const m = el('div', 'dlg-msg'); m.textContent = message;
+    const row = el('div', 'dlg-actions');
+    const no = el('button', 'dlg-btn'); no.textContent = cancelLabel;
+    const ok = el('button', 'dlg-btn primary'); ok.textContent = okLabel;
+    row.append(no, ok); box.append(h, m, row); back.append(box);
+    const done = (v) => { document.removeEventListener('keydown', onKey, true); back.remove(); resolve(v); };
+    const onKey = (e) => {
+      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); done(false); }
+      else if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); done(true); }
+    };
+    no.onclick = () => done(false);
+    ok.onclick = () => done(true);
+    back.addEventListener('mousedown', (e) => { if (e.target === back) done(false); });
+    document.addEventListener('keydown', onKey, true);
+    document.querySelector('.win').append(back);
+    ok.focus();
+  });
+}
+async function resetAll() {
+  if (!(await askConfirm('Reset settings', 'Reset all settings to defaults? Inex Island will restart.', 'Reset'))) return;
   S = JSON.parse(JSON.stringify(DEFAULTS));
   save(S); invoke('set_autostart', { on: false });
   renderPage(); toast('Settings reset');

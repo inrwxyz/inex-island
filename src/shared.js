@@ -6,11 +6,11 @@ export const KEY = 'inex.settings.v1';
 export const DEFAULTS = {
   general: { launchAtLogin: false, hour24: false, autoUpdate: false, lowBatteryAlert: true, lowBattery: 20, chargeToast: true, lockToast: true, copyToast: false },
   appearance: {
-    notchColor: '#030305', notchOpacity: 100, notchBorderColor: '#ffffff', notchBorderOpacity: 45, cornerRadius: 13,
-    menuStyle: 'transparent', menuColor: '#0b0b10', menuOpacity: 92,
+    notchColor: '#030305', notchOpacity: 100, notchBorderColor: '#000000', notchBorderOpacity: 0, cornerRadius: 9,
+    menuStyle: 'color', menuColor: '#ffffff', menuOpacity: 100,
     themeStyle: 'default',
-    tileAccent: '#0a84ff', borderColor: '#ffffff', borderOpacity: 45,
-    fontStyle: 'jakarta', scale: 100, animations: true
+    tileAccent: '#000000', borderColor: '#000000', borderOpacity: 10,
+    fontStyle: 'mono', scale: 110, animations: true
   },
   notch: {
     mode: 'smart', style: 'attached', musicMode: true, compactMode: true, ambientGlow: true, compactGlow: true,
@@ -18,7 +18,7 @@ export const DEFAULTS = {
   },
   weather: { enabled: true, unit: 'C', city: '' },
   widgets: { left: 'weather', right: 'ram' },
-  slots: { a: 'wifi', b: 'drop', c: 'bt', d: 'tray' },
+  slots: { a: 'bt', b: 'wifi', c: 'drop', d: 'tray' },
   menu: {
     actionTiles: ['awake', 'snip', 'calendar', 'timer', 'clipboard', 'lock', 'settings']
   },
@@ -99,9 +99,9 @@ export function load() {
       else base.menu.actionTiles.push('notepad');
     }
     if (!base.slots) base.slots = { a: 'wifi', b: 'drop', c: 'bt', d: 'tray' };
-    if (!base.slots.a) base.slots.a = 'wifi';
-    if (!base.slots.b) base.slots.b = 'drop';
-    if (!base.slots.c) base.slots.c = 'bt';
+    if (!base.slots.a) base.slots.a = 'bt';
+    if (!base.slots.b) base.slots.b = 'wifi';
+    if (!base.slots.c) base.slots.c = 'drop';
     if (!base.slots.d) base.slots.d = 'tray';
     const usedSlots = new Set();
     const validSlots = ['wifi', 'drop', 'bt', 'tray', 'notepad', 'mic'];
