@@ -26,20 +26,6 @@
         "shadow": false,
         "focus": false,
         "dragDropEnabled": true
-      },
-      {
-        "label": "settings",
-        "title": "Inex Island Settings",
-        "url": "settings.html",
-        "width": 860,
-        "height": 640,
-        "center": true,
-        "decorations": false,
-        "transparent": true,
-        "visible": false,
-        "resizable": false,
-        "shadow": false,
-        "skipTaskbar": false
       }
     ],
     "security": {

@@ -26,7 +26,9 @@ use std::time::Duration;
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, WebviewWindow,
+    window::Color,
+    AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, WebviewUrl, WebviewWindow,
+    WebviewWindowBuilder,
 };
 
 // ---- Startup log: %LOCALAPPDATA%\\InexIsland\\startup.log (shows what happened at boot) ----
@@ -1491,25 +1493,48 @@ fn play_alarm_sound() {
     }
 }
 
+static SETTINGS_OPEN_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 fn show_settings_window(app: &AppHandle) {
+    let _guard = SETTINGS_OPEN_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     if let Some(w) = app.get_webview_window("settings") {
         let _ = w.emit("settings-opened", ());
         let _ = w.show();
         let _ = w.unminimize();
         let _ = w.set_focus();
+        return;
+    }
+    if let Ok(w) = WebviewWindowBuilder::new(
+        app,
+        "settings",
+        WebviewUrl::App("settings.html".into()),
+    )
+    .title("Inex Island Settings")
+    .inner_size(860.0, 640.0)
+    .center()
+    .decorations(false)
+    .transparent(true)
+    .background_color(Color(0, 0, 0, 0))
+    .resizable(false)
+    .shadow(false)
+    .skip_taskbar(false)
+    .visible(true)
+    .focused(true)
+    .build()
+    {
+        let _ = w.set_focus();
     }
 }
 
 #[tauri::command]
-fn open_settings(app: AppHandle) {
+async fn open_settings(app: AppHandle) {
     show_settings_window(&app);
 }
 
 #[tauri::command]
 fn close_settings(app: AppHandle) {
     if let Some(w) = app.get_webview_window("settings") {
-        let _ = w.emit("settings-closed", ());
-        let _ = w.hide();
+        let _ = w.close();
     }
 }
 
@@ -1723,14 +1748,6 @@ fn main() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_updater::Builder::new().build())
-        .on_window_event(|window, event| {
-            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                if window.label() == "settings" && !system_shutting_down() {
-                    api.prevent_close();
-                    let _ = window.hide();
-                }
-            }
-        })
         .setup(|app| {
             #[cfg(target_os = "windows")]
             std::thread::spawn(|| {
@@ -1803,7 +1820,10 @@ fn main() {
                 .menu(&menu)
                 .tooltip("Inex Island")
                 .on_menu_event(|app, event| match event.id.as_ref() {
-                    "settings" => show_settings_window(app),
+                    "settings" => {
+                        let h = app.clone();
+                        std::thread::spawn(move || show_settings_window(&h));
+                    }
                     "restart" => app.restart(),
                     "quit" => app.exit(0),
                     _ => {}
@@ -1815,7 +1835,8 @@ fn main() {
                         ..
                     } = event
                     {
-                        show_settings_window(tray.app_handle());
+                        let h = tray.app_handle().clone();
+                        std::thread::spawn(move || show_settings_window(&h));
                     }
                 });
 
