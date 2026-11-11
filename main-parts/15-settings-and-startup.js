@@ -36,6 +36,7 @@ function applySettings() {
   renderWidgets();
   if (typeof syncLoadTimer === 'function') syncLoadTimer();
   applyPrivacy();
+  syncWeatherTimer();
   refreshWeather();
   syncEq();
   refreshMedia();
@@ -43,23 +44,31 @@ function applySettings() {
 
 onSettings((incoming) => { SET = incoming; applySettings(); pollSystemAndMedia(); });
 applySettings();
-// Weather: one request every 12 min. After a failure wait longer each time (2, 4, 8 ... up to 15 min).
-let weatherTimer = null, weatherFails = 0;
+// Weather timer exists ONLY while weather is wanted (Live Weather on + picked as a hover widget).
+// One request every 12 min; after a failure wait longer each time (2, 4, 8 ... up to 15 min).
+// (var, no initializer: applySettings() above runs before this line)
+var weatherTimer, weatherFails;
 function nextWeatherDelay() {
   if (weather.text) { weatherFails = 0; return 12 * 60 * 1000; }
-  weatherFails = Math.min(weatherFails + 1, 6);
+  weatherFails = Math.min((weatherFails || 0) + 1, 6);
   return Math.min(15 * 60 * 1000, 2 * 60 * 1000 * Math.pow(2, weatherFails - 1));
 }
 function scheduleWeather(ms) {
   clearTimeout(weatherTimer);
   weatherTimer = setTimeout(async () => {
+    weatherTimer = null;
+    if (!weatherWanted()) return;
     if (!document.hidden) await refreshWeather();
     scheduleWeather(nextWeatherDelay());
   }, ms);
 }
-scheduleWeather(12 * 60 * 1000);
-// back on screen after a long pause: refresh (refreshWeather keeps its own 10 min cache)
-document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshWeather(); });
+function syncWeatherTimer() {
+  if (weatherWanted()) { if (!weatherTimer) scheduleWeather(12 * 60 * 1000); }
+  else { clearTimeout(weatherTimer); weatherTimer = null; weatherFails = 0; }
+}
+syncWeatherTimer();
+// back on screen after a long pause: refresh (refreshWeather keeps its own cache and does nothing when weather is not wanted)
+document.addEventListener('visibilitychange', () => { if (!document.hidden && weatherWanted()) refreshWeather(); });
 
 // ---- Intro animation: island is immediately visible without delay ----
 (function introAnimation() {

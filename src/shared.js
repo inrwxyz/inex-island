@@ -17,13 +17,13 @@ export const DEFAULTS = {
     calendarTimer: true, timerSound: true, eqSync: true, eqSensitivity: 100
   },
   weather: { enabled: true, unit: 'C', city: '' },
-  widgets: { left: 'weather', right: 'ram' },
+  widgets: { enabled: true, left: 'weather', right: 'ram' },
   slots: { a: 'bt', b: 'wifi', c: 'drop', d: 'tray' },
   menu: {
     actionTiles: ['awake', 'snip', 'calendar', 'timer', 'clipboard', 'lock', 'settings']
   },
   overlays: { btBattery: true, privacyDot: true },
-  share: { deviceName: '', firebaseUrl: '' }
+  share: { deviceName: '' }
 };
 
 export const DEFAULT_ACTION_TILES = ['awake', 'snip', 'calendar', 'timer', 'clipboard', 'notepad', 'lock', 'settings'];
@@ -114,7 +114,8 @@ export function load() {
       usedSlots.add(val);
     }
     if (!base.share.deviceName) base.share.deviceName = localStorage.getItem('island_pc_name') || '';
-    if (!base.share.firebaseUrl) base.share.firebaseUrl = localStorage.getItem('island_firebase_url') || '';
+    if (base.share) delete base.share.firebaseUrl;          // Firebase is gone: drop the old saved URL
+    localStorage.removeItem('island_firebase_url');
   } catch (_) { /* storage blocked: defaults */ }
   return base;
 }
@@ -124,7 +125,6 @@ export function save(settings) {
   try {
     localStorage.setItem(KEY, json);
     if (settings.share.deviceName) localStorage.setItem('island_pc_name', settings.share.deviceName);
-    if (settings.share.firebaseUrl !== undefined) localStorage.setItem('island_firebase_url', settings.share.firebaseUrl);
   } catch (_) {}
   try { window.__TAURI__?.core.invoke('settings_changed', { json }); } catch (_) {}
 }

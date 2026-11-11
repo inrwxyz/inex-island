@@ -184,12 +184,19 @@ async function detectLocation() {
   return loc || weather.loc;
 }
 
+// Weather runs ONLY while "Live Weather" is on AND Weather is picked as a hover widget (left or right).
+// Not picked = no request, no timer, nothing.
+function weatherWanted() {
+  const w = SET.widgets || {};
+  return w.enabled !== false && !!(SET.weather && SET.weather.enabled) && (w.left === 'weather' || w.right === 'weather');
+}
+
 async function refreshWeather() {
   if (weather.busy) return;
   weather.busy = true;
   try {
-    if (!SET.weather.enabled) {
-      weather.text = '';
+    if (!weatherWanted()) {
+      weather.text = ''; weather.at = 0; weather.key = '';
       renderWidgets();
       return;
     }
@@ -269,7 +276,8 @@ function widgetHtml(kind) {
 }
 
 function renderWidgets() {
-  const left = widgetHtml(SET.widgets.left), right = widgetHtml(SET.widgets.right);
+  const on = SET.widgets.enabled !== false;   // Hover Widgets switch in Settings
+  const left = on ? widgetHtml(SET.widgets.left) : '', right = on ? widgetHtml(SET.widgets.right) : '';
   const cTemp = document.getElementById('c-temp');
   const cRam = document.getElementById('c-ram');
   if (cTemp) cTemp.innerHTML = left;

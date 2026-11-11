@@ -315,30 +315,30 @@
       </div>
     </div>
 
-    <!-- ==================== 7. FIREBASE WEBRTC P2P (Up to 5 Users) ==================== -->
+    <!-- ==================== 7. P2P LINK (direct 1-on-1, no server) ==================== -->
     <div id="view-p2p" class="view">
       <div class="subview-header">
         <button class="back-btn icon-back" data-back="view-control" title="Back"><svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg><svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="1.9" fill="none" stroke-linecap="round" stroke-linejoin="round"><rect x="1.5" y="3" width="9" height="7" rx="1.5"/><path d="M4 13h4"/><rect x="13.5" y="12" width="9" height="7" rx="1.5"/><path d="M16 22h4"/><path d="M12 6.5h4.5V10"/><path d="M12 17.5H7.5V14"/></svg></button>
-        <span id="p2p-expiry-timer" class="p2p-expiry-badge hidden" title="Code expires in">05:00</span>
-        <button id="btn-exit-room" class="p2p-exit-btn hidden" title="Exit Room">Exit Room</button>
+        <span id="p2p-expiry-timer" class="p2p-expiry-badge hidden" title="Code expires in">3:00</span>
+        <button id="btn-exit-room" class="p2p-exit-btn hidden" title="Cancel">Cancel</button>
         <span id="p2p-status-pill" class="status-tag">Standby</span>
       </div>
 
-      <div class="p2p-body">
+      <div class="p2p-body" id="p2p-body">
         <div class="p2p-top-actions">
-          <button id="btn-gen-code" class="gen-code-btn">Generate Code</button>
-          <div id="code-display-box" class="code-badge hidden" title="Click to Copy">
+          <button id="btn-gen-code" class="gen-code-btn">Generate</button>
+          <div id="code-display-box" class="code-badge hidden" title="Click to copy">
             <span id="my-p2p-code">------</span>
           </div>
 
           <div class="join-box" id="p2p-join-box">
-            <input type="text" id="input-peer-code" placeholder="Code" maxlength="6" />
+            <input type="text" id="input-peer-code" placeholder="Paste or drop code" autocomplete="off" spellcheck="false" />
             <button id="btn-join-code" class="pair-btn">Join</button>
           </div>
         </div>
 
         <div id="p2p-peers-list" class="smooth-scroll-list">
-          <div class="empty-hint">Generate a code or enter partner code (Max 5 PCs)</div>
+          <div class="empty-hint">Generate a code, or paste a code from your friend.</div>
         </div>
       </div>
     </div>

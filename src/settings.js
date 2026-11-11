@@ -36,7 +36,6 @@ const ICON = {
   reset: I('<path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 3v6h6"/>'),
   border: I('<rect x="3" y="3" width="18" height="18" rx="4"/>'),
   font: I('<polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/>'),
-  p2p: I('<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>'),
   snip: I('<circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/>'),
   calc: I('<rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" y1="6" x2="16" y2="6"/><line x1="16" y1="14" x2="16" y2="18"/><path d="M8 10h.01M12 10h.01M16 10h.01M8 14h.01M12 14h.01M8 18h.01M12 18h.01"/>'),
   notepad: I('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/>'),
@@ -93,11 +92,12 @@ const PAGES = [
     { title: 'Widgets & Productivity', rows: [
       { path: 'notch.calendarTimer', type: 'toggle', icon: 'calendar', t: 'Calendar & Timer', d: 'Productivity split-view on time click' },
       { path: 'notch.timerSound', type: 'toggle', icon: 'bell', t: 'Timer Chime', d: 'Gentle sound when timer finishes', showIf: (s) => s.notch.calendarTimer },
-      { path: 'widgets.left', type: 'select', icon: 'widgets', t: 'Left Hover Widget', d: 'Shown on the left on notch hover', options: WIDGET_OPTS },
-      { path: 'widgets.right', type: 'select', icon: 'widgets', t: 'Right Hover Widget', d: 'Shown on the right on notch hover', options: WIDGET_OPTS },
-      { path: 'weather.enabled', type: 'toggle', icon: 'cloud', t: 'Live Weather', d: 'Show real-time local weather' },
-      { path: 'weather.unit', type: 'seg', icon: 'sun', t: 'Unit', d: 'Celsius or Fahrenheit', options: [['C', '°C'], ['F', '°F']], showIf: (s) => s.weather.enabled },
-      { path: 'weather.city', type: 'text', icon: 'pin', t: 'City', d: 'Leave empty for automatic location. Press Enter to apply', placeholder: 'e.g. Dhaka', showIf: (s) => s.weather.enabled },
+      { path: 'widgets.enabled', type: 'toggle', icon: 'widgets', t: 'Hover Widgets', d: 'Show widgets on notch hover. Off = hidden and nothing is monitored' },
+      { path: 'widgets.left', type: 'select', icon: 'widgets', t: 'Left Hover Widget', d: 'Shown on the left on notch hover', options: WIDGET_OPTS, showIf: (s) => s.widgets.enabled },
+      { path: 'widgets.right', type: 'select', icon: 'widgets', t: 'Right Hover Widget', d: 'Shown on the right on notch hover', options: WIDGET_OPTS, showIf: (s) => s.widgets.enabled },
+      { path: 'weather.enabled', type: 'toggle', icon: 'cloud', t: 'Live Weather', d: 'Show real-time local weather', showIf: (s) => s.widgets.enabled },
+      { path: 'weather.unit', type: 'seg', icon: 'sun', t: 'Unit', d: 'Celsius or Fahrenheit', options: [['C', '°C'], ['F', '°F']], showIf: (s) => s.widgets.enabled && s.weather.enabled },
+      { path: 'weather.city', type: 'text', icon: 'pin', t: 'City', d: 'Leave empty for automatic location. Press Enter to apply', placeholder: 'e.g. Dhaka', showIf: (s) => s.widgets.enabled && s.weather.enabled },
       { path: 'overlays.privacyDot', type: 'toggle', icon: 'mic', t: 'Mic Indicator', d: 'Small dot beside the clock while an app uses your microphone' }
     ] }
   ] },
@@ -129,7 +129,6 @@ const PAGES = [
     ] }
   ] },
 
-  { id: 'p2p', label: 'P2P', icon: 'p2p', firebase: true, sections: [] },
 
   { id: 'system', label: 'System', icon: 'gear', sections: [
     { title: 'Startup & Alerts', rows: [
@@ -314,18 +313,7 @@ function renderRow(row) {
 
 // ---------- pages ----------
 let current = 'notch';
-let directState = { phase: 'standby' };
-let directTimerInterval = null;
-
-try {
-  window.__TAURI__?.event?.listen('direct-p2p-state', (e) => {
-    directState = e.payload || { phase: 'standby' };
-    if (current === 'p2p') renderPage();
-  });
-  window.__TAURI__?.event?.emit('direct-p2p-cmd', { action: 'get-state' });
-} catch (_) {}
-
-let currentAppVer = '0.3.0';
+let currentAppVer = '0.4.1';
 invoke('get_app_version').then((v) => {
   if (v) {
     currentAppVer = v;
@@ -417,9 +405,6 @@ function renderNav() {
     b.addEventListener('click', () => {
       current = p.id;
       quickTilesAccordionOpen = false;
-      if (current === 'p2p') {
-        try { window.__TAURI__?.event?.emit('direct-p2p-cmd', { action: 'get-state' }); } catch (_) {}
-      }
       renderNav();
       renderPage(true);
       if (current === 'about') checkForUpdate(false);   // About: check for a new version and show it
@@ -532,369 +517,6 @@ function renderPage(resetScroll) {
   const keep = main.scrollTop;
   main.innerHTML = '';
   const page = PAGES.find((p) => p.id === current);
-  if (page.firebase || page.id === 'p2p') {
-    if (directTimerInterval) { clearInterval(directTimerInterval); directTimerInterval = null; }
-    const isCustom = !!(S.share && S.share.firebaseUrl);
-    const rulesFormatted = '{\n  "rules": {\n    "rooms": {\n      "$roomCode": {\n        ".read": true,\n        ".write": true\n      }\n    }\n  }\n}';
-    const fb = el('div', 'firebase-page');
-
-    const isConnected = directState.phase === 'connected';
-    const isOffer = directState.phase === 'offer-ready';
-    const isReply = directState.phase === 'reply-ready';
-    const isConnecting = directState.phase === 'connecting';
-    const isError = directState.phase === 'error';
-
-    // Banner
-    const bannerHtml = `
-      <div class="firebase-banner">
-        <div class="fb-icon-box">${ICON.p2p}</div>
-        <div class="fb-info">
-          <div class="fb-title-wrap">
-            <span class="fb-title">P2P File Link</span>
-            <span class="pill ${isConnected ? 'pill-green' : 'pill-purple'}">${isConnected ? 'Direct Connected' : (isCustom ? 'Custom Database' : 'Standby')}</span>
-          </div>
-          <div class="fb-sub">High-speed encrypted WebRTC peer-to-peer file transfer. Files stream directly between devices.</div>
-        </div>
-      </div>
-    `;
-
-    // 1. Direct Serverless Handshake Card
-    let directCardHtml = `
-      <div class="sec-title" style="display:flex;justify-content:space-between;align-items:center;">
-        <span>Direct 1-on-1 Handshake (Zero-Server)</span>
-        <span class="pill pill-green" style="font-size:10px;">Offline / No Firebase</span>
-      </div>
-      <div class="card direct-p2p-card">
-    `;
-
-    if (isConnected) {
-      directCardHtml += `
-        <div class="row" style="padding:10px 0;">
-          <div class="ico-box" style="color:#f4f4f6;">${ICON.check}</div>
-          <div class="txt">
-            <div class="t" style="color:#f4f4f6;">Connected to ${escHtml(directState.peerName || 'Direct Partner')}</div>
-            <div class="d">P2P DataChannel open. You can drag and drop files onto Inex Island to send them directly.</div>
-          </div>
-          <div class="ctl">
-            <button class="btn btn-outline" id="btn-direct-disconnect" style="color:#f87171;border-color:rgba(239,68,68,0.4);">Disconnect</button>
-          </div>
-        </div>
-      `;
-    } else if (isConnecting) {
-      directCardHtml += `
-        <div class="row" style="padding:12px 0;">
-          <div class="ico-box">${ICON.spark}</div>
-          <div class="txt">
-            <div class="t">Connecting to Partner...</div>
-            <div class="d">Establishing WebRTC DataChannel via Google STUN. Please wait...</div>
-          </div>
-          <div class="ctl">
-            <button class="btn btn-outline" id="btn-direct-cancel">Cancel</button>
-          </div>
-        </div>
-      `;
-    } else if (isOffer) {
-      const flat = String(directState.code || '').replace(/-/g, '');
-      const preview = flat.length > 16 ? flat.slice(0, 10) + ' •••••• ' + flat.slice(-6) + ` · ${flat.length} chars` : flat;
-      directCardHtml += `
-        <div style="font-size:12px;font-weight:600;color:#f8fafc;margin-bottom:4px;">STEP 1 · SEND THIS CODE TO YOUR FRIEND</div>
-        <div class="code-preview-box">
-          <div class="code-preview-text">${escHtml(preview)}</div>
-          <button class="btn btn-sm btn-save-fb" id="btn-copy-offer" style="flex:none;">Copy Code</button>
-        </div>
-        <div class="code-meta" style="margin-bottom:12px;">
-          <span>⏱️ Expires in: <b id="direct-expiry-timer" class="expiry-tag">15:00</b></span>
-          <span>· Works exclusively in Inex Island</span>
-        </div>
-
-        <div style="font-size:12px;font-weight:600;color:#f8fafc;margin-top:10px;margin-bottom:4px;">STEP 2 · PASTE YOUR FRIEND'S REPLY CODE</div>
-        <div class="direct-paste-row">
-          <input type="text" id="inp-friend-reply" class="txtin" placeholder="Paste reply code from partner here..." />
-          <button class="btn btn-outline" id="btn-paste-reply">Paste</button>
-          <button class="btn btn-save-fb" id="btn-submit-reply">Connect</button>
-          <button class="btn btn-outline" id="btn-direct-cancel">Cancel</button>
-        </div>
-      `;
-    } else if (isReply) {
-      const flat = String(directState.replyCode || '').replace(/-/g, '');
-      const preview = flat.length > 16 ? flat.slice(0, 10) + ' •••••• ' + flat.slice(-6) + ` · ${flat.length} chars` : flat;
-      directCardHtml += `
-        <div style="font-size:12px;font-weight:600;color:#f8fafc;margin-bottom:4px;">REPLY CODE READY · SEND BACK TO HOST</div>
-        <div class="code-preview-box">
-          <div class="code-preview-text">${escHtml(preview)}</div>
-          <button class="btn btn-sm btn-save-fb" id="btn-copy-reply" style="flex:none;">Copy Reply</button>
-        </div>
-        <div class="code-meta" style="margin-bottom:10px;">
-          <span>Send this reply code back to the host. You will connect automatically once they accept.</span>
-        </div>
-        <button class="btn btn-outline" id="btn-direct-cancel">Cancel</button>
-      `;
-    } else {
-      // Standby
-      if (isError) {
-        directCardHtml += `
-          <div id="direct-err-banner" style="background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:8px 12px;color:#fca5a5;font-size:12px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;gap:8px;">
-            <div style="display:flex;align-items:center;gap:6px;">
-              <span>⚠️</span>
-              <span>${escHtml(directState.message || 'Connection failed')}</span>
-            </div>
-            <button id="btn-dismiss-direct-err" style="background:none;border:none;color:#fca5a5;font-size:16px;line-height:1;cursor:pointer;padding:0 4px;opacity:0.8;" title="Dismiss">&times;</button>
-          </div>
-        `;
-      }
-      directCardHtml += `
-        <div class="row" style="padding:8px 0 12px;border-bottom:1px solid rgba(255,255,255,0.06);">
-          <div class="ico-box">${ICON.spark}</div>
-          <div class="txt">
-            <div class="t">Host a Connection</div>
-            <div class="d">Generate a one-time Inex Island code to share with your friend</div>
-          </div>
-          <div class="ctl">
-            <button class="btn btn-save-fb" id="btn-direct-gen">⚡ Generate Code</button>
-          </div>
-        </div>
-
-        <div style="font-size:12px;font-weight:600;color:#f8fafc;margin-top:12px;margin-bottom:6px;">Or Join a Friend's Host Code</div>
-        <div class="direct-paste-row">
-          <input type="text" id="inp-direct-join" class="txtin" placeholder="Paste partner's host code (ISL-...)" />
-          <button class="btn btn-outline" id="btn-direct-paste-join">Paste</button>
-          <button class="btn btn-save-fb" id="btn-direct-submit-join">Continue</button>
-        </div>
-      `;
-    }
-    directCardHtml += `</div>`;
-
-    // 2. Firebase Signaling (always visible)
-    let fbCardHtml = `
-      <div class="sec-title" style="display:flex;justify-content:space-between;align-items:center;margin-top:20px;">
-        <span>Firebase Signaling (Multi-PC Cloud)</span>
-        <span class="pill ${isCustom ? 'pill-green' : 'pill-purple'}" style="font-size:10px;">${isCustom ? 'Configured' : 'Cloud Database'}</span>
-      </div>
-      <div class="card">
-        <div class="row">
-          <div class="ico-box">${ICON.pin}</div>
-          <div class="txt">
-            <div class="t">Active Database</div>
-            <div class="d">${isCustom ? 'Active private Firebase instance' : 'No Firebase URL set (configure below)'}</div>
-          </div>
-          <div class="ctl">
-            <div class="url-masked-pill" title="Protected & Hidden">
-              <span class="masked-dots">••••••••••••••••••••••••</span>
-              <span class="lock-tag">${isCustom ? 'Configured' : 'Not Set'}</span>
-            </div>
-          </div>
-        </div>
-
-        <div class="row">
-          <div class="ico-box">${ICON.spark}</div>
-          <div class="txt">
-            <div class="t">Database URL</div>
-            <div class="d">Paste your private Firebase Realtime Database URL</div>
-          </div>
-          <div class="ctl">
-            <div class="fb-input-wrap">
-              <input type="password" id="inp-custom-firebase" class="txtin" placeholder="https://your-db.asia-southeast1.firebasedatabase.app" />
-              <button id="btn-save-custom-fb" class="btn btn-save-fb">Save</button>
-            </div>
-          </div>
-        </div>
-
-        ${isCustom ? `
-        <div class="row click" id="row-reset-fb">
-          <div class="ico-box">${ICON.reset}</div>
-          <div class="txt">
-            <div class="t" style="color: #f4f4f6;">Clear Database URL</div>
-            <div class="d">Remove saved Firebase Realtime Database URL</div>
-          </div>
-          <div class="ctl">
-            <button class="btn btn-outline" id="btn-revert-fb">Clear URL</button>
-          </div>
-        </div>` : ''}
-      </div>
-
-      <div class="sec-title">Setup Instructions</div>
-      <div class="card fb-guide-card">
-        <div class="fb-guide-steps">
-          <div class="guide-step">
-            <span class="step-num">1</span>
-            <div class="step-text">Go to <button class="link-btn" id="btn-fb-console-link">Firebase Console ↗</button> and click <b>Add project</b> (Free Spark plan).</div>
-          </div>
-          <div class="guide-step">
-            <span class="step-num">2</span>
-            <div class="step-text">In the sidebar, navigate to <b>Build &gt; Realtime Database</b> and click <b>Create Database</b>.</div>
-          </div>
-          <div class="guide-step">
-            <span class="step-num">3</span>
-            <div class="step-text">Under the <b>Rules</b> tab, replace everything with the Security Rules below and click <b>Publish</b>.</div>
-          </div>
-        </div>
-      </div>
-
-      <div class="sec-title">Firebase Security Rules</div>
-      <div class="card fb-rules-card">
-        <div class="fb-rules-header">
-          <span class="rules-badge">Database Rules (JSON)</span>
-          <button id="btn-copy-rules" class="btn-copy-rules">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-            <span id="copy-rules-txt">Copy Rules</span>
-          </button>
-        </div>
-        <pre class="fb-rules-code"><code>{\n  "rules": {\n    "rooms": {\n      "$roomCode": {\n        ".read": true,\n        ".write": true\n      }\n    }\n  }\n}</code></pre>
-      </div>
-    `;
-
-    fb.innerHTML = bannerHtml + directCardHtml + fbCardHtml;
-    main.append(fb);
-
-    // Wire Direct Handshake Controls
-    if (isOffer && directState.expiresAt) {
-      const updateTimer = () => {
-        const el = fb.querySelector('#direct-expiry-timer');
-        if (!el) return;
-        const rem = Math.max(0, Math.floor((directState.expiresAt - Date.now()) / 1000));
-        const m = Math.floor(rem / 60);
-        const s = String(rem % 60).padStart(2, '0');
-        el.textContent = `${m}:${s}`;
-      };
-      updateTimer();
-      directTimerInterval = setInterval(updateTimer, 1000);
-    }
-
-    const clearDirectErr = () => {
-      if (directState && directState.phase === 'error') {
-        directState = { phase: 'standby' };
-        try { window.__TAURI__?.event?.emit('direct-p2p-cmd', { action: 'clear-error' }); } catch (_) {}
-        const b = fb.querySelector('#direct-err-banner');
-        if (b) b.remove();
-      }
-    };
-    fb.querySelector('#btn-dismiss-direct-err')?.addEventListener('click', clearDirectErr);
-    fb.querySelector('#inp-direct-join')?.addEventListener('input', clearDirectErr);
-    fb.querySelector('#inp-friend-reply')?.addEventListener('input', clearDirectErr);
-    if (isError) {
-      setTimeout(() => {
-        if (directState && directState.phase === 'error') {
-          clearDirectErr();
-        }
-      }, 7000);
-    }
-
-    fb.querySelector('#btn-direct-gen')?.addEventListener('click', () => {
-      clearDirectErr();
-      try { window.__TAURI__?.event?.emit('direct-p2p-cmd', { action: 'gen-offer' }); } catch (_) {}
-    });
-
-    fb.querySelector('#btn-copy-offer')?.addEventListener('click', async () => {
-      try {
-        await navigator.clipboard.writeText(directState.code || '');
-        const btn = fb.querySelector('#btn-copy-offer');
-        if (btn) btn.textContent = '✓ Copied!';
-        toast('Host code copied to clipboard!');
-        setTimeout(() => { if (btn) btn.textContent = 'Copy Code'; }, 2000);
-      } catch (_) { toast('Failed to copy to clipboard'); }
-    });
-
-    fb.querySelector('#btn-paste-reply')?.addEventListener('click', async () => {
-      try {
-        const txt = await navigator.clipboard.readText();
-        const inp = fb.querySelector('#inp-friend-reply');
-        if (inp && txt) inp.value = txt.trim();
-      } catch (_) { toast('Click box and press Ctrl+V'); }
-    });
-
-    fb.querySelector('#btn-submit-reply')?.addEventListener('click', () => {
-      const inp = fb.querySelector('#inp-friend-reply');
-      const val = (inp?.value || '').trim();
-      if (!val) { toast('Paste your friend\'s reply code first'); return; }
-      try { window.__TAURI__?.event?.emit('direct-p2p-cmd', { action: 'accept-reply', replyCode: val }); } catch (_) {}
-    });
-
-    fb.querySelector('#btn-copy-reply')?.addEventListener('click', async () => {
-      try {
-        await navigator.clipboard.writeText(directState.replyCode || '');
-        const btn = fb.querySelector('#btn-copy-reply');
-        if (btn) btn.textContent = '✓ Copied!';
-        toast('Reply code copied to clipboard!');
-        setTimeout(() => { if (btn) btn.textContent = 'Copy Reply'; }, 2000);
-      } catch (_) { toast('Failed to copy to clipboard'); }
-    });
-
-    fb.querySelector('#btn-direct-paste-join')?.addEventListener('click', async () => {
-      clearDirectErr();
-      try {
-        const txt = await navigator.clipboard.readText();
-        const inp = fb.querySelector('#inp-direct-join');
-        if (inp && txt) inp.value = txt.trim();
-      } catch (_) { toast('Click box and press Ctrl+V'); }
-    });
-
-    fb.querySelector('#btn-direct-submit-join')?.addEventListener('click', () => {
-      clearDirectErr();
-      const inp = fb.querySelector('#inp-direct-join');
-      const val = (inp?.value || '').trim();
-      if (!val) { toast('Paste your partner\'s host code first'); return; }
-      try { window.__TAURI__?.event?.emit('direct-p2p-cmd', { action: 'join-offer', hostCode: val }); } catch (_) {}
-    });
-
-    fb.querySelector('#btn-direct-cancel')?.addEventListener('click', () => {
-      try { window.__TAURI__?.event?.emit('direct-p2p-cmd', { action: 'disconnect' }); } catch (_) {}
-    });
-
-    fb.querySelector('#btn-direct-disconnect')?.addEventListener('click', () => {
-      try { window.__TAURI__?.event?.emit('direct-p2p-cmd', { action: 'disconnect' }); } catch (_) {}
-    });
-
-    // Wire Firebase Database Controls
-    const saveBtn = fb.querySelector('#btn-save-custom-fb');
-    const inp = fb.querySelector('#inp-custom-firebase');
-    const saveUrl = () => {
-      const val = (inp?.value || '').trim();
-      if (!val) { toast('Please enter a Firebase URL'); return; }
-      if (!val.startsWith('https://')) { toast('URL must begin with https://'); return; }
-      if (!S.share) S.share = {};
-      S.share.firebaseUrl = val;
-      save(S);
-      toast('Custom Firebase URL saved!');
-      renderPage();
-    };
-    saveBtn?.addEventListener('click', saveUrl);
-    inp?.addEventListener('keydown', (e) => { if (e.key === 'Enter') saveUrl(); });
-
-    const revertBtn = fb.querySelector('#btn-revert-fb');
-    const revertRow = fb.querySelector('#row-reset-fb');
-    const doRevert = () => {
-      if (!S.share) S.share = {};
-      S.share.firebaseUrl = '';
-      save(S);
-      toast('Cleared Firebase URL');
-      renderPage();
-    };
-    revertBtn?.addEventListener('click', (e) => { e.stopPropagation(); doRevert(); });
-    revertRow?.addEventListener('click', doRevert);
-
-    fb.querySelector('#btn-fb-console-link')?.addEventListener('click', () => {
-      openExternalUrl('https://console.firebase.google.com');
-    });
-
-    const copyBtn = fb.querySelector('#btn-copy-rules');
-    copyBtn?.addEventListener('click', async () => {
-      try {
-        await navigator.clipboard.writeText(rulesFormatted);
-        toast('Firebase Rules copied to clipboard!');
-        const txt = fb.querySelector('#copy-rules-txt');
-        if (txt) {
-          txt.textContent = '✓ Copied!';
-          setTimeout(() => { if (txt) txt.textContent = 'Copy Rules'; }, 2000);
-        }
-      } catch (_) {
-        toast('Failed to copy to clipboard');
-      }
-    });
-
-    main.scrollTop = resetScroll ? 0 : keep;
-    return;
-  }
-
   if (page.about) {
     const a = el('div', 'about-minimal');
     a.innerHTML = `
@@ -969,9 +591,6 @@ async function resetAll() {
 }
 function exportSettings() {
   const exportData = JSON.parse(JSON.stringify(S));
-  if (exportData.share && exportData.share.firebaseUrl) {
-    delete exportData.share.firebaseUrl; // Protect private Firebase URL from being leaked in export
-  }
   const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
   const a = el('a'); a.href = URL.createObjectURL(blob); a.download = 'inex-island-settings.json';
   document.body.append(a); a.click(); a.remove(); toast('Settings exported');

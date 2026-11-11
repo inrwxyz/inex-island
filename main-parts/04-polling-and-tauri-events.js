@@ -42,6 +42,7 @@ async function pollSystemAndMedia() {
 var loadTimer, loadBusy;
 function loadWanted() {
   if (document.hidden || appState.currentView !== 'view-compact') return false;
+  if (SET.widgets && SET.widgets.enabled === false) return false;   // Hover Widgets switched off
   const wL = SET.widgets ? SET.widgets.left : null;
   const wR = SET.widgets ? SET.widgets.right : null;
   return ['ram', 'cpu', 'gpu', 'disk', 'net'].some(k => wL === k || wR === k);

@@ -8,7 +8,7 @@ Built with Tauri 2 and Rust.
 ![Platform](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D6?style=flat-square&logo=windows)
 ![Tauri](https://img.shields.io/badge/Tauri-2-FFC131?style=flat-square&logo=tauri)
 ![Rust](https://img.shields.io/badge/Rust-2021-DEA584?style=flat-square&logo=rust)
-![Version](https://img.shields.io/badge/version-0.4.0-brightgreen?style=flat-square)
+![Version](https://img.shields.io/badge/version-0.4.1-brightgreen?style=flat-square)
 ![License](https://img.shields.io/badge/license-GPLv3-blue?style=flat-square)
 
 <br/>
@@ -45,7 +45,7 @@ Built with Tauri 2 and Rust.
 | Backend | Rust, Tauri 2, `windows-rs`, `rustfft`, `wmi` |
 | Frontend | Plain JavaScript and CSS in WebView2 (source in `main-parts/`) |
 | File transfer | Quick Share (Rust), WebRTC data channels for P2P |
-| Signaling | Your own Firebase Realtime Database (handshake only) |
+| Signaling | None. P2P Link uses two short copy-paste codes (no server) |
 
 Windows features (audio, Wi-Fi, Bluetooth, registry, media) use native Windows APIs directly, with no helper processes like PowerShell or `netsh`.
 
@@ -67,29 +67,15 @@ npm run build    # installer ends up in src-tauri/target/release/bundle/nsis/
 
 ---
 
-## P2P Link setup (Firebase)
+## P2P Link (no server)
 
-P2P Link needs a free Realtime Database of your own, used only for the short handshake.
+P2P Link connects two PCs directly. Nothing runs until you press **Generate** or paste a code.
 
-1. Create a project in the [Firebase Console](https://console.firebase.google.com/) and add a **Realtime Database**.
-2. In **Rules**, paste:
-   ```json
-   {
-     "rules": {
-       "rooms": {
-         "$code": {
-           ".read": true,
-           ".write": true
-         }
-       }
-     }
-   }
-   ```
-3. Copy the database URL (for example `https://your-project.firebasedatabase.app`).
-4. In Inex Island open **Settings → Firebase** and paste it.
-5. Create a 6-digit code and connect up to 5 PCs.
+1. PC A: open the menu, **Inex Drop**, then the P2P icon on the right rail, and press **Generate**. Click the code to copy it and send it to PC B.
+2. PC B: paste (or drop) the code in the box. A reply code is made and copied. Send it back to PC A.
+3. PC A: paste (or drop) the reply code in the same box. The link opens.
 
-Quick Share does not need Firebase.
+Each code is valid for 3 minutes and stops working as soon as the link is up.
 
 ---
 

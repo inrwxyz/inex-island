@@ -3,13 +3,7 @@ import { load as loadSettings, save as saveSettings, subscribe as onSettings, ap
 let SET = loadSettings();
 applyTheme(SET);
 
-// Firebase is used strictly for 5-minute WebRTC room discovery & SDP/ICE handshake signaling
-const DEFAULT_FIREBASE_DB_URL = "";
-function getFirebaseUrl() {
-  const custom = (SET.share && SET.share.firebaseUrl) ? SET.share.firebaseUrl.trim() : '';
-  return (custom || DEFAULT_FIREBASE_DB_URL).replace(/\/+$/, '');
-}
-const CODE_TTL_MS = 5 * 60 * 1000; // 5 minutes validity
+const CODE_TTL_MS = 3 * 60 * 1000; // a host / reply code stays valid for 3 minutes
 const RTC_CONFIG = {
   iceServers: [
     { urls: 'stun:stun.l.google.com:19302' },
@@ -26,17 +20,9 @@ const appState = {
   currentView: 'view-compact',
   lastVolume: 75,
   trayFiles: [],
-  roomCode: null,
-  isCodeHost: false,
-  manuallyDisconnected: new Set(),
-  roomExpiresAt: 0,
-  roomExpiryTimer: null,
-  pollSignalTimer: null,
   peers: [], // Connected WebRTC peers: [{ id, name }]
   traySelect: null, // { peerId, picked:Set } while choosing which tray files to send
   draggingOut: false,
-  polling: false,
-  lastTry: {},
   xfer: null,
   prompting: false,
   transferring: false,

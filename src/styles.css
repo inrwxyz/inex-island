@@ -1027,7 +1027,7 @@ body {
 }
 .share-action-btn:hover { background: rgba(150, 150, 160, 0.15); }
 
-/* ==================== 7. FIREBASE WEBRTC P2P ROOM ==================== */
+/* ==================== 7. P2P LINK ==================== */
 .status-tag {
   font-size: 9.5px;
   font-weight: 700;
@@ -3046,3 +3046,15 @@ body {
 
 /* File Tray: a single "Inex Drop" button (follows the selected mode) */
 .tray-share-actions { grid-template-columns: 1fr; }
+
+/* ==================== P2P LINK: one code box, no server ==================== */
+.p2p-top-actions { flex-wrap: wrap; justify-content: center; }
+.p2p-top-actions .join-box { flex: 1 1 120px; min-width: 0; }
+.p2p-top-actions .code-badge { flex: 1 1 100%; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.code-badge.copied { border-style: solid; }
+.gen-code-btn.busy { pointer-events: none; animation: p2pGenPulse 0.9s ease-in-out infinite; }
+.code-badge.pop { animation: p2pCodeIn 0.34s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.p2p-body.drop-over { outline: 1px dashed currentColor; outline-offset: -4px; border-radius: 12px; }
+@keyframes p2pGenPulse { 0%, 100% { opacity: 0.5; } 50% { opacity: 1; } }
+@keyframes p2pCodeIn { from { opacity: 0; transform: translateY(4px) scale(0.96); filter: blur(3px); } to { opacity: 1; transform: none; filter: none; } }
+.island.no-anim .gen-code-btn.busy, .island.no-anim .code-badge.pop { animation: none; }

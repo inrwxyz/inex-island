@@ -122,13 +122,7 @@ async function handlePeerMessage(peerId, entry, msg) {
       if (msg.name) { entry.name = msg.name; syncConnectedPeersList(); }
       return;
     case 'bye':
-      if (msg.peerId) appState.manuallyDisconnected.add(msg.peerId);
-      appState.manuallyDisconnected.add(peerId);
       cleanupPeer(peerId);
-      return;
-    case 'room_closed':
-      showToast('lock', 'Room closed by host', 2200);
-      exitP2PRoom(false);
       return;
     case 'file-offer': {
       const files = Array.isArray(msg.files) ? msg.files.filter((f) => f && f.name).slice(0, 200) : [];
@@ -360,8 +354,8 @@ function updateOfferGlow() {
 function refreshStatusPill() {
   if (anyTransferActive()) return;
   const pill = document.getElementById('p2p-status-pill');
-  if (appState.roomCode) pill.textContent = `Code ${appState.roomCode}`;
-  else pill.textContent = appState.peers.length > 0 ? `${appState.peers.length} Connected` : 'Standby';
+  if (!pill) return;
+  pill.textContent = appState.peers.length > 0 ? `${appState.peers.length} Connected` : directPhaseLabel();
 }
 
 // One place that decides if the notch shows the transfer animation: only while data is really moving
@@ -377,22 +371,9 @@ function refreshTransferUI() {
 }
 
 function renderPeersUI() {
-  updateP2PExpiryUI();
-  const exitBtn = document.getElementById('btn-exit-room');
-  if (exitBtn) {
-    exitBtn.classList.toggle('hidden', !appState.roomCode && appState.peers.length === 0);
-  }
   const count = appState.peers.length;
   if (typeof updateDropRailBadge === 'function') updateDropRailBadge(count);
-  const inRoomOrConnected = !!(appState.roomCode || count > 0);
-  document.getElementById('btn-gen-code')?.classList.toggle('hidden', inRoomOrConnected);
-  document.getElementById('p2p-join-box')?.classList.toggle('hidden', inRoomOrConnected);
-  if (appState.isCodeHost && appState.roomCode) {
-    document.getElementById('code-display-box')?.classList.remove('hidden');
-  } else if (!inRoomOrConnected) {
-    document.getElementById('code-display-box')?.classList.add('hidden');
-  }
-  document.getElementById('btn-open-p2p-settings')?.classList.toggle('hidden', count > 0);
+  renderP2PView();
   const listEl = document.getElementById('p2p-peers-list');
   const badge = document.getElementById('c-peer-badge');
   const countSpan = document.getElementById('c-peer-count');
@@ -415,17 +396,10 @@ function renderPeersUI() {
 
   listEl.innerHTML = '';
   if (count === 0) {
-    const msg = appState.roomCode
-      ? `Waiting for peers to join code ${appState.roomCode} (5m valid)...`
-      : 'Generate a code or enter partner code (Max 5 PCs)';
-    listEl.innerHTML = `
-      <div class="empty-hint">
-        <div>${msg}</div>
-        <button id="btn-open-p2p-settings" class="link-btn" style="margin-top:6px;font-size:10px;opacity:0.75;cursor:pointer;background:none;border:none;color:inherit;text-decoration:underline;">Or use Direct Offline P2P in Settings ↗</button>
-      </div>`;
-    document.getElementById('btn-open-p2p-settings')?.addEventListener('click', () => {
-      invokeTauri('open_settings');
-    });
+    const hint = document.createElement('div');
+    hint.className = 'empty-hint';
+    hint.textContent = p2pHintText();
+    listEl.appendChild(hint);
     return;
   }
 

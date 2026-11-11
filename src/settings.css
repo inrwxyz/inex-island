@@ -566,144 +566,6 @@ main {
   border-color: rgba(255, 255, 255, 0.14);
 }
 
-.pill.pill-purple {
-  background: rgba(255, 255, 255, 0.05);
-  color: #a1a1aa;
-  border-color: rgba(255, 255, 255, 0.1);
-}
-
-/* ================= FIREBASE PAGE ================= */
-.firebase-page {
-  display: flex;
-  flex-direction: column;
-}
-
-.firebase-banner {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  background: var(--card);
-  border: 1px solid var(--card-line);
-  border-radius: 10px;
-  padding: 14px 16px;
-  margin-bottom: 12px;
-  position: relative;
-}
-
-.firebase-banner::before, .firebase-banner::after {
-  content: "";
-  position: absolute;
-  width: 8px;
-  height: 8px;
-  pointer-events: none;
-  border-color: rgba(255, 255, 255, 0.28);
-  border-style: solid;
-}
-
-.firebase-banner::before { top: -1px; left: -1px; border-width: 1.5px 0 0 1.5px; border-top-left-radius: 4px; }
-.firebase-banner::after { bottom: -1px; right: -1px; border-width: 0 1.5px 1.5px 0; border-bottom-right-radius: 4px; }
-
-.fb-icon-box {
-  width: 40px;
-  height: 40px;
-  border-radius: 9px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  display: grid;
-  place-items: center;
-  flex: none;
-}
-
-.fb-icon-box svg {
-  width: 20px;
-  height: 20px;
-  color: #ffffff;
-}
-
-.fb-info {
-  flex: 1;
-  min-width: 0;
-}
-
-.fb-title-wrap {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-}
-
-.fb-title {
-  font-size: 14px;
-  font-weight: 700;
-  color: #ffffff;
-}
-
-.fb-sub {
-  font-size: 11px;
-  color: var(--dim);
-  margin-top: 2px;
-  line-height: 1.4;
-}
-
-/* Masked URL Box (Protected) */
-.url-masked-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  background: #050508;
-  border: 1px solid #1a1a24;
-  border-radius: 6px;
-  padding: 4px 9px;
-}
-
-.masked-dots {
-  font-family: Consolas, monospace;
-  letter-spacing: 2px;
-  color: #63636e;
-  font-size: 11px;
-}
-
-.lock-tag {
-  font-size: 9px;
-  font-weight: 700;
-  text-transform: uppercase;
-  color: #a1a1aa;
-  background: rgba(255, 255, 255, 0.06);
-  padding: 2px 5px;
-  border-radius: 4px;
-}
-
-.fb-input-wrap {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-}
-
-.fb-input-wrap .txtin {
-  width: 210px;
-}
-
-.btn-save-fb {
-  background: #1c1c28;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  color: #ffffff;
-}
-
-.btn-save-fb:hover {
-  background: #252536;
-  border-color: rgba(255, 255, 255, 0.3);
-}
-
-/* Firebase Instructions Guide Card */
-.fb-guide-card {
-  padding: 14px 16px;
-}
-
-.fb-guide-steps {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
 .guide-step {
   display: flex;
   align-items: flex-start;
@@ -711,102 +573,6 @@ main {
   font-size: 12px;
   color: #cfcfe0;
   line-height: 1.5;
-}
-
-.step-num {
-  width: 19px;
-  height: 19px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  font-size: 10px;
-  font-weight: 700;
-  color: #ffffff;
-  display: grid;
-  place-items: center;
-  flex: none;
-  margin-top: 1px;
-}
-
-.step-text code {
-  background: #050508;
-  border: 1px solid #1c1c26;
-  border-radius: 4px;
-  padding: 1px 5px;
-  font-family: 'JetBrains Mono', Consolas, monospace;
-  font-size: 11px;
-  color: #38bdf8;
-}
-
-.link-btn {
-  display: inline-flex;
-  align-items: center;
-  background: none;
-  border: none;
-  color: #38bdf8;
-  font-weight: 600;
-  text-decoration: underline;
-  cursor: pointer;
-  padding: 0;
-  font-size: 12px;
-}
-
-.link-btn:hover {
-  color: #7dd3fc;
-}
-
-/* Firebase Security Rules Card & Code Box */
-.fb-rules-card {
-  padding: 12px 14px 14px;
-}
-
-.fb-rules-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 9px;
-}
-
-.rules-badge {
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.6px;
-  color: var(--dim);
-  text-transform: uppercase;
-}
-
-.btn-copy-rules {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 11px;
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  color: #ffffff;
-  font-size: 11px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.btn-copy-rules:hover {
-  background: rgba(255, 255, 255, 0.12);
-  border-color: rgba(255, 255, 255, 0.22);
-}
-
-.fb-rules-code {
-  background: #040407;
-  border: 1px solid #14141c;
-  border-radius: 6px;
-  padding: 11px 13px;
-  font-family: 'JetBrains Mono', Consolas, monospace;
-  font-size: 11px;
-  color: #38bdf8;
-  line-height: 1.5;
-  overflow-x: auto;
-  user-select: text;
-  -webkit-user-select: text;
 }
 
 /* About Page */
@@ -912,7 +678,6 @@ main {
   opacity: 1;
 }
 
-
 /* Quick Action Tile Manager */
 .tile-manager-card {
   padding: 14px 16px;
@@ -1012,55 +777,6 @@ main {
   max-width: 70px;
 }
 
-/* Direct P2P Code Cards & Handshake */
-.direct-p2p-card {
-  padding: 14px 16px;
-  background: var(--card);
-  border: 1px solid var(--card-line);
-  border-radius: 10px;
-  margin-bottom: 12px;
-}
-.code-preview-box {
-  background: rgba(0, 0, 0, 0.4);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 8px;
-  padding: 10px 12px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin: 10px 0;
-}
-.code-preview-text {
-  font-family: 'JetBrains Mono', Consolas, monospace;
-  font-size: 12px;
-  color: #38bdf8;
-  letter-spacing: 0.05em;
-  word-break: break-all;
-}
-.code-meta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 11px;
-  color: var(--muted);
-}
-.expiry-tag {
-  color: #f59e0b;
-  font-weight: 500;
-}
-.direct-paste-row {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  margin-top: 10px;
-}
-.direct-paste-row input {
-  flex: 1;
-  min-width: 0;
-  font-family: 'JetBrains Mono', Consolas, monospace;
-  font-size: 12px;
-}
 /* Quick Action Tiles: collapsed summary + customize */
 .qa-head { display: flex; justify-content: space-between; align-items: center; }
 .qa-head .qa-hint { font-size: 10px; letter-spacing: 0.4px; text-transform: uppercase; color: var(--dim); font-weight: 600; }
@@ -1069,7 +785,6 @@ main {
 .qa-customize, .qa-done { flex: none; }
 .qa-done { margin-top: 12px; }
 .tile-manager-card .tiles-grid + .tile-group-header { margin-top: 16px; }
-
 
 /* Inex-styled confirm dialog (replaces the browser confirm box) */
 .dlg-back {
