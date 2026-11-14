@@ -7,8 +7,7 @@ use tauri::{AppHandle, Emitter};
 //  * PIPE_ACCESS_INBOUND (the island only reads) + PIPE_REJECT_REMOTE_CLIENTS (no SMB / network clients)
 //  * every connection is handed to its own short-lived thread and the next pipe instance is created
 //    immediately, so there is no window where the pipe does not exist (events used to be dropped there)
-//  * a client that connects and never writes can no longer block the listener: reads are polled with
-//    PeekNamedPipe against a 2 s deadline (no blocking ReadFile, no cross-thread cancel)
+//  * readers use FILE_FLAG_OVERLAPPED + WaitForSingleObject against a 2 s deadline (zero polling)
 //  * message size is capped and only JSON-looking lines are forwarded
 //  * at most MAX_HANDLERS connections are served at once
 
@@ -18,22 +17,76 @@ pub fn start(app: AppHandle) {
 }
 
 #[cfg(target_os = "windows")]
+unsafe fn read_overlapped_line(
+    handle: windows::Win32::Foundation::HANDLE,
+    max_bytes: usize,
+    deadline_ms: u64,
+) -> Vec<u8> {
+    use windows::Win32::Foundation::{CloseHandle, GetLastError, ERROR_IO_PENDING, WAIT_OBJECT_0};
+    use windows::Win32::Storage::FileSystem::ReadFile;
+    use windows::Win32::System::Threading::{CreateEventW, ResetEvent, WaitForSingleObject};
+    use windows::Win32::System::IO::{CancelIoEx, GetOverlappedResult, OVERLAPPED};
+
+    let Ok(ev) = CreateEventW(None, true, false, None) else {
+        return Vec::new();
+    };
+    let mut data: Vec<u8> = Vec::new();
+    let deadline = std::time::Instant::now() + std::time::Duration::from_millis(deadline_ms);
+    let mut chunk = [0u8; 1024];
+
+    while data.len() < max_bytes {
+        let Some(rem) = deadline.checked_duration_since(std::time::Instant::now()) else {
+            break;
+        };
+        let _ = ResetEvent(ev);
+        let mut ov = OVERLAPPED { hEvent: ev, ..Default::default() };
+        let mut n = 0u32;
+        if ReadFile(handle, Some(&mut chunk), Some(&mut n), Some(&mut ov)).is_err() {
+            if GetLastError() != ERROR_IO_PENDING {
+                break;
+            }
+            if WaitForSingleObject(ev, rem.as_millis().max(1) as u32) != WAIT_OBJECT_0 {
+                let _ = CancelIoEx(handle, Some(&ov));
+                break;
+            }
+            if GetOverlappedResult(handle, &ov, &mut n, false).is_err() {
+                break;
+            }
+        }
+        if n == 0 {
+            break;
+        }
+        data.extend_from_slice(&chunk[..n as usize]);
+        if data.ends_with(b"\n") {
+            break;
+        }
+    }
+
+    let _ = CloseHandle(ev);
+    data
+}
+
+#[cfg(target_os = "windows")]
 fn run(app: AppHandle) {
     use std::ffi::c_void;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Arc;
     use std::time::Duration;
     use windows::core::w;
-    use windows::Win32::Foundation::{CloseHandle, GetLastError, HANDLE, INVALID_HANDLE_VALUE, WIN32_ERROR};
-    use windows::Win32::Storage::FileSystem::{ReadFile, FILE_FLAGS_AND_ATTRIBUTES};
+    use windows::Win32::Foundation::{
+        CloseHandle, GetLastError, ERROR_IO_PENDING, ERROR_PIPE_CONNECTED, HANDLE,
+        INVALID_HANDLE_VALUE, WAIT_OBJECT_0,
+    };
+    use windows::Win32::Storage::FileSystem::{FILE_FLAGS_AND_ATTRIBUTES, FILE_FLAG_OVERLAPPED};
     use windows::Win32::System::Pipes::{
-        ConnectNamedPipe, CreateNamedPipeW, DisconnectNamedPipe, PeekNamedPipe, PIPE_READMODE_BYTE,
+        ConnectNamedPipe, CreateNamedPipeW, DisconnectNamedPipe, PIPE_READMODE_BYTE,
         PIPE_REJECT_REMOTE_CLIENTS, PIPE_TYPE_BYTE, PIPE_UNLIMITED_INSTANCES, PIPE_WAIT,
     };
+    use windows::Win32::System::Threading::{CreateEventW, WaitForSingleObject, INFINITE};
+    use windows::Win32::System::IO::OVERLAPPED;
 
     const PIPE_ACCESS_INBOUND: u32 = 0x0000_0001;
     const FILE_FLAG_FIRST_PIPE_INSTANCE: u32 = 0x0008_0000;
-    const ERROR_PIPE_CONNECTED: u32 = 535;
     const MAX_MESSAGE_BYTES: usize = 4096;
     const MAX_LINE_BYTES: usize = 2048;
     const MAX_HANDLERS: usize = 16;
@@ -45,7 +98,7 @@ fn run(app: AppHandle) {
 
     loop {
         unsafe {
-            let mut open_mode = PIPE_ACCESS_INBOUND;
+            let mut open_mode = PIPE_ACCESS_INBOUND | FILE_FLAG_OVERLAPPED.0;
             if first_instance {
                 open_mode |= FILE_FLAG_FIRST_PIPE_INSTANCE;
             }
@@ -61,18 +114,29 @@ fn run(app: AppHandle) {
             );
 
             if handle == INVALID_HANDLE_VALUE {
-                // first instance refused = the name is already owned by another process; keep retrying slowly
                 std::thread::sleep(Duration::from_millis(if first_instance { 2000 } else { 500 }));
                 continue;
             }
             first_instance = false;
 
-            let connected = ConnectNamedPipe(handle, None).is_ok()
-                || GetLastError() == WIN32_ERROR(ERROR_PIPE_CONNECTED);
+            let Ok(conn_ev) = CreateEventW(None, true, false, None) else {
+                let _ = CloseHandle(handle);
+                continue;
+            };
+            let mut ov = OVERLAPPED { hEvent: conn_ev, ..Default::default() };
+            let mut connected = ConnectNamedPipe(handle, Some(&mut ov)).is_ok();
+            if !connected {
+                let err = GetLastError();
+                if err == ERROR_PIPE_CONNECTED {
+                    connected = true;
+                } else if err == ERROR_IO_PENDING {
+                    connected = WaitForSingleObject(conn_ev, INFINITE) == WAIT_OBJECT_0;
+                }
+            }
+            let _ = CloseHandle(conn_ev);
 
             if !connected {
                 let _ = CloseHandle(handle);
-                std::thread::sleep(Duration::from_millis(50));
                 continue;
             }
 
@@ -82,7 +146,6 @@ fn run(app: AppHandle) {
                 continue;
             }
 
-            // HANDLE is not Send; pass the raw value to the worker thread.
             let raw = handle.0 as isize;
             let app2 = app.clone();
             let active2 = active.clone();
@@ -90,28 +153,7 @@ fn run(app: AppHandle) {
 
             std::thread::spawn(move || {
                 let handle = HANDLE(raw as *mut c_void);
-                let mut data: Vec<u8> = Vec::new();
-                let deadline = std::time::Instant::now() + Duration::from_millis(READ_DEADLINE_MS);
-
-                while std::time::Instant::now() < deadline && data.len() < MAX_MESSAGE_BYTES {
-                    let mut avail = 0u32;
-                    if PeekNamedPipe(handle, None, 0, None, Some(&mut avail), None).is_err() {
-                        break; // client closed and everything it wrote has been read
-                    }
-                    if avail == 0 {
-                        std::thread::sleep(Duration::from_millis(5));
-                        continue;
-                    }
-                    let mut buf = vec![0u8; (avail as usize).min(1024)];
-                    let mut n = 0u32;
-                    if ReadFile(handle, Some(&mut buf), Some(&mut n), None).is_err() || n == 0 {
-                        break;
-                    }
-                    data.extend_from_slice(&buf[..n as usize]);
-                    if data.ends_with(b"\n") {
-                        break; // one JSON line per connection
-                    }
-                }
+                let data = read_overlapped_line(handle, MAX_MESSAGE_BYTES, READ_DEADLINE_MS);
 
                 if let Ok(text) = std::str::from_utf8(&data) {
                     for line in text.split('\n') {

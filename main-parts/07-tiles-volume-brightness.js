@@ -5,7 +5,7 @@ document.getElementById('tile-tray').addEventListener('click', openTrayView);
 
 document.querySelectorAll('.back-btn').forEach((btn) => {
   btn.addEventListener('click', () => {
-    switchView('view-control', 'state-control', 316, 292);
+    openControlMenu();
   });
 });
 
@@ -15,11 +15,24 @@ function applyRadio(kind, on) {
     document.getElementById('tile-wifi').classList.toggle('active', on);
     if (!on) document.getElementById('wifi-sub').textContent = 'Off';
     document.getElementById('wifi-master-toggle').checked = on;
+    const macTile = document.getElementById('mac-tile-wifi');
+    const macSub = document.getElementById('mac-wifi-sub');
+    if (macTile) macTile.classList.toggle('active', on);
+    if (macSub) {
+      if (!on) macSub.textContent = 'Off';
+      else if (appState.stats && appState.stats.wifi_name && appState.stats.wifi_name !== 'Not connected') macSub.textContent = appState.stats.wifi_name;
+      else macSub.textContent = 'On';
+    }
   } else {
     appState.btRadio = on;
     document.getElementById('tile-bt').classList.toggle('active', on);
     document.getElementById('bt-sub').textContent = on ? 'On' : 'Off';
     document.getElementById('bt-master-toggle').checked = on;
+    const macTile = document.getElementById('mac-tile-bt');
+    const macSub = document.getElementById('mac-bt-sub');
+    if (macTile) macTile.classList.toggle('active', on);
+    if (macSub && !on) macSub.textContent = 'Off';
+    else if (macSub && on && macSub.textContent === 'Off') macSub.textContent = 'On';
   }
 }
 
@@ -74,6 +87,17 @@ const ACTION_TILE_TITLES = {
 
 let awakeState = false;
 
+// Keep-awake button exists in both menus (Classic tile row + Mac top bar): keep both in step
+function syncAwakeUi() {
+  const title = awakeState ? 'Keep screen awake: ON' : 'Keep screen awake: off';
+  ['act-awake', 'mac-awake-btn'].forEach((id) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.classList.toggle('active', awakeState);
+    el.title = title;
+  });
+}
+
 function renderQuickActionTiles() {
   const row = document.getElementById('quick-icons-row');
   if (!row) return;
@@ -82,7 +106,7 @@ function renderQuickActionTiles() {
     : ['awake', 'snip', 'calendar', 'timer', 'clipboard', 'lock', 'settings'];
 
   row.innerHTML = '';
-  list.forEach((id) => {
+  list.slice(0, 7).forEach((id) => {   // the row fits 7 circles at most
     const ico = ACTION_TILE_ICONS[id];
     const title = ACTION_TILE_TITLES[id] || id;
     if (!ico) return;
@@ -100,8 +124,7 @@ function renderQuickActionTiles() {
         const want = !awakeState;
         const on = await invokeTauri('set_keep_awake', { on: want });
         awakeState = on === true;
-        btn.classList.toggle('active', awakeState);
-        btn.title = awakeState ? 'Keep screen awake: ON' : 'Keep screen awake: off';
+        syncAwakeUi();
       });
     } else if (id === 'snip') {
       btn.addEventListener('click', () => {
@@ -166,6 +189,10 @@ function setVolumeUI(level) {
     ms.value = level;
     ms.style.setProperty('--val', `${level}%`);
   }
+  const macVal = document.getElementById('mac-val-vol');
+  if (macVal) macVal.textContent = `${level}%`;
+  const macSlider = document.getElementById('mac-slider-vol');
+  if (macSlider) macSlider.value = level;
   appState.lastVolume = level;
 }
 function handleVolumeChange(newVal) {
@@ -177,24 +204,35 @@ document.getElementById('m-vol-toggle').addEventListener('click', () => {
   appState.volOpen = !appState.volOpen;
   island.classList.toggle('vol-open', appState.volOpen);
   document.getElementById('m-vol-toggle').classList.toggle('muted-ico', !appState.volOpen);
-  invokeTauri('resize_island', { width: 316, height: appState.volOpen ? MEDIA_H_VOL : MEDIA_H });
+  reportIslandSize({ width: ISLAND_WIN_W, height: appState.volOpen ? MEDIA_H_VOL : MEDIA_H });
 });
 document.getElementById('m-bt-btn').addEventListener('click', () => openAudioView());
 invokeTauri('get_system_volume').then((v) => { if (typeof v === 'number') setVolumeUI(v); });
 
 document.getElementById('slider-vol').addEventListener('input', (e) => handleVolumeChange(e.target.value));
+document.getElementById('mac-slider-vol')?.addEventListener('input', (e) => handleVolumeChange(e.target.value));
 document.getElementById('m-vol-slider').addEventListener('input', (e) => handleVolumeChange(e.target.value));
 
-document.getElementById('slider-bright').addEventListener('change', (e) => {
-  const level = parseInt(e.target.value, 10);
-  document.getElementById('val-bright').textContent = `${level}%`;
-  e.target.style.setProperty('--val', `${level}%`);
-  invokeTauri('set_system_brightness', { level });
-});
-document.getElementById('slider-bright').addEventListener('input', (e) => {
-  document.getElementById('val-bright').textContent = `${e.target.value}%`;
-  e.target.style.setProperty('--val', `${e.target.value}%`);
-});
+function syncBrightTextAndApply(level, commit) {
+  const n = parseInt(level, 10);
+  const vEl = document.getElementById('val-bright');
+  if (vEl) vEl.textContent = `${n}%`;
+  const s = document.getElementById('slider-bright');
+  if (s) {
+    s.value = n;
+    s.style.setProperty('--val', `${n}%`);
+  }
+  const mvEl = document.getElementById('mac-val-bright');
+  if (mvEl) mvEl.textContent = `${n}%`;
+  const ms = document.getElementById('mac-slider-bright');
+  if (ms) ms.value = n;
+  if (commit) invokeTauri('set_system_brightness', { level: n });
+}
+
+document.getElementById('slider-bright').addEventListener('change', (e) => syncBrightTextAndApply(e.target.value, true));
+document.getElementById('slider-bright').addEventListener('input', (e) => syncBrightTextAndApply(e.target.value, false));
+document.getElementById('mac-slider-bright')?.addEventListener('change', (e) => syncBrightTextAndApply(e.target.value, true));
+document.getElementById('mac-slider-bright')?.addEventListener('input', (e) => syncBrightTextAndApply(e.target.value, false));
 // Brightness follows Windows (Fn keys, quick settings, auto-brightness) through an event, no polling
 function setBrightUI(level) {
   if (typeof level !== 'number') return;
@@ -205,12 +243,179 @@ function setBrightUI(level) {
   }
   const valEl = document.getElementById('val-bright');
   if (valEl) valEl.textContent = `${level}%`;
+  const ms = document.getElementById('mac-slider-bright');
+  if (ms && ms.dataset.drag !== '1') ms.value = level;
+  const mvEl = document.getElementById('mac-val-bright');
+  if (mvEl) mvEl.textContent = `${level}%`;
 }
 document.getElementById('slider-bright').addEventListener('pointerdown', (e) => { e.target.dataset.drag = '1'; });
-window.addEventListener('pointerup', () => { const s = document.getElementById('slider-bright'); if (s) s.dataset.drag = ''; });
+document.getElementById('mac-slider-bright')?.addEventListener('pointerdown', (e) => { e.target.dataset.drag = '1'; });
+window.addEventListener('pointerup', () => {
+  const s = document.getElementById('slider-bright'); if (s) s.dataset.drag = '';
+  const ms = document.getElementById('mac-slider-bright'); if (ms) ms.dataset.drag = '';
+});
 onTauriEvent('brightness-changed', (e) => setBrightUI(e && e.payload));
 invokeTauri('get_system_brightness').then(setBrightUI);
 setTimeout(() => invokeTauri('get_system_brightness').then(setBrightUI), 5000);
+
+// Mac in-place subview management (keeps 500x210 locked, zero window resize or jitter)
+currentMacSubTarget = null;
+function openMacSub(viewId, title, from) {
+  if (typeof closeMacTrayPane === 'function') closeMacTrayPane();
+  closeMacSub();
+  const src = document.getElementById(viewId);
+  const mount = document.getElementById('mac-sub-mount');
+  const actionsSlot = document.getElementById('mac-sub-actions');
+  if (!src || !mount) return;
+  currentMacSubTarget = { id: viewId, parent: src.parentNode, next: src.nextSibling };
+  mount.appendChild(src);
+  src.classList.add('active', 'in-mac-sub');
+  const titleEl = document.getElementById('mac-sub-title');
+  if (titleEl) titleEl.textContent = title;
+
+  if (actionsSlot) {
+    actionsSlot.innerHTML = '';
+    const headerRight = src.querySelector('.bt-header-right, .panel-top-right, .qs-header-right, .cal-nav-bar, .top-tool-btn');
+    if (headerRight) {
+      currentMacSubTarget.actions = headerRight;
+      currentMacSubTarget.actionsParent = headerRight.parentNode;
+      currentMacSubTarget.actionsNext = headerRight.nextSibling;
+      actionsSlot.appendChild(headerRight);
+    }
+    if (viewId === 'view-p2p') mountP2PBarItems(actionsSlot);   // Generate / code / Cancel / status sit in the Back line, like Wi-Fi / Bluetooth
+  }
+
+  document.getElementById('mac-right-home')?.classList.add('hidden');
+  const subPanel = document.getElementById('mac-right-sub');
+  if (subPanel) {
+    subPanel.classList.remove('from-bottom');
+    subPanel.classList.remove('hidden');
+    if (from === 'bottom') {
+      const host = subPanel.parentElement;
+      host.classList.add('mx-clip');                       // the panel slides in from under the bottom edge
+      void subPanel.offsetWidth;
+      subPanel.classList.add('from-bottom');
+      setTimeout(() => host.classList.remove('mx-clip'), 420);
+    }
+  }
+
+  if (viewId === 'view-wifi') {
+    invokeTauri('wifi_backend', { on: true }).catch(() => {});
+    if (typeof loadWifiList === 'function') loadWifiList();
+  }
+  if (viewId === 'view-bt') {
+    invokeTauri('bt_backend', { on: true }).catch(() => {});
+    invokeTauri('bt_discovery', { on: true }).catch(() => {});
+    if (typeof loadBtList === 'function') loadBtList();
+  }
+  if (viewId === 'view-tray' && typeof updateTrayUI === 'function') updateTrayUI();
+  if (viewId === 'view-calendar' && typeof renderCalendarGrid === 'function') renderCalendarGrid();
+  if (viewId === 'view-notepad' && typeof focusNotepad === 'function') focusNotepad();
+  if (viewId === 'view-clipboard' && typeof openClipboardView === 'function') openClipboardView();
+  if (viewId === 'view-alarm' && typeof openAlarmView === 'function') openAlarmView();
+  if (typeof syncDropRail === 'function') syncDropRail(viewId);   // Quick Share <-> P2P side rail (only for those two views)
+}
+
+// P2P: move its option controls into the Back line (right side) and put them back on close
+function mountP2PBarItems(slot) {
+  const wrap = document.createElement('div');
+  wrap.className = 'mx-p2p-actions';
+  currentMacSubTarget.moved = [];
+  ['btn-gen-code', 'code-display-box', 'p2p-expiry-timer', 'btn-exit-room', 'p2p-status-pill'].forEach((id) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    currentMacSubTarget.moved.push({ el, parent: el.parentNode, next: el.nextSibling });
+    wrap.appendChild(el);
+  });
+  slot.appendChild(wrap);
+}
+
+function closeMacSub() {
+  if (!currentMacSubTarget) return;
+  const el = document.getElementById(currentMacSubTarget.id);
+  if (currentMacSubTarget.moved) {
+    for (let i = currentMacSubTarget.moved.length - 1; i >= 0; i--) {
+      const m = currentMacSubTarget.moved[i];
+      if (m.parent) m.parent.insertBefore(m.el, m.next);
+    }
+  }
+  if (currentMacSubTarget.actions && currentMacSubTarget.actionsParent) {
+    currentMacSubTarget.actionsParent.insertBefore(currentMacSubTarget.actions, currentMacSubTarget.actionsNext);
+  }
+  const actionsSlot = document.getElementById('mac-sub-actions');
+  if (actionsSlot) actionsSlot.innerHTML = '';
+  if (el && currentMacSubTarget.parent) {
+    el.classList.remove('active', 'in-mac-sub');
+    currentMacSubTarget.parent.insertBefore(el, currentMacSubTarget.next);
+  }
+  if (currentMacSubTarget.id === 'view-bt') {
+    invokeTauri('bt_discovery', { on: false });
+  }
+  if (currentMacSubTarget.id === 'view-clipboard' && typeof closeClipboardView === 'function') {
+    closeClipboardView();
+  }
+  currentMacSubTarget = null;
+  island.classList.remove('has-rail');
+  document.getElementById('mac-right-sub')?.classList.add('hidden');
+  document.getElementById('mac-right-home')?.classList.remove('hidden');
+}
+
+document.getElementById('mac-sub-back')?.addEventListener('click', () => {
+  const sp = document.getElementById('mac-right-sub');
+  if (sp && sp.classList.contains('from-bottom') && !sp.classList.contains('sinking')) {
+    const host = sp.parentElement;
+    host.classList.add('mx-clip');
+    sp.classList.add('sinking');                           // goes back down the same way it came
+    setTimeout(() => { sp.classList.remove('sinking'); host.classList.remove('mx-clip'); closeMacSub(); }, 210);
+  } else closeMacSub();
+});
+
+// Mac 2x2 Control Center tiles
+// Clicking tile body toggles power directly (just like normal mode); clicking chevron or right-click opens in-place subpanel
+document.getElementById('mac-tile-wifi')?.addEventListener('click', (e) => {
+  if (e.target.closest('.mx-tile-chev')) openMacSub('view-wifi', 'Wi-Fi');
+  else toggleRadio('wifi', !appState.wifiRadio);
+});
+document.getElementById('mac-tile-wifi')?.addEventListener('contextmenu', (e) => {
+  e.preventDefault();
+  openMacSub('view-wifi', 'Wi-Fi');
+});
+
+document.getElementById('mac-tile-bt')?.addEventListener('click', (e) => {
+  if (e.target.closest('.mx-tile-chev')) openMacSub('view-bt', 'Bluetooth');
+  else toggleRadio('bt', !appState.btRadio);
+});
+document.getElementById('mac-tile-bt')?.addEventListener('contextmenu', (e) => {
+  e.preventDefault();
+  openMacSub('view-bt', 'Bluetooth');
+});
+
+document.getElementById('mac-tile-drop')?.addEventListener('click', (e) => {
+  if (e.target.closest('.mx-tile-chev')) openMacDrop();
+  else if (getDropMode() === 'p2p') openMacDrop('p2p');
+  else toggleInexDrop();
+});
+document.getElementById('mac-tile-drop')?.addEventListener('contextmenu', (e) => {
+  e.preventDefault();
+  openMacDrop();
+});
+
+document.getElementById('mac-tray-btn')?.addEventListener('click', () => {
+  if (macTrayPaneOpen()) closeMacTrayPane();   // tray icon again = back to the menu
+  else openMacTrayView(false);
+});
+
+// Mac Quick Actions strip: open right in place inside Control Deck
+document.querySelectorAll('#mac-quick-row .mx-q').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    const act = btn.dataset.action;
+    if (act === 'notepad') openMacSub('view-notepad', 'Quick Notes', 'bottom');
+    else if (act === 'clipboard') openMacSub('view-clipboard', 'Clipboard', 'bottom');
+    else if (act === 'timer') openMacSub('view-timer', 'Focus Timer', 'bottom');
+    else if (act === 'alarm') openMacSub('view-alarm', 'Alarm', 'bottom');
+    else if (act === 'calendar') openMacSub('view-calendar', 'Calendar', 'bottom');
+  });
+});
 
 // 7. Audio Output Switcher (Headphones / Speakers)
 let lastAudioOrigin = 'view-media';
@@ -225,7 +430,7 @@ document.getElementById('audio-back-btn')?.addEventListener('click', () => {
   if (lastAudioOrigin === 'view-media' && appState.mediaPlaying) {
     openMedia();
   } else {
-    switchView('view-control', 'state-control', 316, 292);
+    openControlMenu();
   }
 });
 

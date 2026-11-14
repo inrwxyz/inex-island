@@ -39,18 +39,29 @@ function updateDropTile() {
   const title = document.getElementById('tile-drop-title');
   const count = (appState.peers || []).length;
   const direct = rtcPeers.has('direct-peer');
+  const macTile = document.getElementById('mac-tile-drop');
+  const macSub = document.getElementById('mac-drop-sub');
+  const macTitle = macTile ? macTile.querySelector('.mx-txt b') : null;
   if (p2p) {
+    const p2pText = count > 0 ? (direct ? 'Direct 1:1' : `${count}/5 Peers`) : 'Standby';
     tile.classList.toggle('active', count > 0);
-    if (sub) sub.textContent = count > 0 ? (direct ? 'Direct 1:1' : `${count}/5 Peers`) : 'Standby';
+    if (sub) sub.textContent = p2pText;
     if (cap) cap.textContent = count > 0 ? (direct ? '1 direct peer' : `${count} peer${count > 1 ? 's' : ''}`) : '';
     if (title) title.textContent = 'P2P Link';
     tile.title = 'Inex Drop · P2P (click to open)';
+    if (macTile) macTile.classList.toggle('active', count > 0);
+    if (macSub) macSub.textContent = p2pText;
+    if (macTitle) macTitle.textContent = 'P2P Link';
   } else {
+    const qsText = inTransfer ? 'Transferring' : (dropActive ? 'Ready' : 'Off');
     tile.classList.toggle('active', dropActive);
-    if (sub) sub.textContent = inTransfer ? 'Transferring' : (dropActive ? 'Ready' : 'Off');
+    if (sub) sub.textContent = qsText;
     if (cap) cap.textContent = '';
     if (title) title.textContent = 'Inex Drop';
     tile.title = 'Inex Drop · Quick Share (click to turn on / off)';
+    if (macTile) macTile.classList.toggle('active', dropActive);
+    if (macSub) macSub.textContent = qsText;
+    if (macTitle) macTitle.textContent = 'Inex Drop';
   }
 }
 
@@ -81,9 +92,34 @@ function syncDropRail(viewId) {
   document.getElementById('rail-p2p')?.classList.toggle('on', idx === 1);
 }
 
+// Mac menu: open Quick Share or P2P in the right-hand panel (the rail on the side switches between them)
+function openMacDrop(mode) {
+  const m = mode || getDropMode();
+  if (appState.currentView !== 'view-control-mac') openControlMenu();
+  if (m === 'p2p') {
+    openMacSub('view-p2p', 'P2P');
+  } else {
+    openMacSub('view-inexdrop', 'Inex Drop');
+    if (typeof refreshDropUI === 'function') refreshDropUI();
+  }
+}
+
+// which rail slot is open right now (classic view, or in-place sub panel of the Mac menu)
+function currentDropRailIdx() {
+  if (appState.currentView === 'view-control-mac' && typeof currentMacSubTarget !== 'undefined' && currentMacSubTarget) {
+    return dropRailViews().indexOf(currentMacSubTarget.id);
+  }
+  return dropRailViews().indexOf(appState.currentView);
+}
+
 function goDropRail(idx) {
   if (idx < 0 || idx >= dropRailViews().length) return;
-  if (appState.currentView === dropRailViews()[idx]) return;
+  if (currentDropRailIdx() === idx) return;
+  if (appState.currentView === 'view-control-mac') {          // Mac menu: swap the panel in place
+    if (idx === 0) { openMacSub('view-inexdrop', 'Inex Drop'); refreshDropUI(); }
+    else openMacSub('view-p2p', 'P2P');
+    return;
+  }
   if (idx === 0) openQsView();
   else openP2PView();
 }
@@ -104,7 +140,7 @@ document.getElementById('drop-rail')?.addEventListener('wheel', (e) => {
   const now = Date.now();
   if (now - dropRailWheelAt < 250) return;
   dropRailWheelAt = now;
-  const cur = dropRailViews().indexOf(appState.currentView);
+  const cur = currentDropRailIdx();
   if (cur === -1) return;
   goDropRail(cur + (e.deltaY > 0 ? 1 : -1));
 }, { passive: false });

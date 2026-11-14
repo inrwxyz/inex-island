@@ -187,8 +187,12 @@ async function detectLocation() {
 // Weather runs ONLY while "Live Weather" is on AND Weather is picked as a hover widget (left or right).
 // Not picked = no request, no timer, nothing.
 function weatherWanted() {
+  if (!(SET.weather && SET.weather.enabled)) return false;
+  const compactNeedsWeather = ['weather', 'cycle'].includes(SET.notch?.compactContent);
+  const macNeedsWeather = SET.appearance?.menuLayout === 'mac' && (!SET.macMenu || SET.macMenu.showWeather !== false);
   const w = SET.widgets || {};
-  return w.enabled !== false && !!(SET.weather && SET.weather.enabled) && (w.left === 'weather' || w.right === 'weather');
+  const hoverNeedsWeather = w.enabled !== false && (w.left === 'weather' || w.right === 'weather');
+  return compactNeedsWeather || macNeedsWeather || hoverNeedsWeather;
 }
 
 async function refreshWeather() {
@@ -246,6 +250,7 @@ async function refreshWeather() {
     weather.place = loc.city || '';
     if (!weather.text) weather.at = 0;
     try { localStorage.setItem('inex.weather.cached', JSON.stringify({ text: weather.text, iconSvg: weather.iconSvg, condition: weather.condition, place: weather.place, at: Date.now() })); } catch (_) {}
+    updateClocks();
     renderWidgets();
   } finally {
     weather.busy = false;
@@ -275,6 +280,26 @@ function widgetHtml(kind) {
   }
 }
 
+function syncMacWeatherUI() {
+  const pill = document.getElementById('mac-weather');
+  const tempEl = document.getElementById('mac-weather-temp');
+  if (!pill || !tempEl) return;
+  const hasWx = !!(SET.weather && SET.weather.enabled && weather.text);
+  tempEl.textContent = hasWx ? weather.text : '--°';
+  pill.title = weather.place ? `${weather.condition || 'Weather'} • ${weather.place}` : 'Weather';
+  const oldSvg = pill.querySelector('svg');
+  if (hasWx && oldSvg && typeof getActiveWeatherIcon === 'function') {
+    const tmp = document.createElement('span');
+    tmp.innerHTML = getActiveWeatherIcon();
+    const newSvg = tmp.querySelector('svg');
+    if (newSvg) {
+      newSvg.setAttribute('width', '12');
+      newSvg.setAttribute('height', '12');
+      oldSvg.replaceWith(newSvg);
+    }
+  }
+}
+
 function renderWidgets() {
   const on = SET.widgets.enabled !== false;   // Hover Widgets switch in Settings
   const left = on ? widgetHtml(SET.widgets.left) : '', right = on ? widgetHtml(SET.widgets.right) : '';
@@ -284,6 +309,8 @@ function renderWidgets() {
   if (cRam) cRam.innerHTML = right;
   document.getElementById('c-left-box').classList.toggle('has-widget', !!left);
   document.getElementById('c-right-box').classList.toggle('has-widget', !!right);
+  // Prevent empty side-stretch when hover widgets are disabled or both set to None.
+  island.classList.toggle('no-hover-expand', !(left || right));
 
   cTemp.title = SET.widgets.left === 'weather' && weather.place ? `Forecast • ${weather.place}` : '';
   cRam.title = SET.widgets.right === 'weather' && weather.place ? `Forecast • ${weather.place}` : '';
@@ -296,6 +323,7 @@ function renderWidgets() {
   if (calLeft) calLeft.innerHTML = left;
   if (topRam) topRam.innerHTML = right;
   if (calRam) calRam.innerHTML = right;
+  syncMacWeatherUI();
 }
 
 function batteryOverlays(stats) {
@@ -303,6 +331,7 @@ function batteryOverlays(stats) {
   const g = SET.general;
   // charger plugged in / removed
   if (appState.prevCharging !== undefined && stats.charging !== appState.prevCharging && g.chargeToast) {
+    playStatusSound('power', stats.charging ? 'power' : 'power-off');
     if (stats.charging && hudCanShow()) {
       showDeviceHud({
         iconHTML: BOLT_SVG,
@@ -335,6 +364,7 @@ function batteryOverlays(stats) {
   // low battery alert HUD
   const low = g.lowBatteryAlert && !stats.charging && stats.battery_pct <= g.lowBattery;
   if (low && !appState.lowShown) {
+    playStatusSound('power', 'low');
     if (hudCanShow()) {
       showDeviceHud({
         iconHTML: LOW_BATT_SVG,
@@ -354,6 +384,69 @@ function batteryOverlays(stats) {
   if (!low && (stats.charging || stats.battery_pct > g.lowBattery + 3)) appState.lowShown = false;
 }
 
+const MAC_BT_GLYPH = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6.5 6.5 17.5 17.5 12 23 12 1 17.5 6.5 6.5 17.5"/></svg>';
+// Control Deck Bluetooth tile: show the connected device's icon (earbuds, headphones...) with a battery ring,
+// same look as the device status card. Each copy of BUDS_SVG gets its own gradient id: a duplicate id that
+// sits inside a hidden element makes the gradient fail and the buds turn invisible.
+function syncMacBtTileIcon(dev) {
+  const ico = document.querySelector('#mac-tile-bt .mx-ico');
+  if (!ico) return;
+  let key = 'bt', html = MAC_BT_GLYPH;
+  if (dev && appState.btRadio) {
+    const kind = dev.kind || 'bt';
+    const isBuds = (kind === 'headphones' || kind === 'bt') && /airpod|buds|earbud|earphone|airdope|tws|pods|wf-/i.test(dev.name || '');
+    if (isBuds && typeof BUDS_SVG !== 'undefined') { key = 'buds'; html = BUDS_SVG.replace(/budg/g, 'budg-tile'); }
+    else if (kind !== 'bt' && typeof DEV_ICONS !== 'undefined' && DEV_ICONS[kind]) { key = kind; html = DEV_ICONS[kind]; }
+  }
+  if (ico.dataset.k !== key) {
+    ico.dataset.k = key;
+    ico.innerHTML = html;
+    ico.classList.toggle('has-dev', key !== 'bt');
+  }
+  let pct = null;
+  if (key !== 'bt' && typeof btBatteryFor === 'function') pct = btBatteryFor(dev.name);
+  if (pct === null || pct === undefined || !(pct >= 0)) {
+    ico.classList.remove('has-batt');
+    ico.style.removeProperty('--p');
+  } else {
+    ico.classList.add('has-batt');
+    ico.style.setProperty('--p', Math.max(0, Math.min(100, pct)));
+    ico.style.setProperty('--bc', pct <= 15 ? '#ff453a' : pct <= 30 ? '#ff9f0a' : '#30d158');
+  }
+}
+
+// Long text (song title, Bluetooth name) slides slowly instead of being cut with "...". Only runs while text overflows.
+function mqFit(el) {
+  if (!el || el._mqBusy) return;
+  el._mqBusy = true;
+  const inner = el.querySelector(':scope > .mq-in');
+  const text = inner ? inner.textContent : el.textContent;
+  el.classList.remove('mq');
+  if (inner) el.textContent = text;
+  if (el.clientWidth > 0) {
+    const over = el.scrollWidth - el.clientWidth;
+    if (over > 2) {
+      const s = document.createElement('span');
+      s.className = 'mq-in';
+      s.textContent = text;
+      el.textContent = '';
+      el.appendChild(s);
+      el.style.setProperty('--mq-d', `-${over + 6}px`);
+      el.style.setProperty('--mq-t', `${Math.max(4, (over + 6) / 20).toFixed(1)}s`);
+      el.classList.add('mq');
+    }
+  }
+  requestAnimationFrame(() => { el._mqBusy = false; });
+}
+['mac-title', 'mac-artist', 'mac-bt-sub'].forEach((id) => {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const fit = () => mqFit(el);
+  new MutationObserver(fit).observe(el, { childList: true, characterData: true, subtree: true });
+  if (typeof ResizeObserver !== 'undefined') new ResizeObserver(fit).observe(el);
+  fit();
+});
+
 function setBtCaption(devices) {
   const first = (devices || []).find((d) => d.connected);
   let txt = appState.btRadio && first ? first.name : '';
@@ -362,9 +455,15 @@ function setBtCaption(devices) {
     if (pct !== null) txt += ` • ${pct}%`;
   }
   document.getElementById('bt-cap').textContent = txt;
+  syncMacBtTileIcon(first);
+  const macBtSub = document.getElementById('mac-bt-sub');
+  if (macBtSub) {
+    const _s = appState.btRadio ? (first ? first.name : 'On') : 'Off';
+    if (macBtSub.textContent !== _s) macBtSub.textContent = _s;
+  }
 }
 async function refreshBtCaption() {
-  if (!slotRunning.has('bt')) return;
+  if (!slotRunning.has('bt') && SET.appearance?.menuLayout !== 'mac') return;
   if (!appState.btRadio) { setBtCaption([]); return; }
   setBtCaption(await invokeTauri('get_bt_devices'));
 }

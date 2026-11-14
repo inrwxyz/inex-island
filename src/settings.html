@@ -3,19 +3,19 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="color-scheme" content="dark" />
+  <meta name="color-scheme" content="dark light" />
   <title>Inex Island Settings</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&family=Lexend:wght@400;500;600;700&family=Montserrat:wght@400;500;600;700&family=Outfit:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700&family=Poppins:wght@400;500;600;700&family=Raleway:wght@400;500;600;700&family=Doto:wght@400;800&family=Space+Mono:wght@400;700&family=Space+Grotesk:wght@500;600;700&family=Syne:wght@500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="settings.css?v=0.3.5" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&family=Lexend:wght@400;500;600;700&family=Montserrat:wght@400;500;600;700&family=Outfit:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Poppins:wght@400;500;600;700&family=Raleway:wght@400;500;600;700&family=Doto:wght@400;800&family=Space+Mono:wght@400;700&family=Space+Grotesk:wght@500;600;700&family=Syne:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="settings.css?v=0.4.3" />
 </head>
 <body>
   <div class="win">
     <header id="titlebar">
       <div class="header-left">
-        <span class="slash">/</span>
-        <span class="header-title">Settings</span>
+        <img src="logo.svg" alt="" class="brand-logo" />
+        <div class="brand-txt"><span class="brand-name">Inex Island</span><span class="brand-sub" id="brand-ver"></span></div>
       </div>
       <div class="header-right">
         <button id="btn-reset-header" class="btn-reset-header" title="Reset all settings to factory defaults">
@@ -26,11 +26,13 @@
       </div>
     </header>
     <div class="body">
-      <nav id="nav"></nav>
+      <aside class="side">
+        <nav id="nav" aria-label="Settings sections"></nav>
+      </aside>
       <main id="page"></main>
     </div>
   </div>
   <script src="p2p-codec.js"></script>
-  <script type="module" src="settings.js?v=0.3.5"></script>
+  <script type="module" src="settings.js?v=0.4.3"></script>
 </body>
 </html>

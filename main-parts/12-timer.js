@@ -64,7 +64,7 @@ function triggerTimerAlarm(opts) {
 
   // 1) window big enough, 2) old content blurs away, 3) island springs open
   if (typeof cancelCloseEase === 'function') cancelCloseEase();
-  tryInvoke('resize_island', { width: ISLAND_WIN_W, height: hudIsFloating() ? 64 : 56 });  // same width as compact/HUDs so never jumps sideways
+  reportIslandSize({ width: ISLAND_WIN_W, height: hudIsFloating() ? 64 : 56 });  // same width as compact/HUDs so never jumps sideways
   island.classList.add('hud-pre');
   alarmStartT = setTimeout(() => {
     island.classList.remove('hud-pre');
@@ -107,7 +107,7 @@ function dismissTimerAlarm() {
       island.classList.remove('hud-back');
       appState.alarmActive = false;
       appState.alarmClosing = false;
-      hudRestoreWindow();
+      hudRestoreSize();
       renderCenter();
       updateClocks();
       refreshMedia();
@@ -321,7 +321,7 @@ function renderCalendarGrid(dir) {
 
   // 6 rows need a bit more room than the other sub menus
   if (appState.currentView === 'view-calendar') {
-    invokeTauri('resize_island', { width: 316, height: 268 + (hudIsFloating() ? 12 : 0) });
+    reportIslandSize({ width: ISLAND_WIN_W, height: 268 + (hudIsFloating() ? 12 : 0) });
   }
 }
 

@@ -6,6 +6,7 @@ mod audio;
 mod brightness;
 mod live;
 mod locker_bridge;
+mod nexus_bridge;
 mod net;
 mod privacy;
 mod shelf;
@@ -220,6 +221,7 @@ struct MediaInfo {
     playing: bool,
     title: String,
     artist: String,
+    source: String,
     position: f64,
     duration: f64,
     updated_at: u64,
@@ -228,6 +230,8 @@ struct MediaInfo {
 #[derive(Serialize)]
 struct SysStats {
     ram_pct: u32,
+    ram_used_gb: f32,
+    ram_total_gb: f32,
     cpu_pct: u32,
     gpu_pct: u32,
     disk_pct: u32,
@@ -285,10 +289,68 @@ fn get_clipboard_text() -> String {
     String::new()
 }
 
+// ---- Fixed window ---------------------------------------------------------------------------------
+// The OS window is sized ONCE (big and transparent) at startup and never resized again, so it can not get
+// out of step with the CSS animation (that mismatch was the shaking). Clicks outside the island must still
+// reach the apps underneath, so a small watcher thread switches the window to "click-through" whenever the
+// cursor is outside the island's rectangle (reported by the page through set_island_hit).
+const FIXED_WIN_W: f64 = 820.0; // 548 x 140% (max UI scale) + room for the spring overshoot
+const FIXED_WIN_H: f64 = 500.0; // tallest view (292) x 140% + room
+static HIT: std::sync::Mutex<(f64, f64)> = std::sync::Mutex::new((316.0, 44.0));
+
 #[tauri::command]
-fn resize_island(window: WebviewWindow, width: f64, height: f64) {
-    place_island(&window, width, height);
+fn set_island_hit(width: f64, height: f64) {
+    if let Ok(mut h) = HIT.lock() {
+        *h = (width, height);
+    }
 }
+
+#[cfg(target_os = "windows")]
+fn start_hit_poller(window: WebviewWindow, win_logical_w: f64) {
+    use windows::Win32::Foundation::{HWND, POINT, RECT};
+    use windows::Win32::UI::WindowsAndMessaging::{GetCursorPos, GetWindowRect};
+    let hwnd_val: isize = match window.hwnd() {
+        Ok(h) => h.0 as isize,
+        Err(_) => return,
+    };
+    std::thread::spawn(move || {
+        let mut ignoring: Option<bool> = None;
+        loop {
+            let (hw, hh) = HIT.lock().map(|g| *g).unwrap_or((316.0, 44.0));
+            let hwnd = HWND(hwnd_val as *mut core::ffi::c_void);
+            let mut p = POINT::default();
+            let mut r = RECT::default();
+            let ok = unsafe { GetCursorPos(&mut p).is_ok() && GetWindowRect(hwnd, &mut r).is_ok() };
+            let mut near = false;
+            if ok {
+                let phys_w = (r.right - r.left) as f64;
+                let scale = if win_logical_w > 0.0 { phys_w / win_logical_w } else { 1.0 };
+                let cx = (r.left as f64 + r.right as f64) / 2.0;
+                let left = cx - hw * scale / 2.0;
+                let right = cx + hw * scale / 2.0;
+                let top = r.top as f64;
+                let bottom = top + hh * scale;
+                let (px, py) = (p.x as f64, p.y as f64);
+                let inside = px >= left && px <= right && py >= top && py <= bottom;
+                let m = 120.0 * scale;
+                near = px >= left - m && px <= right + m && py >= top - m && py <= bottom + m;
+                let want_ignore = !inside;
+                if ignoring != Some(want_ignore) {
+                    if window.set_ignore_cursor_events(want_ignore).is_ok() {
+                        ignoring = Some(want_ignore);
+                        // a click-through window gets no more mouse events, so tell the page where the pointer is
+                        let _ = window.emit("island_pointer", !want_ignore);
+                    }
+                }
+            }
+            // fast while the cursor is around the island, relaxed (almost no CPU) everywhere else
+            std::thread::sleep(Duration::from_millis(if near { 16 } else { 70 }));
+        }
+    });
+}
+
+#[cfg(not(target_os = "windows"))]
+fn start_hit_poller(_window: WebviewWindow, _win_logical_w: f64) {}
 
 // Centers the island at the top of its monitor. Returns false if no monitor is known yet
 // (can happen right after boot), so the caller can retry.
@@ -365,6 +427,151 @@ fn get_best_media_session(
     manager.GetCurrentSession().ok()
 }
 
+#[cfg(target_os = "windows")]
+fn pretty_media_source(app_id: &str) -> String {
+    let raw = app_id.trim();
+    if raw.is_empty() {
+        return String::new();
+    }
+    let low = raw.to_ascii_lowercase();
+    if low.contains("youtubemusic") || low.contains("cinhimbnkkaeohfgghhklpknlkffjgod") {
+        return "YouTube Music".to_string();
+    }
+    if low.contains("youtube") || low.contains("agimnkijcaahngcdmfeangaknmldooml") {
+        return "YouTube".to_string();
+    }
+    if low.contains("spotify") { return "Spotify".to_string(); }
+    if low.contains("applemusic") || low.contains("itunes") { return "Apple Music".to_string(); }
+    if low.contains("tidal") { return "TIDAL".to_string(); }
+    if low.contains("deezer") { return "Deezer".to_string(); }
+    if low.contains("vlc") { return "VLC".to_string(); }
+    if low.contains("foobar") { return "foobar2000".to_string(); }
+    if low.contains("zune") || low.contains("mediaplayer") { return "Media Player".to_string(); }
+    if low.contains("msedge") || low.contains("microsoftedge") { return "Edge".to_string(); }
+    if low.contains("chrome") { return "Chrome".to_string(); }
+    if low.contains("firefox") { return "Firefox".to_string(); }
+    if low.contains("brave") { return "Brave".to_string(); }
+    if low.contains("opera") { return "Opera".to_string(); }
+    if low.contains("telegram") { return "Telegram".to_string(); }
+    if low.contains("discord") { return "Discord".to_string(); }
+    let base = raw.rsplit(['\\', '/', '!']).next().unwrap_or(raw);
+    let stem = base.strip_suffix(".exe").or_else(|| base.strip_suffix(".EXE")).unwrap_or(base);
+    let clean = stem.split('_').next().unwrap_or(stem).trim();
+    if clean.len() > 20 { clean[..20].to_string() } else { clean.to_string() }
+}
+
+#[cfg(target_os = "windows")]
+static LAST_BROWSER_MEDIA_SOURCE: std::sync::Mutex<Option<(String, String)>> = std::sync::Mutex::new(None);
+
+#[cfg(target_os = "windows")]
+fn visible_window_titles() -> Vec<String> {
+    use windows::Win32::Foundation::{BOOL, HWND, LPARAM};
+    use windows::Win32::UI::WindowsAndMessaging::{EnumWindows, GetWindowTextW, IsWindowVisible};
+
+    unsafe extern "system" fn enum_proc(hwnd: HWND, lparam: LPARAM) -> BOOL {
+        if IsWindowVisible(hwnd).as_bool() {
+            let mut buf = [0u16; 512];
+            let len = GetWindowTextW(hwnd, &mut buf);
+            if len > 0 {
+                let s = String::from_utf16_lossy(&buf[..len as usize]);
+                let vec = &mut *(lparam.0 as *mut Vec<String>);
+                vec.push(s);
+            }
+        }
+        BOOL(1)
+    }
+
+    let mut titles: Vec<String> = Vec::new();
+    unsafe {
+        let _ = EnumWindows(Some(enum_proc), LPARAM(&mut titles as *mut Vec<String> as isize));
+    }
+    titles
+}
+
+#[cfg(target_os = "windows")]
+fn resolve_media_source(app_id: &str, title: &str, artist: &str, album: &str, subtitle: &str) -> String {
+    let base = pretty_media_source(app_id);
+    let meta = format!("{} {}", album, subtitle).to_ascii_lowercase();
+    if meta.contains("youtube music") { return "YouTube Music".to_string(); }
+    if meta.contains("youtube") { return "YouTube".to_string(); }
+    if meta.contains("spotify") { return "Spotify".to_string(); }
+
+    let is_browser = matches!(base.as_str(), "Chrome" | "Edge" | "Firefox" | "Brave" | "Opera");
+    if !is_browser {
+        return base;
+    }
+
+    let title_low = title.trim().to_ascii_lowercase();
+    let artist_low = artist.trim().to_ascii_lowercase();
+    let track_key = format!("{}|{}|{}", base, title_low, artist_low);
+    let snippet: String = title_low.chars().take(18).collect();
+    let snippet = snippet.trim();
+
+    let windows = visible_window_titles();
+    let mut detected: Option<String> = None;
+
+    // Exact match: window title includes current track snippet + site name
+    if snippet.len() >= 4 {
+        for wt in &windows {
+            let wl = wt.to_ascii_lowercase();
+            if wl.contains(snippet) {
+                if wl.contains("youtube music") {
+                    detected = Some("YouTube Music".to_string());
+                    break;
+                }
+                if wl.contains("youtube") {
+                    detected = Some("YouTube".to_string());
+                    break;
+                }
+                if wl.contains("spotify") {
+                    detected = Some("Spotify".to_string());
+                    break;
+                }
+            }
+        }
+    }
+
+    // Fallback: open browser window actively showing YouTube / YouTube Music
+    if detected.is_none() {
+        let browser_hint = match base.as_str() {
+            "Chrome" => "chrome",
+            "Edge" => "edge",
+            "Firefox" => "firefox",
+            "Brave" => "brave",
+            "Opera" => "opera",
+            _ => "",
+        };
+        for wt in &windows {
+            let wl = wt.to_ascii_lowercase();
+            if !browser_hint.is_empty() && !wl.contains(browser_hint) && !wl.ends_with("youtube") {
+                continue;
+            }
+            if wl.contains("youtube music") {
+                detected = Some("YouTube Music".to_string());
+                break;
+            }
+            if wl.contains(" - youtube") {
+                detected = Some("YouTube".to_string());
+                break;
+            }
+        }
+    }
+
+    if let Ok(mut guard) = LAST_BROWSER_MEDIA_SOURCE.lock() {
+        if let Some(ref src) = detected {
+            *guard = Some((track_key, src.clone()));
+            return src.clone();
+        }
+        if let Some((ref prev_key, ref prev_src)) = *guard {
+            if prev_key == &track_key {
+                return prev_src.clone();
+            }
+        }
+    }
+
+    base
+}
+
 #[tauri::command]
 async fn get_media_status() -> MediaInfo {
     #[cfg(target_os = "windows")]
@@ -382,6 +589,10 @@ async fn get_media_status() -> MediaInfo {
                         .unwrap_or(GlobalSystemMediaTransportControlsSessionPlaybackStatus::Closed);
 
                     let playing = status == GlobalSystemMediaTransportControlsSessionPlaybackStatus::Playing;
+                    let raw_app_id = session
+                        .SourceAppUserModelId()
+                        .map(|s| s.to_string())
+                        .unwrap_or_default();
 
                     let now_ms = std::time::SystemTime::now()
                         .duration_since(std::time::UNIX_EPOCH)
@@ -396,6 +607,7 @@ async fn get_media_status() -> MediaInfo {
                             playing: false,
                             title: String::new(),
                             artist: String::new(),
+                            source: String::new(),
                             position: 0.0,
                             duration: 0.0,
                             updated_at: now_ms,
@@ -406,7 +618,10 @@ async fn get_media_status() -> MediaInfo {
                         if let Ok(props) = props_op.get() {
                             let title = props.Title().map(|s| s.to_string()).unwrap_or_default();
                             let artist = props.Artist().map(|s| s.to_string()).unwrap_or_default();
+                            let album = props.AlbumTitle().map(|s| s.to_string()).unwrap_or_default();
+                            let subtitle = props.Subtitle().map(|s| s.to_string()).unwrap_or_default();
                             if !title.is_empty() {
+                                let source = resolve_media_source(&raw_app_id, &title, &artist, &album, &subtitle);
                                 let (position, duration) = session
                                     .GetTimelineProperties()
                                     .map(|t| {
@@ -425,6 +640,7 @@ async fn get_media_status() -> MediaInfo {
                                     playing,
                                     title,
                                     artist,
+                                    source,
                                     position,
                                     duration,
                                     updated_at: now_ms,
@@ -444,6 +660,7 @@ async fn get_media_status() -> MediaInfo {
         playing: false,
         title: String::new(),
         artist: String::new(),
+        source: String::new(),
         position: 0.0,
         duration: 0.0,
         updated_at: now_ms,
@@ -1092,6 +1309,7 @@ pub fn foreground_is_fullscreen() -> bool {
 #[derive(Serialize)]
 struct SysLoad {
     ram_pct: u32,
+    ram_used_gb: f32,
     cpu_pct: u32,
     gpu_pct: u32,
     disk_pct: u32,
@@ -1101,6 +1319,7 @@ struct SysLoad {
 #[tauri::command]
 async fn get_sys_load() -> SysLoad {
     let (mut ram_pct, mut cpu_pct, mut gpu_pct, mut disk_pct) = (0, 0, 0, 0);
+    let mut ram_used_gb = 0.0f32;
     #[cfg(target_os = "windows")]
     unsafe {
         use windows::Win32::System::SystemInformation::{GlobalMemoryStatusEx, MEMORYSTATUSEX};
@@ -1110,6 +1329,7 @@ async fn get_sys_load() -> SysLoad {
         };
         if GlobalMemoryStatusEx(&mut mem).is_ok() {
             ram_pct = mem.dwMemoryLoad;
+            ram_used_gb = ((mem.ullTotalPhys - mem.ullAvailPhys) as f64 / 1_073_741_824.0) as f32;
         }
         cpu_pct = cpu_percent();
         gpu_pct = gpu::percent();
@@ -1117,13 +1337,14 @@ async fn get_sys_load() -> SysLoad {
     }
     #[cfg(not(target_os = "windows"))]
     let _ = (&mut ram_pct, &mut cpu_pct, &mut gpu_pct, &mut disk_pct);
-    SysLoad { ram_pct, cpu_pct, gpu_pct, disk_pct }
+    SysLoad { ram_pct, ram_used_gb, cpu_pct, gpu_pct, disk_pct }
 }
 
 #[allow(unused_assignments)]
 #[tauri::command]
 async fn get_sys_stats() -> SysStats {
     let mut ram_pct = 0;
+    let (mut ram_used_gb, mut ram_total_gb) = (0.0f32, 0.0f32);
     let (mut cpu_pct, mut gpu_pct, mut disk_pct, mut battery_pct, mut charging) = (0, 0, 0, -1, false);
     let mut is_fullscreen = false;
     #[cfg(target_os = "windows")]
@@ -1135,6 +1356,10 @@ async fn get_sys_stats() -> SysStats {
         };
         if GlobalMemoryStatusEx(&mut mem).is_ok() {
             ram_pct = mem.dwMemoryLoad;
+            let total = mem.ullTotalPhys as f64;
+            let avail = mem.ullAvailPhys as f64;
+            ram_total_gb = (total / 1_073_741_824.0) as f32;
+            ram_used_gb = ((total - avail) / 1_073_741_824.0) as f32;
         }
         cpu_pct = cpu_percent();
         gpu_pct = gpu::percent();
@@ -1156,6 +1381,8 @@ async fn get_sys_stats() -> SysStats {
 
     SysStats {
         ram_pct,
+        ram_used_gb,
+        ram_total_gb,
         cpu_pct,
         gpu_pct,
         disk_pct,
@@ -1396,7 +1623,6 @@ fn take_snip() {
 
 #[tauri::command]
 fn launch_quick_action(id: String) {
-    // Only the Calculator tile still opens an outside app (through the shell, no cmd.exe).
     if id == "calc" {
         shell_open("calc.exe");
     }
@@ -1413,25 +1639,18 @@ fn setup_shelf_drop(app: AppHandle) {
     shelf::setup_shelf_drop(app);
 }
 
-fn generate_chime_wav() -> Vec<u8> {
+fn synthesize_wav_notes(duration_secs: f32, decay_rate: f32, notes: &[(f32, f32, f32)]) -> Vec<u8> {
     let sample_rate: u32 = 44100;
-    let duration = 0.85;
-    let total_samples = (sample_rate as f32 * duration) as usize;
+    let total_samples = ((sample_rate as f32 * duration_secs) as usize).max(1);
     let mut pcm: Vec<i16> = vec![0; total_samples];
 
-    let notes = [
-        (523.25, 0.00, 0.28), // C5
-        (659.25, 0.08, 0.26), // E5
-        (783.99, 0.16, 0.24), // G5
-        (1046.50, 0.24, 0.22), // C6
-    ];
-
-    for &(freq, delay, vol) in &notes {
+    for &(freq, delay, vol) in notes {
         let start_sample = (delay * sample_rate as f32) as usize;
         for i in start_sample..total_samples {
             let t = (i - start_sample) as f32 / sample_rate as f32;
-            let decay = (-t * 4.5).exp();
-            let sample = (2.0 * std::f32::consts::PI * freq * t).sin() * vol * decay;
+            let attack = (t / 0.004).min(1.0);
+            let decay = (-t * decay_rate).exp();
+            let sample = (2.0 * std::f32::consts::PI * freq * t).sin() * vol * attack * decay;
             let val = (sample * 32767.0) as i32;
             pcm[i] = pcm[i].saturating_add(val as i16);
         }
@@ -1444,7 +1663,6 @@ fn generate_chime_wav() -> Vec<u8> {
     wav.extend_from_slice(b"RIFF");
     wav.extend_from_slice(&file_size.to_le_bytes());
     wav.extend_from_slice(b"WAVE");
-
     wav.extend_from_slice(b"fmt ");
     wav.extend_from_slice(&16u32.to_le_bytes());
     wav.extend_from_slice(&1u16.to_le_bytes());
@@ -1453,14 +1671,80 @@ fn generate_chime_wav() -> Vec<u8> {
     wav.extend_from_slice(&(sample_rate * 2).to_le_bytes());
     wav.extend_from_slice(&2u16.to_le_bytes());
     wav.extend_from_slice(&16u16.to_le_bytes());
-
     wav.extend_from_slice(b"data");
     wav.extend_from_slice(&data_size.to_le_bytes());
     for s in pcm {
         wav.extend_from_slice(&s.to_le_bytes());
     }
-
     wav
+}
+
+fn generate_chime_wav() -> Vec<u8> {
+    synthesize_wav_notes(
+        0.85,
+        4.5,
+        &[
+            (523.25, 0.00, 0.28),
+            (659.25, 0.08, 0.26),
+            (783.99, 0.16, 0.24),
+            (1046.50, 0.24, 0.22),
+        ],
+    )
+}
+
+#[cfg(target_os = "windows")]
+fn play_wav_memory(wav: &[u8]) {
+    #[link(name = "winmm")]
+    extern "system" {
+        fn PlaySoundW(pszSound: *const u16, hmod: usize, fdwSound: u32) -> i32;
+    }
+    const SND_ASYNC: u32 = 0x0001;
+    const SND_NODEFAULT: u32 = 0x0002;
+    const SND_MEMORY: u32 = 0x0004;
+    unsafe {
+        let _ = PlaySoundW(wav.as_ptr() as *const u16, 0, SND_MEMORY | SND_ASYNC | SND_NODEFAULT);
+    }
+}
+
+#[tauri::command]
+fn play_status_sound(kind: String) {
+    #[cfg(target_os = "windows")]
+    {
+        use std::sync::OnceLock;
+        let wav: &'static Vec<u8> = match kind.as_str() {
+            "power" => {
+                static W: OnceLock<Vec<u8>> = OnceLock::new();
+                W.get_or_init(|| synthesize_wav_notes(0.28, 12.0, &[(659.25, 0.0, 0.18), (987.77, 0.055, 0.16)]))
+            }
+            "power-off" => {
+                static W: OnceLock<Vec<u8>> = OnceLock::new();
+                W.get_or_init(|| synthesize_wav_notes(0.24, 14.0, &[(783.99, 0.0, 0.15), (523.25, 0.05, 0.14)]))
+            }
+            "low" => {
+                static W: OnceLock<Vec<u8>> = OnceLock::new();
+                W.get_or_init(|| synthesize_wav_notes(0.38, 10.0, &[(440.0, 0.0, 0.18), (392.0, 0.12, 0.18)]))
+            }
+            "bluetooth" => {
+                static W: OnceLock<Vec<u8>> = OnceLock::new();
+                W.get_or_init(|| synthesize_wav_notes(0.26, 13.5, &[(587.33, 0.0, 0.16), (880.0, 0.05, 0.17)]))
+            }
+            "transfer" => {
+                static W: OnceLock<Vec<u8>> = OnceLock::new();
+                W.get_or_init(|| synthesize_wav_notes(0.32, 11.0, &[(523.25, 0.0, 0.16), (783.99, 0.06, 0.16), (1046.5, 0.12, 0.14)]))
+            }
+            "lock" => {
+                static W: OnceLock<Vec<u8>> = OnceLock::new();
+                W.get_or_init(|| synthesize_wav_notes(0.24, 15.0, &[(783.99, 0.0, 0.15), (1174.66, 0.045, 0.13)]))
+            }
+            _ => {
+                static W: OnceLock<Vec<u8>> = OnceLock::new();
+                W.get_or_init(|| synthesize_wav_notes(0.11, 28.0, &[(932.33, 0.0, 0.12)]))
+            }
+        };
+        play_wav_memory(wav);
+    }
+    #[cfg(not(target_os = "windows"))]
+    let _ = kind;
 }
 
 #[tauri::command]
@@ -1475,7 +1759,6 @@ fn play_alarm_sound() {
             }
             const SND_ASYNC: u32 = 0x0001;
             const SND_NODEFAULT: u32 = 0x0002;
-            const SND_MEMORY: u32 = 0x0004;
             const SND_FILENAME: u32 = 0x00020000;
 
             let alarm_file = r"C:\Windows\Media\Alarm01.wav";
@@ -1488,7 +1771,7 @@ fn play_alarm_sound() {
 
             static CHIME: std::sync::OnceLock<Vec<u8>> = std::sync::OnceLock::new();
             let wav = CHIME.get_or_init(generate_chime_wav);
-            let _ = PlaySoundW(wav.as_ptr() as *const u16, 0, SND_MEMORY | SND_ASYNC | SND_NODEFAULT);
+            play_wav_memory(wav);
         }
     }
 }
@@ -1510,7 +1793,7 @@ fn show_settings_window(app: &AppHandle) {
         WebviewUrl::App("settings.html".into()),
     )
     .title("Inex Island Settings")
-    .inner_size(860.0, 640.0)
+    .inner_size(980.0, 680.0)
     .center()
     .decorations(false)
     .transparent(true)
@@ -1766,6 +2049,8 @@ fn main() {
             shelf::setup_shelf_drop(app.handle().clone());
             visualizer::setup_audio_visualization(app.handle().clone());
             locker_bridge::start(app.handle().clone());
+            nexus_bridge::start(app.handle().clone());
+            clipboard::start_screenshot_watch(app.handle().clone());
 
             #[cfg(target_os = "windows")]
             {
@@ -1780,13 +2065,14 @@ fn main() {
                 // so it never appears in the wrong spot. The page plays the intro animation.
                 let w = window.clone();
                 std::thread::spawn(move || {
-                    let mut placed = place_island(&w, 316.0, 44.0);
+                    let mut placed = place_island(&w, FIXED_WIN_W, FIXED_WIN_H);
                     let mut tries = 0;
                     while !placed && tries < 10 {
                         std::thread::sleep(Duration::from_millis(50));
-                        placed = place_island(&w, 316.0, 44.0);
+                        placed = place_island(&w, FIXED_WIN_W, FIXED_WIN_H);
                         tries += 1;
                     }
+                    start_hit_poller(w.clone(), FIXED_WIN_W);
                     let _ = w.show();
                 });
             }
@@ -1848,13 +2134,14 @@ fn main() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            resize_island,
+            set_island_hit,
             clipboard_seq,
             get_clipboard_text,
-            clipboard::get_clipboard_image,
             clipboard::get_clipboard_files,
             clipboard::set_clipboard_files,
-            clipboard::read_image_file,
+            clipboard::filter_screenshot_paths,
+            clipboard::filter_existing_paths,
+            clipboard::read_screenshot_bytes,
             get_net_speed,
             privacy::privacy_watch_start,
             focus_island,
@@ -1862,6 +2149,7 @@ fn main() {
             close_settings,
             drag_settings,
             play_alarm_sound,
+            play_status_sound,
             quit_app,
             restart_app,
             settings_changed,

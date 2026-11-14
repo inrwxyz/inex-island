@@ -1,72 +1,87 @@
 // ==================== 14c. CLIPBOARD HISTORY SHELF ====================
-// Keeps the last CLIPBOARD_MAX copies: text, images and copied files.
-// Text and image thumbnails live in localStorage; the full-size images live in IndexedDB (much bigger quota).
+// Keeps ONLY the last CLIPBOARD_MAX copied text snippets and OS screenshot paths.
+// Zero internal image storage (no IndexedDB blobs, no base64 thumbnails in localStorage).
+// Deleted screenshot files are dropped automatically via ReadDirectoryChangesW & existence checks.
 const CLIPBOARD_STORAGE_KEY = 'inex.island.clipboard.v1';
-const CLIPBOARD_MAX = 20;            // how many items we remember
-const CLIPBOARD_TEXT_LIMIT = 50000;  // longest text kept per item
-const CLIPBOARD_THUMB_W = 520;       // thumbnail box (px), shown ~2x sharper than the card
-const CLIPBOARD_THUMB_H = 180;
+const CLIPBOARD_MAX = 20;
+const CLIPBOARD_TEXT_LIMIT = 50000;
 let clipboardItems = [];
+let clipPreviewUrls = [];
+let clipRenderGen = 0;
 
-// ---------- full-size image store (IndexedDB) ----------
-let clipDbPromise = null;
-function clipDb() {
-  if (!clipDbPromise) {
-    clipDbPromise = new Promise((resolve) => {
-      try {
-        const req = indexedDB.open('inex-island-clipboard', 1);
-        req.onupgradeneeded = () => req.result.createObjectStore('images', { keyPath: 'id' });
-        req.onsuccess = () => resolve(req.result);
-        req.onerror = () => resolve(null);
-      } catch (_) { resolve(null); }
-    });
+// Purge legacy IndexedDB full-image cache from older versions if present.
+try { indexedDB.deleteDatabase('inex-island-clipboard'); } catch (_) {}
+
+function revokeClipPreviews() {
+  for (const url of clipPreviewUrls) {
+    try { URL.revokeObjectURL(url); } catch (_) {}
   }
-  return clipDbPromise;
+  clipPreviewUrls = [];
 }
-async function clipIdb(mode, fn) {
-  const db = await clipDb();
-  if (!db) return null;
-  return new Promise((resolve) => {
-    try {
-      const tx = db.transaction('images', mode);
-      const req = fn(tx.objectStore('images'));
-      tx.oncomplete = () => resolve(req ? req.result : true);
-      tx.onerror = () => resolve(null);
-      tx.onabort = () => resolve(null);
-    } catch (_) { resolve(null); }
-  });
+
+function closeClipboardView() {
+  clipRenderGen++;
+  revokeClipPreviews();
+  const container = document.getElementById('clipboard-list');
+  if (container) container.innerHTML = '';
 }
-const clipBlobPut = (id, blob) => clipIdb('readwrite', (s) => s.put({ id, blob }));
-const clipBlobGet = async (id) => { const r = await clipIdb('readonly', (s) => s.get(id)); return r && r.blob ? r.blob : null; };
-const clipBlobClear = () => clipIdb('readwrite', (s) => s.clear());
-// Drop stored images that no longer belong to a history item
-async function pruneClipboardBlobs() {
-  const keys = await clipIdb('readonly', (s) => s.getAllKeys());
-  if (!Array.isArray(keys)) return;
-  const keep = new Set(clipboardItems.filter((i) => i.kind === 'image').map((i) => i.id));
-  const stale = keys.filter((k) => !keep.has(k));
-  if (stale.length) await clipIdb('readwrite', (s) => { stale.forEach((k) => s.delete(k)); return null; });
+
+function clipPathKey(p) {
+  return String(p || '').replace(/\//g, '\\').replace(/\\+$/, '').toLowerCase();
+}
+
+function clipFileName(p) {
+  const parts = String(p).split(/[\\/]/).filter(Boolean);
+  return parts.length ? parts[parts.length - 1] : String(p);
 }
 
 // ---------- history list ----------
 function loadClipboardHistory() {
   try {
     const raw = localStorage.getItem(CLIPBOARD_STORAGE_KEY);
-    clipboardItems = raw ? JSON.parse(raw) : [];
-    if (!Array.isArray(clipboardItems)) clipboardItems = [];
+    const parsed = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(parsed)) {
+      clipboardItems = [];
+      return;
+    }
+    clipboardItems = parsed
+      .filter((it) => {
+        if (!it) return false;
+        const kind = it.kind || (typeof it.text === 'string' ? 'text' : '');
+        if (kind === 'text') return typeof it.text === 'string' && it.text.trim().length > 0;
+        if (kind === 'screenshot') return typeof it.path === 'string' && it.path.trim().length > 0;
+        return false; // Drop legacy 'image' blobs and regular 'files' entries
+      })
+      .map((it) => {
+        const kind = it.kind || 'text';
+        if (kind === 'screenshot') {
+          return {
+            id: it.id || (Date.now() + Math.random().toString(36).slice(2, 6)),
+            kind: 'screenshot',
+            hash: clipPathKey(it.path),
+            path: it.path,
+            name: it.name || clipFileName(it.path),
+            time: it.time || Date.now()
+          };
+        }
+        return {
+          id: it.id || (Date.now() + Math.random().toString(36).slice(2, 6)),
+          kind: 'text',
+          hash: it.hash || clipHashString(it.text),
+          text: it.text,
+          time: it.time || Date.now()
+        };
+      })
+      .slice(0, CLIPBOARD_MAX);
   } catch (_) {
     clipboardItems = [];
   }
-  // items saved by older versions have no "kind": they are text
-  clipboardItems.forEach((it) => { if (!it.kind) it.kind = 'text'; });
-  clipboardItems = clipboardItems.slice(0, CLIPBOARD_MAX);
 }
 
 function saveClipboardHistory() {
   try {
     localStorage.setItem(CLIPBOARD_STORAGE_KEY, JSON.stringify(clipboardItems.slice(0, CLIPBOARD_MAX)));
   } catch (_) {
-    // storage full: drop the oldest half and try once more
     try {
       clipboardItems = clipboardItems.slice(0, Math.ceil(CLIPBOARD_MAX / 2));
       localStorage.setItem(CLIPBOARD_STORAGE_KEY, JSON.stringify(clipboardItems));
@@ -86,24 +101,6 @@ function formatRelativeTime(ts) {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
-function formatBytes(n) {
-  if (!n) return '';
-  if (n < 1024) return `${n} B`;
-  if (n < 1024 * 1024) return `${Math.round(n / 1024)} KB`;
-  return `${(n / 1024 / 1024).toFixed(1)} MB`;
-}
-
-function clipFileName(p) {
-  const parts = String(p).split(/[\\/]/).filter(Boolean);
-  return parts.length ? parts[parts.length - 1] : String(p);
-}
-
-// Same content as before? (cheap 32-bit FNV-1a)
-function clipHashBytes(u8) {
-  let h = 0x811c9dc5;
-  for (let i = 0; i < u8.length; i++) { h ^= u8[i]; h = Math.imul(h, 16777619); }
-  return (h >>> 0).toString(16) + ':' + u8.length;
-}
 function clipHashString(s) {
   let h = 0x811c9dc5;
   for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
@@ -111,19 +108,16 @@ function clipHashString(s) {
 }
 
 function trimClipboardItems() {
-  // newest first: a new copy pushes the oldest one (text, image or file) out once there are more than CLIPBOARD_MAX
   clipboardItems = clipboardItems.slice(0, CLIPBOARD_MAX);
 }
 
-// Put a new item on top. A copy of something already in the list just moves that item to the top.
 function pushClipboardItem(item) {
   const idx = clipboardItems.findIndex((it) => it.kind === item.kind && it.hash === item.hash);
-  if (idx === 0) return false;                       // already the newest
+  if (idx === 0) return false;
   if (idx > 0) clipboardItems.splice(idx, 1);
   clipboardItems.unshift(item);
   trimClipboardItems();
   saveClipboardHistory();
-  pruneClipboardBlobs();
   if (appState.currentView === 'view-clipboard') renderClipboardList();
   return true;
 }
@@ -133,7 +127,6 @@ function addClipboardText(text) {
   let clean = text.trim();
   if (!clean) return false;
   if (clean.length > CLIPBOARD_TEXT_LIMIT) clean = clean.slice(0, CLIPBOARD_TEXT_LIMIT);
-  // reuse the id of an identical item, otherwise make a new one
   return pushClipboardItem({
     id: Date.now() + Math.random().toString(36).slice(2, 6),
     kind: 'text',
@@ -143,122 +136,92 @@ function addClipboardText(text) {
   });
 }
 
-const CLIP_IMG_EXT = /\.(png|jpe?g|gif|webp|bmp)$/i;
-const CLIP_VID_EXT = /\.(mp4|mkv|mov|avi|webm|wmv|flv|m4v|mpg|mpeg|3gp)$/i;
-const CLIP_ICON_FILE_BIG = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><polyline points="14 3 14 8 19 8"/></svg>';
-const CLIP_ICON_VIDEO = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="3"/><polygon points="10.5 9.5 15 12 10.5 14.5" fill="currentColor" stroke="none"/></svg>';
-
-// Small preview of a picture file (null for videos, documents, missing or huge files)
-async function makeFileThumb(path) {
-  try {
-    if (!CLIP_IMG_EXT.test(path)) return null;
-    const dataUrl = await tryInvoke('read_image_file', { path });
-    if (!dataUrl || typeof dataUrl !== 'string' || dataUrl.length < 32) return null;
-    const img = new Image();
-    img.src = dataUrl;
-    await img.decode();
-    const w = img.naturalWidth, h = img.naturalHeight;
-    if (!w || !h) return null;
-    const scale = Math.min(1, 360 / w, 160 / h);
-    const tw = Math.max(1, Math.round(w * scale)), th = Math.max(1, Math.round(h * scale));
-    const c = document.createElement('canvas');
-    c.width = tw; c.height = th;
-    c.getContext('2d').drawImage(img, 0, 0, tw, th);
-    return c.toDataURL('image/webp', 0.8);
-  } catch (_) {
-    return null;
-  }
-}
-
-// thumbs[i] belongs to paths[i] (only the first 3 are shown, so only those get a preview)
-async function makeFileThumbs(paths) {
-  const out = [];
-  for (let i = 0; i < Math.min(3, paths.length); i++) out.push(await makeFileThumb(paths[i]));
-  return out;
-}
-
-async function addClipboardFiles(paths) {
-  if (!Array.isArray(paths) || paths.length === 0) return false;
-  const list = paths.slice(0, 200);
-  const hash = clipHashString(list.join('|'));
-  const old = clipboardItems.find((it) => it.kind === 'files' && it.hash === hash);
-  if (old) { old.time = Date.now(); return pushClipboardItem(old); }
-  const thumbs = await makeFileThumbs(list);
+function addClipboardScreenshot(path) {
+  if (!path || typeof path !== 'string') return false;
+  const clean = path.trim();
+  if (!clean) return false;
   return pushClipboardItem({
     id: Date.now() + Math.random().toString(36).slice(2, 6),
-    kind: 'files',
-    hash,
-    paths: list,
-    thumbs: thumbs.some(Boolean) ? thumbs : null,
-    thumbsDone: true,
+    kind: 'screenshot',
+    hash: clipPathKey(clean),
+    path: clean,
+    name: clipFileName(clean),
     time: Date.now()
   });
 }
 
-// Files copied before previews existed: make them once, then redraw
-async function fillMissingFileThumbs() {
-  let changed = false;
-  for (const it of clipboardItems) {
-    if (it.kind !== 'files' || it.thumbsDone) continue;
-    it.thumbsDone = true;
-    const thumbs = await makeFileThumbs(it.paths);
-    if (thumbs.some(Boolean)) { it.thumbs = thumbs; changed = true; }
-  }
-  if (changed) {
-    saveClipboardHistory();
-    if (appState.currentView === 'view-clipboard') renderClipboardList();
-  }
+function removeScreenshotByPath(path) {
+  const key = clipPathKey(path);
+  if (!key) return false;
+  const before = clipboardItems.length;
+  clipboardItems = clipboardItems.filter((it) => !(it.kind === 'screenshot' && clipPathKey(it.path) === key));
+  if (clipboardItems.length === before) return false;
+  saveClipboardHistory();
+  if (appState.currentView === 'view-clipboard') renderClipboardList();
+  return true;
 }
 
-async function addClipboardImage(dataUrl) {
-  if (!dataUrl || typeof dataUrl !== 'string') return false;
+async function pruneMissingScreenshots() {
+  const shots = clipboardItems.filter((it) => it.kind === 'screenshot').map((it) => it.path);
+  if (shots.length === 0) return false;
+  const existing = await tryInvoke('filter_existing_paths', { paths: shots });
+  if (!Array.isArray(existing)) return false;
+  const keep = new Set(existing.map(clipPathKey));
+  const before = clipboardItems.length;
+  clipboardItems = clipboardItems.filter((it) => it.kind !== 'screenshot' || keep.has(clipPathKey(it.path)));
+  if (clipboardItems.length === before) return false;
+  saveClipboardHistory();
+  return true;
+}
+
+const CLIP_ICON_SCREENSHOT = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2.5"/><circle cx="9" cy="10.5" r="1.5"/><path d="M21 15l-4.5-4.5L7 19"/></svg>';
+
+// Transient 96px thumbnail created ONLY while Clipboard view is open; cleared on close.
+async function hydrateScreenshotThumb(path, containerEl, gen) {
   try {
-    const img = new Image();
-    img.src = dataUrl;
-    await img.decode();
-    const w = img.naturalWidth, h = img.naturalHeight;
-    if (!w || !h) return false;
-
-    // full image as PNG (a PNG from the clipboard is kept as it is; a bitmap is converted)
-    let blob;
-    if (dataUrl.startsWith('data:image/png')) {
-      blob = await (await fetch(dataUrl)).blob();
-    } else {
-      const c = document.createElement('canvas');
-      c.width = w; c.height = h;
-      c.getContext('2d').drawImage(img, 0, 0);
-      blob = await new Promise((r) => c.toBlob(r, 'image/png'));
+    const ab = await invokeTauri('read_screenshot_bytes', { path });
+    if (gen !== clipRenderGen || appState.currentView !== 'view-clipboard') return;
+    if (!ab || ab.byteLength === 0) {
+      if (removeScreenshotByPath(path)) return;
+      return;
     }
-    if (!blob) return false;
-    const hash = clipHashBytes(new Uint8Array(await blob.arrayBuffer()));
-
-    // thumbnail for the list
-    const scale = Math.min(1, CLIPBOARD_THUMB_W / w, CLIPBOARD_THUMB_H / h);
-    const tw = Math.max(1, Math.round(w * scale)), th = Math.max(1, Math.round(h * scale));
-    const tc = document.createElement('canvas');
-    tc.width = tw; tc.height = th;
-    tc.getContext('2d').drawImage(img, 0, 0, tw, th);
-    const thumb = tc.toDataURL('image/webp', 0.82);
-
-    const id = Date.now() + Math.random().toString(36).slice(2, 6);
-    // same picture copied again: just bring the old item to the top
-    const old = clipboardItems.find((it) => it.kind === 'image' && it.hash === hash);
-    if (old) { old.time = Date.now(); return pushClipboardItem(old); }
-
-    await clipBlobPut(id, blob);
-    return pushClipboardItem({ id, kind: 'image', hash, thumb, w, h, bytes: blob.size, time: Date.now() });
+    const rawBlob = new Blob([ab]);
+    const bmp = await createImageBitmap(rawBlob, { resizeWidth: 96, resizeHeight: 96, resizeQuality: 'medium' });
+    let thumbUrl = '';
+    try {
+      const c = document.createElement('canvas');
+      c.width = bmp.width;
+      c.height = bmp.height;
+      c.getContext('2d').drawImage(bmp, 0, 0);
+      const smallBlob = await new Promise((r) => c.toBlob(r, 'image/webp', 0.8));
+      if (smallBlob && gen === clipRenderGen && appState.currentView === 'view-clipboard') {
+        thumbUrl = URL.createObjectURL(smallBlob);
+      }
+    } finally {
+      bmp.close();
+    }
+    if (!thumbUrl) return;
+    clipPreviewUrls.push(thumbUrl);
+    const im = document.createElement('img');
+    im.src = thumbUrl;
+    im.alt = '';
+    im.draggable = false;
+    containerEl.innerHTML = '';
+    containerEl.appendChild(im);
   } catch (_) {
-    return false;
+    // Missing or deleted screenshot file: remove from history automatically
+    removeScreenshotByPath(path);
   }
 }
 
 // ---------- drawing ----------
-
 function renderClipboardList() {
+  if (appState.currentView !== 'view-clipboard') return;
   const container = document.getElementById('clipboard-list');
   if (!container) return;
 
-  // text, images / screenshots and copied files (photos, videos ...) all show here
+  const gen = ++clipRenderGen;
+  revokeClipPreviews();
   const visibleItems = clipboardItems;
 
   if (visibleItems.length === 0) {
@@ -266,7 +229,7 @@ function renderClipboardList() {
       <div class="clipboard-empty">
         <svg viewBox="0 0 24 24" width="22" height="22" stroke="currentColor" stroke-width="1.8" fill="none" opacity="0.4"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>
         <span>Nothing copied yet</span>
-        <small style="opacity:0.4; font-size:9.5px;">Copy text, an image or a file (Ctrl+C)</small>
+        <small style="opacity:0.4; font-size:9.5px;">Copied text &amp; screenshots appear here</small>
       </div>
     `;
     return;
@@ -282,13 +245,8 @@ function renderClipboardList() {
     header.className = 'clipboard-item-header';
 
     const timeSpan = document.createElement('span');
-    if (item.kind === 'image') {
-      timeSpan.textContent = `${formatRelativeTime(item.time)} • Image`;
-    } else if (item.kind === 'files') {
-      const n = item.paths.length;
-      const only = n === 1 ? item.paths[0] : '';
-      const what = only ? (CLIP_IMG_EXT.test(only) ? 'Image' : CLIP_VID_EXT.test(only) ? 'Video' : 'File') : `${n} files`;
-      timeSpan.textContent = `${formatRelativeTime(item.time)} • ${what}`;
+    if (item.kind === 'screenshot') {
+      timeSpan.textContent = `${formatRelativeTime(item.time)} • Screenshot`;
     } else {
       timeSpan.textContent = `${formatRelativeTime(item.time)} • ${item.text.length} chars`;
     }
@@ -308,7 +266,6 @@ function renderClipboardList() {
       ev.stopPropagation();
       clipboardItems = clipboardItems.filter((x) => x.id !== item.id);
       saveClipboardHistory();
-      pruneClipboardBlobs();
       renderClipboardList();
     });
 
@@ -317,37 +274,22 @@ function renderClipboardList() {
     header.appendChild(timeSpan);
     header.appendChild(actions);
 
-    if (item.kind === 'image' || item.kind === 'files') {
-      // same card height as a text item: small thumbnail in front, details on the side
+    if (item.kind === 'screenshot') {
       card.classList.add('clip-media');
       const row = document.createElement('div');
       row.className = 'clip-media-row';
 
       const th = document.createElement('div');
       th.className = 'clip-thumb';
-      const firstPath = item.kind === 'files' ? item.paths[0] : '';
-      const thumbSrc = item.kind === 'image' ? item.thumb : (item.thumbs && item.thumbs[0]);
-      if (thumbSrc) {
-        const im = document.createElement('img');
-        im.src = thumbSrc;
-        im.alt = '';
-        im.draggable = false;
-        th.appendChild(im);
-      } else {
-        th.innerHTML = (item.kind === 'files' && CLIP_VID_EXT.test(firstPath)) ? CLIP_ICON_VIDEO : CLIP_ICON_FILE_BIG;
-      }
+      th.innerHTML = CLIP_ICON_SCREENSHOT;
+      hydrateScreenshotThumb(item.path, th, gen);
 
       const info = document.createElement('div');
       info.className = 'clip-media-info';
       info.appendChild(header);
       const det = document.createElement('div');
       det.className = 'clip-media-name';
-      if (item.kind === 'image') {
-        det.textContent = `${item.w}×${item.h}${item.bytes ? ' • ' + formatBytes(item.bytes) : ''}`;
-      } else {
-        const more = item.paths.length > 1 ? `  +${item.paths.length - 1} more` : '';
-        det.textContent = clipFileName(item.paths[0]) + more;
-      }
+      det.textContent = item.name || clipFileName(item.path);
       info.appendChild(det);
 
       row.appendChild(th);
@@ -364,15 +306,13 @@ function renderClipboardList() {
     card.addEventListener('click', async () => {
       let ok = false;
       try {
-        if (item.kind === 'image') {
-          const blob = await clipBlobGet(item.id);
-          if (blob) {
-            clipSelfImageUntil = Date.now() + 1500; // do not record our own copy as a new item
-            await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
-            ok = true;
+        if (item.kind === 'screenshot') {
+          ok = !!(await tryInvoke('set_clipboard_files', { paths: [item.path] }));
+          if (!ok) {
+            removeScreenshotByPath(item.path);
+            showToast('snip', 'Screenshot deleted', 1200);
+            return;
           }
-        } else if (item.kind === 'files') {
-          ok = !!(await tryInvoke('set_clipboard_files', { paths: item.paths }));
         } else {
           await navigator.clipboard.writeText(item.text);
           ok = true;
@@ -384,7 +324,7 @@ function renderClipboardList() {
         showToast('snip', 'Copied to clipboard', 1200);
         setTimeout(() => { card.classList.remove('copied'); }, 1100);
       } else {
-        showToast('snip', item.kind === 'image' && !(await clipBlobGet(item.id)) ? 'Image no longer stored' : 'Copy failed', 1200);
+        showToast('snip', 'Copy failed', 1200);
       }
     });
 
@@ -392,24 +332,24 @@ function renderClipboardList() {
   });
 }
 
-// ---------- reading the system clipboard ----------
-let clipSelfImageUntil = 0; // set when WE put an image on the clipboard (history click)
-let clipLastSeq = 0;        // Windows clipboard change counter we already recorded
+// ---------- reading the system clipboard (Text + Screenshot paths only) ----------
+let clipLastSeq = 0;
 
-// What is on the clipboard right now? Files first, then text, then image
-// (Excel and Word put text AND a picture of it: the text is what we want there).
 async function readClipboardOnce() {
   const files = await tryInvoke('get_clipboard_files', {});
-  if (Array.isArray(files) && files.length) return { kind: 'files', paths: files };
+  if (Array.isArray(files) && files.length > 0) {
+    // Only record screenshots copied from the OS Screenshots folder; ignore other copied/cut files.
+    const shots = await tryInvoke('filter_screenshot_paths', { paths: files });
+    if (Array.isArray(shots) && shots.length > 0) {
+      return { kind: 'screenshot', path: shots[0] };
+    }
+    return { kind: 'ignored' };
+  }
   const t = await tryInvoke('get_clipboard_text', {});
   if (t && typeof t === 'string' && t.trim()) return { kind: 'text', text: t };
-  const img = await tryInvoke('get_clipboard_image', {});
-  if (img && typeof img === 'string' && img.length > 32) return { kind: 'image', dataUrl: img };
   return null;
 }
 
-// Windows fires "clipboard changed" while the copying app can still be holding the clipboard open, so a single
-// read often comes back empty. Read again a few times before giving up.
 async function readClipboardWithRetry() {
   const waits = [0, 50, 120, 250, 450];
   for (const w of waits) {
@@ -426,86 +366,93 @@ async function readClipboardWithRetry() {
   return null;
 }
 
-async function recordClipboardPayload(got) {
-  if (!got) return false;
-  if (got.kind === 'files') return addClipboardFiles(got.paths);
+function recordClipboardPayload(got) {
+  if (!got || got.kind === 'ignored') return false;
+  if (got.kind === 'screenshot') return addClipboardScreenshot(got.path);
   if (got.kind === 'text') return addClipboardText(got.text);
-  if (got.kind === 'image') {
-    if (Date.now() < clipSelfImageUntil) return false;
-    return await addClipboardImage(got.dataUrl);
-  }
   return false;
 }
 
-// Catches copies we did not see live (copied before the island started, or while it was asleep)
 async function checkSystemClipboard() {
   try {
     const seq = await tryInvoke('clipboard_seq', {});
-    if (seq && seq === clipLastSeq) return;      // nothing new since the last time
+    if (seq && seq === clipLastSeq) return;
     const got = await readClipboardOnce();
     if (seq) clipLastSeq = seq;
-    await recordClipboardPayload(got);
+    recordClipboardPayload(got);
   } catch (_) {}
 }
 
 function openClipboardView() {
-  checkSystemClipboard().then(renderClipboardList).then(fillMissingFileThumbs);
+  Promise.all([checkSystemClipboard(), pruneMissingScreenshots()]).then(() => {
+    renderClipboardList();
+  });
 }
 
-// Initialise
+// Initialise & prune stale/deleted items immediately
 loadClipboardHistory();
-pruneClipboardBlobs();
-setTimeout(fillMissingFileThumbs, 1500);
+saveClipboardHistory();
+pruneMissingScreenshots();
 
 document.getElementById('btn-clipboard-clear')?.addEventListener('click', () => {
   if (clipboardItems.length === 0) return;
   clipboardItems = [];
+  revokeClipPreviews();
   saveClipboardHistory();
-  clipBlobClear();
   renderClipboardList();
   showToast('unlock', 'Clipboard cleared', 1200);
 });
 
-// Periodic and event-driven clipboard capture when user interacts
 window.addEventListener('focus', checkSystemClipboard);
 document.getElementById('island')?.addEventListener('mouseenter', checkSystemClipboard);
 
-// System-wide copy -> little "Copied" popup in the island (Windows tells us the clipboard changed, no matter which app copied)
 const CLIP_HUD_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/><path class="clip-tick" d="M8.5 14.5l2.5 2.5 4.5-5"/></svg>';
 let clipHudAt = 0;
 
-let clipCopySeq = 0;
-onTauriEvent('clipboard-copied', async () => {
-  if (SET.general && SET.general.copyToast === false) return; // toggle OFF: do nothing
-  const mySeq = ++clipCopySeq;
-  const got = await readClipboardWithRetry();
-  if (mySeq !== clipCopySeq) return;   // a newer copy arrived while waiting: that one shows the popup
-  const seq = await tryInvoke('clipboard_seq', {});
-  if (seq) clipLastSeq = seq;
-  const selfImage = got && got.kind === 'image' && Date.now() < clipSelfImageUntil;
-  await recordClipboardPayload(got);
-  if (selfImage) return;               // our own history click: no popup
-
-  // our own copy buttons already show a toast; do not stack a second popup
+function showClipboardHud(tag) {
+  if (SET.general && SET.general.copyToast === false) return;
   if (appState.toast) return;
   const now = Date.now();
   if (now - clipHudAt < 500) return;
   clipHudAt = now;
-
-  let tag = 'Copied to Clipboard';
-  if (got && got.kind === 'text') {
-    const one = got.text.replace(/\s+/g, ' ').trim();
-    tag = one.length > 24 ? one.slice(0, 24) + '\u2026' : one;
-  } else if (got && got.kind === 'image') {
-    tag = 'Image copied';
-  } else if (got && got.kind === 'files') {
-    tag = got.paths.length === 1 ? clipFileName(got.paths[0]) : `${got.paths.length} files`;
-    if (tag.length > 24) tag = tag.slice(0, 24) + '\u2026';
-  }
   showDeviceHud({
     iconHTML: CLIP_HUD_SVG, plain: true,
     name: 'Copied',
     tag,
     ms: 1700
   });
+}
+
+// Native zero-polling OS screenshot folder watcher events (ReadDirectoryChangesW)
+onTauriEvent('screenshot-added', (ev) => {
+  const path = ev && ev.payload && ev.payload.path;
+  if (!path) return;
+  if (addClipboardScreenshot(path)) {
+    const name = clipFileName(path);
+    showClipboardHud(name.length > 24 ? name.slice(0, 24) + '\u2026' : name);
+  }
+});
+
+onTauriEvent('screenshot-removed', (ev) => {
+  const path = ev && ev.payload && ev.payload.path;
+  if (path) removeScreenshotByPath(path);
+});
+
+let clipCopySeq = 0;
+onTauriEvent('clipboard-copied', async () => {
+  const mySeq = ++clipCopySeq;
+  const got = await readClipboardWithRetry();
+  if (mySeq !== clipCopySeq) return;
+  const seq = await tryInvoke('clipboard_seq', {});
+  if (seq) clipLastSeq = seq;
+  if (!got || got.kind === 'ignored') return;
+  recordClipboardPayload(got);
+
+  if (got.kind === 'text') {
+    const one = got.text.replace(/\s+/g, ' ').trim();
+    showClipboardHud(one.length > 24 ? one.slice(0, 24) + '\u2026' : one);
+  } else if (got.kind === 'screenshot') {
+    const name = clipFileName(got.path);
+    showClipboardHud(name.length > 24 ? name.slice(0, 24) + '\u2026' : name);
+  }
 });

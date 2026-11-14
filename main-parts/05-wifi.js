@@ -26,7 +26,7 @@ async function loadWifiList(soft) {
   if (!soft) netList.innerHTML = `<div class="empty-hint">Scanning…</div>`;
   const res = await invokeTauri('get_wifi_networks');
   btn.classList.remove('spin');
-  if (appState.currentView !== 'view-wifi' || appState.keepOpen) return;
+  if (!isWifiViewOpen() || appState.keepOpen) return;
   const networks = res && Array.isArray(res.networks) ? res.networks : [];
   const scanError = res && res.error ? res.error : '';
   const wn = appState.stats && appState.stats.wifi_name;
@@ -328,7 +328,7 @@ function showWifiJoin({ ssid, hidden, security }) {
       msg.textContent = 'Connected';
       if (appState.stats) appState.stats.wifi_name = name;
       appState.keepOpen = false;
-      setTimeout(() => { if (appState.currentView === 'view-wifi') loadWifiList(); }, 700);
+      setTimeout(() => { if (isWifiViewOpen()) loadWifiList(); }, 700);
       return;
     }
     go.disabled = false; cancel.disabled = false;

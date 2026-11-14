@@ -25,6 +25,18 @@ function renderMediaProgress(pos) {
   const dur = appState.mediaDuration || 0;
   pos = Math.min(dur || pos, Math.max(0, pos));
 
+  if (appState.currentView !== 'view-media' && appState.currentView !== 'view-control-mac') return;
+
+  const pct = dur > 0 ? Math.min(100, (pos / dur) * 100) : 0;
+  const macProgEl = document.getElementById('mac-prog-fill');
+  if (macProgEl && !appState.mediaSeeking) {
+    macProgEl.style.setProperty('--v', pct.toFixed(1));
+  }
+  const macSlider = document.getElementById('mac-seek-slider');
+  if (macSlider && !appState.mediaSeeking) {
+    const v = Math.round(pct * 10);
+    if (macSlider.value != v) macSlider.value = v;
+  }
   if (appState.currentView !== 'view-media') return;
 
   const curTimeEl = document.getElementById('m-cur-time');
@@ -40,7 +52,6 @@ function renderMediaProgress(pos) {
     const str = dur > 0 ? `-${fmtTime(dur - pos)}` : '--:--';
     if (totTimeEl.textContent !== str) totTimeEl.textContent = str;
   }
-  const pct = dur > 0 ? Math.min(100, (pos / dur) * 100) : 0;
   if (progFillEl) {
     const w = `${pct}%`;
     if (progFillEl.style.width !== w) progFillEl.style.width = w;
@@ -55,7 +66,8 @@ function renderMediaProgress(pos) {
 // The timer only exists while the media panel is open and a track is playing.
 var mediaTickT; // var + no initializer: switchView() may call syncMediaTick() early
 function syncMediaTick() {
-  const want = appState.currentView === 'view-media' && appState.mediaPlaying && appState.mediaDuration > 0;
+  const macWantsMedia = appState.currentView === 'view-control-mac' && (!SET.macMenu || SET.macMenu.showMedia !== false);
+  const want = (appState.currentView === 'view-media' || macWantsMedia) && appState.mediaPlaying && appState.mediaDuration > 0;
   if (want && !mediaTickT) {
     mediaTickT = setInterval(() => {
       if (!appState.mediaSeeking) renderMediaProgress();
@@ -66,47 +78,62 @@ function syncMediaTick() {
   }
 }
 
-// Interactive Media Timeline Seek Bar
-const seekSlider = document.getElementById('m-seek-slider');
-seekSlider.addEventListener('input', (e) => {
+// Interactive Media Timeline Seek Bar (Classic + Control Deck)
+function handleSeekInput(sliderVal) {
   if (appState.mediaDuration <= 0) return;
   appState.mediaSeeking = true;
-  const pct = Number(e.target.value) / 1000;
+  const pct = Number(sliderVal) / 1000;
   const targetSec = pct * appState.mediaDuration;
-  document.getElementById('m-prog-fill').style.width = `${pct * 100}%`;
-  document.getElementById('m-cur-time').textContent = fmtTime(targetSec);
-  document.getElementById('m-tot-time').textContent = `-${fmtTime(appState.mediaDuration - targetSec)}`;
-});
+  const mFill = document.getElementById('m-prog-fill');
+  const mCur = document.getElementById('m-cur-time');
+  const mTot = document.getElementById('m-tot-time');
+  if (mFill) mFill.style.width = `${pct * 100}%`;
+  if (mCur) mCur.textContent = fmtTime(targetSec);
+  if (mTot) mTot.textContent = `-${fmtTime(appState.mediaDuration - targetSec)}`;
+  const macFill = document.getElementById('mac-prog-fill');
+  if (macFill) macFill.style.setProperty('--v', (pct * 100).toFixed(1));
+}
 
-seekSlider.addEventListener('change', async (e) => {
+async function handleSeekCommit(sliderVal) {
   if (appState.mediaDuration <= 0) {
     appState.mediaSeeking = false;
     return;
   }
-  const pct = Number(e.target.value) / 1000;
+  const pct = Number(sliderVal) / 1000;
   const targetSec = pct * appState.mediaDuration;
   mediaBackendPos = targetSec;
   mediaBackendTime = Date.now();
   appState.mediaProgressSec = targetSec;
   await invokeTauri('seek_media', { positionSec: targetSec });
   setTimeout(() => { appState.mediaSeeking = false; }, 300);
+}
+
+['m-seek-slider', 'mac-seek-slider'].forEach((id) => {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.addEventListener('input', (e) => handleSeekInput(e.target.value));
+  el.addEventListener('change', (e) => handleSeekCommit(e.target.value));
 });
 
 // Artwork & Dominant Ambient Color
+function setAmb(rgb) {
+  ['view-media', 'mac-media', 'island'].forEach((id) => document.getElementById(id)?.style.setProperty('--amb', rgb));
+}
+
 async function loadMediaArt() {
   const url = await invokeTauri('get_media_art');
-  const cArt = document.getElementById('c-art'), mArt = document.getElementById('m-art');
-  const cFb = document.getElementById('c-art-fallback'), mFb = document.getElementById('m-art-fallback');
-  const card = document.getElementById('view-media');
+  const cArt = document.getElementById('c-art'), mArt = document.getElementById('m-art'), macArt = document.getElementById('mac-art');
+  const cFb = document.getElementById('c-art-fallback'), mFb = document.getElementById('m-art-fallback'), macFb = document.getElementById('mac-art-fallback');
 
   if (!url) {
     appState.loadedArtUrl = '';
-    [cArt, mArt].forEach((i) => {
+    [cArt, mArt, macArt].forEach((i) => {
+      if (!i) return;
       i.classList.add('hidden');
       i.src = '';
     });
-    [cFb, mFb].forEach((i) => (i.style.display = ''));
-    if (card) card.style.setProperty('--amb', '70, 130, 180');
+    [cFb, mFb, macFb].forEach((i) => { if (i) i.style.display = ''; });
+    setAmb('70, 130, 180');
     return;
   }
 
@@ -119,12 +146,13 @@ async function loadMediaArt() {
       return;
     }
     appState.loadedArtUrl = url;
-    cArt.src = url;
-    mArt.src = url;
-    [cArt, mArt].forEach((i) => i.classList.remove('hidden'));
-    [cFb, mFb].forEach((i) => (i.style.display = 'none'));
+    if (cArt) cArt.src = url;
+    if (mArt) mArt.src = url;
+    if (macArt) macArt.src = url;
+    [cArt, mArt, macArt].forEach((i) => { if (i) i.classList.remove('hidden'); });
+    [cFb, mFb, macFb].forEach((i) => { if (i) i.style.display = 'none'; });
     const c = dominantColor(img);
-    if (card) card.style.setProperty('--amb', c);
+    setAmb(c);
     const mBtn = document.getElementById('c-media-btn');
     if (mBtn) mBtn.style.setProperty('--thumb-glow', `rgba(${c}, 0.9)`);
   };
@@ -157,6 +185,117 @@ function tickClock() {
 tickClock();
 onTauriEvent('system-resumed', updateClocks);
 
+function sourceBadgeMeta(src) {
+  const s = (src || '').toLowerCase();
+  if (s.includes('spotify')) {
+    return {
+      cls: 'src-spotify',
+      svg: '<svg viewBox="0 0 24 24" fill="#1ed760"><path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.52 17.34c-.24.36-.66.48-1.02.24-2.82-1.74-6.36-2.1-10.56-1.14-.42.12-.78-.18-.9-.54-.12-.42.18-.78.54-.9 4.56-1.02 8.52-.6 11.64 1.32.42.18.48.66.3 1.02zm1.44-3.3c-.3.42-.84.6-1.26.3-3.24-1.98-8.16-2.58-11.94-1.38-.48.12-1.02-.12-1.14-.6-.12-.48.12-1.02.6-1.14 4.32-1.32 9.72-.66 13.44 1.62.36.18.54.78.3 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.3c-.6.18-1.2-.18-1.38-.72-.18-.6.18-1.2.72-1.38 4.26-1.26 11.28-1.02 15.72 1.62.54.3.72 1.02.42 1.56-.3.42-1.02.6-1.56.3z"/></svg>'
+    };
+  }
+  if (s.includes('youtube')) {
+    if (s.includes('music')) {
+      return {
+        cls: 'src-youtube-music',
+        svg: '<svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="7.5" stroke="#ffffff" stroke-width="1.6"/><polygon points="10,8.5 16,12 10,15.5" fill="#ffffff"/></svg>'
+      };
+    }
+    return {
+      cls: 'src-youtube',
+      svg: '<svg viewBox="0 0 24 24" fill="#ffffff"><path d="M9.5 7.4v9.2L17.2 12 9.5 7.4z"/></svg>'
+    };
+  }
+  if (s.includes('apple')) {
+    return {
+      cls: 'src-apple',
+      svg: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 4v10.2a2.8 2.8 0 1 1-1.8-2.6V7.5l-6 1.5v6.8a2.8 2.8 0 1 1-1.8-2.6V6.2L16 4z"/></svg>'
+    };
+  }
+  if (s.includes('vlc')) {
+    return {
+      cls: 'src-vlc',
+      svg: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3 7.5 18H5v2h14v-2h-2.5L12 3z"/></svg>'
+    };
+  }
+  if (s.includes('chrome') || s.includes('edge') || s.includes('firefox') || s.includes('brave') || s.includes('opera')) {
+    return {
+      cls: 'src-browser',
+      svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="8"/><path d="M4.5 12h15M12 4a11 11 0 0 1 0 16M12 4a11 11 0 0 0 0 16"/></svg>'
+    };
+  }
+  return {
+    cls: '',
+    svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>'
+  };
+}
+
+function updateSourceBadge(badgeId, icoId, _nameId, source) {
+  const badge = document.getElementById(badgeId);
+  const ico = document.getElementById(icoId);
+  if (!badge) return;
+  const label = (source || '').trim();
+  if (!label) {
+    badge.className = 'src-corner hidden';
+    badge.title = '';
+    delete badge.dataset.src;
+    return;
+  }
+  if (badge.dataset.src !== label) {
+    badge.dataset.src = label;
+    const meta = sourceBadgeMeta(label);
+    badge.className = `src-corner${meta.cls ? ' ' + meta.cls : ''}`;
+    badge.title = `Playing from ${label}`;
+    if (ico) ico.innerHTML = meta.svg;
+  }
+  badge.classList.remove('hidden');
+}
+
+function syncMacMediaUI() {
+  const m = appState.cachedMedia;
+  const hasMedia = !!(m && m.title && m.title.trim());
+  const isPlaying = !!(hasMedia && appState.mediaPlaying);
+  const titleEl = document.getElementById('mac-title');
+  const artistEl = document.getElementById('mac-artist');
+  const playSvg = document.getElementById('mac-play-svg');
+  const macArt = document.getElementById('mac-art');
+  const macFb = document.getElementById('mac-art-fallback');
+  const progEl = document.getElementById('mac-prog-fill');
+  document.getElementById('mac-media')?.classList.toggle('has-media', hasMedia);
+
+  const _t = hasMedia ? m.title : 'Not Playing';
+  if (titleEl && titleEl.textContent !== _t) titleEl.textContent = _t;   // same text: keep the sliding animation running
+  if (artistEl) {
+    const _a = !hasMedia
+      ? 'Spotify / YouTube'
+      : isPlaying
+        ? (m.artist || 'Playing on PC')
+        : (m.artist ? `${m.artist} (Paused)` : 'Paused on PC');
+    if (artistEl.textContent !== _a) artistEl.textContent = _a;
+  }
+  updateSourceBadge('mac-source-badge', 'mac-source-ico', 'mac-source-name', hasMedia ? m.source : '');
+  if (playSvg) {
+    playSvg.innerHTML = isPlaying
+      ? '<rect x="5" y="3" width="5" height="18" rx="1"/><rect x="14" y="3" width="5" height="18" rx="1"/>'
+      : '<polygon points="6 3 20 12 6 21"/>';
+  }
+  if (macArt && macFb) {
+    if (hasMedia && appState.loadedArtUrl) {
+      if (macArt.src !== appState.loadedArtUrl) macArt.src = appState.loadedArtUrl;
+      macArt.classList.remove('hidden');
+      macFb.style.display = 'none';
+    } else {
+      macArt.src = '';
+      macArt.classList.add('hidden');
+      macFb.style.display = '';
+    }
+  }
+  if (progEl && !hasMedia) progEl.style.setProperty('--v', '0');
+}
+
+document.querySelector('#mac-media .mx-media-top')?.addEventListener('click', () => {
+  if (appState.cachedMedia && appState.cachedMedia.title) openMedia();
+});
+
 function clearMediaUI() {
   appState.cachedMedia = null;
   appState.mediaPlaying = false;
@@ -173,7 +312,6 @@ function clearMediaUI() {
   const mEqBars = document.getElementById('m-eq-bars');
   const mTitle = document.getElementById('m-title');
   const mArtist = document.getElementById('m-artist');
-  const card = document.getElementById('view-media');
 
   if (eq) eq.classList.add('hidden');
   if (mediaBtn) {
@@ -190,11 +328,13 @@ function clearMediaUI() {
   }
   if (cFb) cFb.style.display = '';
   if (mFb) mFb.style.display = '';
-  if (card) card.style.setProperty('--amb', '70, 130, 180');
+  setAmb('70, 130, 180');
   if (playSvg) playSvg.innerHTML = `<polygon points="6 3 20 12 6 21"/>`;
   if (mEqBars) mEqBars.style.visibility = 'hidden';
   if (mTitle) mTitle.textContent = 'Not Playing';
   if (mArtist) mArtist.textContent = 'Spotify / YouTube';
+  updateSourceBadge('m-source-badge', 'm-source-ico', 'm-source-name', '');
+  syncMacMediaUI();
 
   appState.mediaProgressSec = 0;
   appState.mediaDuration = 0;
@@ -202,6 +342,7 @@ function clearMediaUI() {
   renderMediaProgress();
 
   island.classList.remove('media-active');
+  syncMacMediaUI();
   updateCompactStateClasses();
   syncEq();
 }
@@ -232,6 +373,8 @@ async function refreshMedia() {
     clearMediaUI();
     return;
   }
+  appState.cachedMedia = media;
+  updateSourceBadge('m-source-badge', 'm-source-ico', 'm-source-name', media.source || '');
 
   if (media.duration > 0) appState.mediaDuration = media.duration;
   syncMediaTick();
@@ -300,6 +443,7 @@ async function refreshMedia() {
     renderMediaProgress();
   }
 
+  syncMacMediaUI();
   updateCompactStateClasses();
   syncEq();
 }

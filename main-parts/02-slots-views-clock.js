@@ -80,6 +80,10 @@ function applySlots() {
 
   const slotMap = { [a]: 1, [b]: 2, [c]: 3, [d]: 4 };
   const want = new Set([a, b, c, d]);
+  if (SET.appearance && SET.appearance.menuLayout === 'mac') {
+    want.add('wifi');
+    want.add('bt');
+  }
 
   Object.entries(SLOT_DEFS).forEach(([id, def]) => {
     const tile = document.getElementById(def.el);
@@ -102,24 +106,36 @@ function applySlots() {
 }
 
 // Microphone slot: real system mute of the default capture device
+let micMutedState = null;
 function renderMic(m) {
-  const t = document.getElementById('tile-mic');
-  if (!t) return;
+  micMutedState = m;
   const none = m === null || m === undefined;
-  t.classList.toggle('muted', m === true);
-  t.classList.toggle('active', m === false);
-  document.getElementById('mic-sub').textContent = none ? 'No mic' : m ? 'Muted' : 'On';
-  document.getElementById('mic-cap').textContent = none ? 'No mic' : m ? 'Muted' : '';
+  const t = document.getElementById('tile-mic');
+  if (t) {
+    t.classList.toggle('muted', m === true);
+    t.classList.toggle('active', m === false);
+    document.getElementById('mic-sub').textContent = none ? 'No mic' : m ? 'Muted' : 'On';
+    document.getElementById('mic-cap').textContent = none ? 'No mic' : m ? 'Muted' : '';
+  }
+  // Mac menu mic tile
+  const mt = document.getElementById('mac-tile-mic');
+  if (mt) {
+    mt.classList.toggle('muted', m === true);
+    mt.classList.toggle('active', m === false);
+    const ms = document.getElementById('mac-mic-sub');
+    if (ms) ms.textContent = none ? 'No mic' : m ? 'Muted' : 'On';
+  }
 }
 async function refreshMic() {
   renderMic(await invokeTauri('get_mic_muted'));
 }
 async function toggleMic() {
-  const muted = document.getElementById('tile-mic').classList.contains('muted');
-  await invokeTauri('set_mic_muted', { muted: !muted });
+  await invokeTauri('set_mic_muted', { muted: micMutedState !== true });
   refreshMic();
 }
 document.getElementById('tile-mic').addEventListener('click', () => SLOT_DEFS.mic.click());
+document.getElementById('mac-tile-mic')?.addEventListener('click', () => toggleMic());
+refreshMic();
 document.getElementById('tile-notepad').addEventListener('click', () => SLOT_DEFS.notepad.click());
 
 let _wasCompactBusy = false;
@@ -140,31 +156,6 @@ function updateCompactStateClasses() {
   island.classList.toggle('media-active', !!appState.mediaPlaying && !isBusy);
 }
 
-// Window resize that never cuts the island while it is still shrinking:
-// growing = instant, shrinking = the window stays big until the CSS close animation has finished.
-// Also keeps OS window width fixed at ISLAND_WIN_W so height-only resizes never shift HWND sideways.
-let _winT = null;
-function smoothResize(win) {
-  clearTimeout(_winT);
-  const cur = appState.lastWin ? { ...appState.lastWin } : null;
-  const target = { width: ISLAND_WIN_W, height: win.height };
-  if (cur && (target.width < cur.width || target.height < cur.height)) {
-    invokeTauri('resize_island', { width: Math.max(cur.width, target.width), height: Math.max(cur.height, target.height) });
-    _winT = setTimeout(() => {
-      const c = island.classList;
-      // a HUD / alarm owns the window right now: do not shrink under it
-      if (appState.currentView === 'view-compact' &&
-          (c.contains('bt-hud-active') || c.contains('hud-pre') || c.contains('hud-back') ||
-           c.contains('biometric-active') || c.contains('bio-hud') || c.contains('alarm-active'))) return;
-      let w = target;
-      if (appState.currentView === 'view-compact' && typeof compactWindowSize === 'function') w = compactWindowSize(target);
-      invokeTauri('resize_island', w);
-    }, 520);
-  } else {
-    invokeTauri('resize_island', target);
-  }
-}
-
 let _menuCloseT = null;
 function triggerCloseEase(ms) {
   clearTimeout(_menuCloseT);
@@ -177,9 +168,14 @@ function cancelCloseEase() {
 }
 function switchView(viewId, stateClass, winWidth, winHeight) {
   appState.keepOpen = false;
+  if (typeof closeMacSub === 'function') closeMacSub();
+  if (typeof closeMacTrayPane === 'function') closeMacTrayPane();
   if (appState.currentView === 'view-bt' && viewId !== 'view-bt') {
     appState.btBusy = false;
     invokeTauri('bt_discovery', { on: false }); // new-device discovery only runs while the list is open
+  }
+  if (appState.currentView === 'view-clipboard' && viewId !== 'view-clipboard' && typeof closeClipboardView === 'function') {
+    closeClipboardView(); // revoke thumbnail blob URLs & free DOM immediately on close
   }
   document.querySelectorAll('.view').forEach((v) => v.classList.remove('active'));
   const target = document.getElementById(viewId);
@@ -195,8 +191,8 @@ function switchView(viewId, stateClass, winWidth, winHeight) {
   }
 
   island.classList.remove(
-    'state-compact', 'state-drop', 'state-control',
-    'state-tray', 'state-sub', 'state-media', 'state-calendar'
+    'state-compact', 'state-drop', 'state-control', 'state-control-mac',
+    'state-tray', 'state-tray-mac', 'state-sub', 'state-media', 'state-calendar'
   );
   island.classList.add(stateClass);
   appState.currentView = viewId;
@@ -217,13 +213,57 @@ function switchView(viewId, stateClass, winWidth, winHeight) {
   }
 
   let win = { width: winWidth, height: effH };
-  if (viewId === 'view-compact' && typeof compactWindowSize === 'function') win = compactWindowSize(win);
-  smoothResize(win);
+  if (viewId === 'view-compact' && typeof compactIslandSize === 'function') win = compactIslandSize(win);
+  reportIslandSize(win);
 
   if (viewId === 'view-compact' && appState.timerStartPending) {
     appState.timerStartPending = false;
     setTimeout(() => { if (appState.timerRunning && typeof showTimerStartHud === 'function') showTimerStartHud(); }, 450);
   }
+}
+
+function applyMacMenuConfig() {
+  const cfg = (SET.macMenu && typeof SET.macMenu === 'object') ? SET.macMenu : {};
+  const map = {
+    clock: cfg.showClock !== false,
+    weather: cfg.showWeather !== false && (!SET.weather || SET.weather.enabled !== false),
+    stats: cfg.showStats !== false,
+    media: cfg.showMedia !== false && (!SET.notch || SET.notch.musicMode !== false),
+    sliders: cfg.showSliders !== false,
+  };
+  Object.keys(map).forEach((k) => {
+    const el = document.querySelector(`#view-control-mac [data-mac="${k}"]`);
+    if (el) el.classList.toggle('hidden', !map[k]);
+  });
+  const batEl = document.getElementById('mac-stat-bat');
+  if (batEl && appState.stats) {
+    batEl.classList.toggle('hidden', !(appState.stats.battery_pct >= 0));
+  }
+  const topBat = document.getElementById('mac-battery');
+  if (topBat && appState.stats) {
+    topBat.classList.toggle('hidden', !(appState.stats.battery_pct >= 0 && cfg.showBattery !== false));
+  }
+}
+
+function openControlMenu() {
+  if (SET.appearance && SET.appearance.menuLayout === 'mac') {
+    applyMacMenuConfig();
+    invokeTauri('wifi_backend', { on: true }).catch(() => {});
+    invokeTauri('bt_backend', { on: true }).catch(() => {});
+    switchView('view-control-mac', 'state-control-mac', ISLAND_WIN_W, 218);
+    if (typeof refreshRadios === 'function') refreshRadios().catch(() => {});
+    if (typeof refreshLoad === 'function') refreshLoad().catch(() => {});
+    if (typeof syncMacStatsUI === 'function') syncMacStatsUI();
+    if (typeof syncMacWeatherUI === 'function') syncMacWeatherUI();
+    if (typeof syncMacMediaUI === 'function') syncMacMediaUI();
+    if (typeof updateTrayUI === 'function') updateTrayUI();
+    if (typeof updateDropTile === 'function') updateDropTile();
+    if (typeof renderMediaProgress === 'function') renderMediaProgress();
+  } else {
+    switchView('view-control', 'state-control', 316, 292);
+  }
+  try { refreshBtCaption(); } catch (_) {}
+  if (slotRunning.has('mic')) try { refreshMic(); } catch (_) {}
 }
 
 function openMedia() {
@@ -236,11 +276,85 @@ function openMedia() {
 function goCompact() {
   island.classList.remove('vol-open');
   document.getElementById('tray-peer-picker').classList.add('hidden');
-  // Keep OS window width fixed at ISLAND_WIN_W across every view and only shrink height:
-  // changing window width moves the centered HWND sideways and makes WebView2 paint a stale shifted frame.
   switchView('view-compact', 'state-compact', ISLAND_WIN_W, 36);
 }
 
+// Mac-style menu static controls (lock & settings)
+document.getElementById('mac-lock-btn')?.addEventListener('click', () => invokeTauri('lock_screen'));
+document.getElementById('mac-awake-btn')?.addEventListener('click', async () => {
+  const on = await invokeTauri('set_keep_awake', { on: !awakeState });
+  awakeState = on === true;
+  syncAwakeUi();
+});
+document.getElementById('mac-settings-btn')?.addEventListener('click', () => invokeTauri('open_settings'));
+
+let _cycleIdx = 0;
+let _cycleTimer = null;
+
+const COMPACT_STAT_ICONS = {
+  cpu: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><polyline points="2 12 6 12 9 5 14 19 17 12 22 12"/></svg>',
+  ram: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="12" rx="3"/><line x1="8" y1="10" x2="8" y2="14"/><line x1="12" y1="9" x2="12" y2="15"/><line x1="16" y1="11" x2="16" y2="13"/></svg>',
+  battery: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="2" y="7" width="16" height="10" rx="2.5"/><rect x="4.5" y="9.5" width="9.5" height="5" rx="1" fill="currentColor" stroke="none"/><path d="M20.5 10.5v3" stroke-linecap="round" stroke-width="2.2"/></svg>',
+  charging: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z"/></svg>',
+  weather: '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="5"/><g stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></svg>'
+};
+
+function renderCompactChip(iconSvg, text, cls) {
+  const c = cls ? ` ${cls}` : '';
+  return `<span class="c-stat-chip${c}">${iconSvg}<span>${escHtml(text)}</span></span>`;
+}
+
+function formatCompactCenterHtml(timeStr) {
+  const mode = (SET.notch && SET.notch.compactContent) || 'clock';
+  if (mode === 'clock') return { html: false, val: timeStr };
+  const stats = appState.stats;
+  const pick = (k) => {
+    if (k === 'weather') {
+      if (!(SET.weather && SET.weather.enabled !== false && typeof weather !== 'undefined' && weather.text)) return null;
+      const ico = (typeof getActiveWeatherIcon === 'function' ? getActiveWeatherIcon() : '') || COMPACT_STAT_ICONS.weather;
+      const wCls = (weather.isDay === false) ? 'is-night' : 'is-weather';
+      return { html: true, val: renderCompactChip(ico, weather.text, wCls) };
+    }
+    if (k === 'cpu') {
+      if (!stats) return null;
+      const cls = stats.cpu_pct >= 85 ? 'is-cpu is-crit' : stats.cpu_pct >= 65 ? 'is-cpu is-warn' : 'is-cpu';
+      return { html: true, val: renderCompactChip(COMPACT_STAT_ICONS.cpu, `${stats.cpu_pct}%`, cls) };
+    }
+    if (k === 'ram') {
+      if (!stats) return null;
+      const cls = stats.ram_pct >= 85 ? 'is-ram is-crit' : stats.ram_pct >= 70 ? 'is-ram is-warn' : 'is-ram';
+      return { html: true, val: renderCompactChip(COMPACT_STAT_ICONS.ram, `${stats.ram_pct}%`, cls) };
+    }
+    if (k === 'battery') {
+      if (!(stats && stats.battery_pct >= 0)) return null;
+      const cls = !stats.charging ? (stats.battery_pct <= 15 ? 'is-bat is-crit' : stats.battery_pct <= 30 ? 'is-bat is-warn' : 'is-bat') : 'is-bat';
+      const ico = stats.charging ? COMPACT_STAT_ICONS.charging : COMPACT_STAT_ICONS.battery;
+      return { html: true, val: renderCompactChip(ico, `${stats.battery_pct}%`, cls) };
+    }
+    return { html: false, val: timeStr };
+  };
+  if (mode === 'cycle') {
+    const order = ['clock', 'weather', 'cpu', 'ram', 'battery'].filter((k) => !!pick(k));
+    if (!order.length) return { html: false, val: timeStr };
+    return pick(order[_cycleIdx % order.length]) || { html: false, val: timeStr };
+  }
+  return pick(mode) || { html: false, val: timeStr };
+}
+
+function syncCompactCycleTimer() {
+  const want = SET.notch && SET.notch.compactContent === 'cycle' && !document.hidden;
+  if (want && !_cycleTimer) {
+    _cycleTimer = setInterval(() => {
+      _cycleIdx = (_cycleIdx + 1) % 60;
+      updateClocks();
+    }, 5000);
+  } else if (!want && _cycleTimer) {
+    clearInterval(_cycleTimer);
+    _cycleTimer = null;
+  }
+}
+
+let _lastCenterRender = '';
 // 1. Live Clock + Media Progress Tick
 function updateClocks() {
   const now = new Date();
@@ -257,10 +371,23 @@ function updateClocks() {
 
   if (!appState.timerRunning && !appState.transferring && !appState.prompting && !appState.lockerPrompting) {
     const cClock = document.getElementById('c-clock');
-    if (cClock && cClock.textContent !== str) cClock.textContent = str;
+    const res = formatCompactCenterHtml(str);
+    const sig = `${res.html ? 'H' : 'T'}:${res.val}`;
+    if (cClock && sig !== _lastCenterRender) {
+      _lastCenterRender = sig;
+      if (res.html) cClock.innerHTML = res.val;
+      else cClock.textContent = res.val;
+    }
   }
   const ctrlClock = document.getElementById('ctrl-clock-tab');
   if (ctrlClock && ctrlClock.textContent !== str) ctrlClock.textContent = str;
+  const macClock = document.getElementById('mac-clock');
+  if (macClock && macClock.textContent !== str) macClock.textContent = str;
+  const macDate = document.getElementById('mac-date');
+  if (macDate) {
+    const dateStr = now.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+    if (macDate.textContent !== dateStr) macDate.textContent = dateStr;
+  }
   const calClock = document.getElementById('cal-top-clock');
   if (calClock && calClock.textContent !== str) calClock.textContent = str;
   const timerClock = document.getElementById('timer-top-clock');

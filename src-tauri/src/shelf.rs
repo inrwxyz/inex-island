@@ -7,8 +7,9 @@
 //!
 //! Events sent to the UI (unchanged):
 //!   shelf-drag-enter  { paths | text, position: { x, y } }
+//!   shelf-drag-over   { position: { x, y } }   (mouse position while dragging, client px)
 //!   shelf-drag-leave
-//!   shelf-drag-drop   { paths | text }
+//!   shelf-drag-drop   { paths | text, position: { x, y } }
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
@@ -162,10 +163,15 @@ impl IDropTarget_Impl for IslandDropTarget_Impl {
     fn DragOver(
         &self,
         _keys: MODIFIERKEYS_FLAGS,
-        _pt: &POINTL,
+        pt: &POINTL,
         effect: *mut DROPEFFECT,
     ) -> windows::core::Result<()> {
-        set_effect(effect, self.armed.load(Ordering::Relaxed));
+        let armed = self.armed.load(Ordering::Relaxed);
+        set_effect(effect, armed);
+        if armed {
+            let at = unsafe { to_client(self.hwnd, pt) };
+            let _ = self.app.emit("shelf-drag-over", json!({ "position": { "x": at.x, "y": at.y } }));
+        }
         Ok(())
     }
 
@@ -180,7 +186,7 @@ impl IDropTarget_Impl for IslandDropTarget_Impl {
         &self,
         pdata: Option<&IDataObject>,
         _keys: MODIFIERKEYS_FLAGS,
-        _pt: &POINTL,
+        pt: &POINTL,
         effect: *mut DROPEFFECT,
     ) -> windows::core::Result<()> {
         let was_armed = self.armed.swap(false, Ordering::Relaxed);
@@ -191,7 +197,10 @@ impl IDropTarget_Impl for IslandDropTarget_Impl {
         };
         set_effect(effect, payload.is_some());
         if let Some(p) = payload {
-            let _ = self.app.emit("shelf-drag-drop", p.to_json());
+            let at = unsafe { to_client(self.hwnd, pt) };
+            let mut body = p.to_json();
+            body["position"] = json!({ "x": at.x, "y": at.y });
+            let _ = self.app.emit("shelf-drag-drop", body);
         }
         Ok(())
     }

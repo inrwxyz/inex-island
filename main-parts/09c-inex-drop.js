@@ -66,6 +66,7 @@ function promptTitle(p) {
 
 // Island notch prompt HUD
 function showPromptHud(p) {
+  playStatusSound('transfer', 'transfer');
   if (typeof showDeviceHud === 'function') {
     showDeviceHud({
       iconHTML: getBatchIcon(p.names || [p.name]),
@@ -94,11 +95,13 @@ function clearPrompt() {
 var DROP_W = 316, DROP_H = 208;
 
 function openQsView() {
+  if (SET.appearance && SET.appearance.menuLayout === 'mac') { openMacDrop('qs'); return; }
   switchView('view-inexdrop', 'state-sub', DROP_W, DROP_H);
   refreshDropUI();
 }
 
 function openP2PView() {
+  if (SET.appearance && SET.appearance.menuLayout === 'mac') { openMacDrop('p2p'); return; }
   switchView('view-p2p', 'state-sub', DROP_W, DROP_H);
 }
 
@@ -124,17 +127,14 @@ async function refreshDropUI() {
   if (tileDrop) {
     tileDrop.classList.toggle('active', dropActive);
   }
+  const macDrop = document.getElementById('mac-tile-drop');
+  if (macDrop) macDrop.classList.toggle('active', dropActive);
 
+  const dropText = inTransfer ? 'Transferring' : (dropActive ? 'Ready' : 'Off');
   const subEl = document.getElementById('tile-drop-sub');
-  if (subEl) {
-    if (inTransfer) {
-      subEl.textContent = 'Transferring';
-    } else if (dropActive) {
-      subEl.textContent = 'Ready';
-    } else {
-      subEl.textContent = 'Off';
-    }
-  }
+  if (subEl) subEl.textContent = dropText;
+  const macDropSub = document.getElementById('mac-drop-sub');
+  if (macDropSub) macDropSub.textContent = dropText;
 
   if (typeof updateDropTile === 'function') updateDropTile();
 
@@ -700,6 +700,7 @@ onTauriEvent('quickshare-event', (event) => {
     case 'rx_session_end': {
       clearPrompt();
       if (p.ok) {
+        playStatusSound('transfer', 'transfer');
         const tBar = document.getElementById('qs-xfer-bar');
         const tPct = document.getElementById('qs-xfer-pct');
         const tSub = document.getElementById('qs-xfer-sub');

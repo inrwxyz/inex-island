@@ -1,19 +1,176 @@
 async function refreshRadios() {
-  // only ask about radios whose slot is shown (a hidden slot costs nothing)
+  const macOn = SET.appearance && SET.appearance.menuLayout === 'mac';
+  // only ask about radios whose slot is shown (or always in Mac layout)
   const [wifiOn, btOn] = await Promise.all([
-    slotRunning.has('wifi') ? invokeTauri('get_radio_state', { kind: 'wifi' }) : null,
-    slotRunning.has('bt') ? invokeTauri('get_radio_state', { kind: 'bt' }) : null
+    (slotRunning.has('wifi') || macOn) ? invokeTauri('get_radio_state', { kind: 'wifi' }) : null,
+    (slotRunning.has('bt') || macOn) ? invokeTauri('get_radio_state', { kind: 'bt' }) : null
   ]);
   if (typeof wifiOn === 'boolean') applyRadio('wifi', wifiOn);
   if (typeof btOn === 'boolean') applyRadio('bt', btOn);
+}
+
+const MAC_GAUGE_ARC = 80.1;   // 270 degrees of the r=17 ring
+function setMacStatMeter(wrapId, valId, barId, pct, critAt, warnAt, lowIsBad, subId, subText) {
+  const wrap = document.getElementById(wrapId);
+  const val = document.getElementById(valId);
+  const bar = document.getElementById(barId);
+  if (!wrap || !val) return;
+  const n = Math.max(0, Math.min(100, Math.round(Number(pct) || 0)));
+  val.textContent = `${n}%`;
+  if (bar) bar.style.strokeDasharray = `${(n / 100 * MAC_GAUGE_ARC).toFixed(1)} 106.8`;
+  if (subId) {
+    const sub = document.getElementById(subId);
+    if (sub && sub.textContent !== (subText || '')) sub.textContent = subText || '';
+  }
+
+  const isCrit = lowIsBad ? n <= critAt : n >= critAt;
+  const isWarn = !isCrit && (lowIsBad ? n <= warnAt : n >= warnAt);
+  wrap.classList.toggle('crit', isCrit);
+  wrap.classList.toggle('warn', isWarn);
+}
+
+async function syncMacStatsUI() {
+  const s = appState.stats;
+  if (!s) return;
+
+  // 1. Top bar laptop battery indicator (if battery present on PC/laptop)
+  const batTop = document.getElementById('mac-battery');
+  if (batTop) {
+    const hasBat = s.battery_pct >= 0;
+    const showBat = hasBat && (SET.macMenu?.showBattery !== false);
+    batTop.classList.toggle('hidden', !showBat);
+    if (showBat) {
+      const pctEl = document.getElementById('mac-bat-pct');
+      if (pctEl) pctEl.textContent = `${s.battery_pct}%`;
+      const lvl = Math.max(1, Math.min(10, Math.round((s.battery_pct / 100) * 10)));
+      const lvlEl = document.getElementById('mac-bat-level');
+      if (lvlEl) lvlEl.setAttribute('width', lvl);
+      const bolt = document.getElementById('mac-bat-bolt');
+      if (bolt) bolt.classList.toggle('hidden', !s.charging);
+      batTop.classList.toggle('charging', !!s.charging);
+      batTop.classList.toggle('low', s.battery_pct <= 20 && !s.charging);
+    }
+  }
+
+  // 2. Mini Stats Card: CPU & RAM OR Connected Bluetooth Device Card OR Laptop Battery
+  const mode = SET.macMenu?.statsMode || 'sys';
+  const macStatsCard = document.getElementById('mac-stats');
+  const cpuStat = document.getElementById('mac-stat-cpu');
+  const ramStat = document.getElementById('mac-stat-ram');
+  const extraStat = document.getElementById('mac-stat-extra');
+  const btCard = document.getElementById('mac-stat-bt');
+
+  if (mode === 'bt') {
+    let btDev = null;
+    let btDevPct = -1;
+    try {
+      const devices = await invokeTauri('get_bt_devices');
+      if (Array.isArray(devices)) {
+        btDev = devices.find((d) => d.connected);
+      }
+      if (btDev) {
+        const bl = await invokeTauri('get_bt_batteries');
+        if (Array.isArray(bl) && bl.length) appState.btBatt = bl;
+        const p = btBatteryFor(btDev.name);
+        if (p !== null && p !== undefined) btDevPct = p;
+        // Windows may not report the battery immediately after connecting.
+        if (btDevPct < 0 && (appState._macBtTries || 0) < 3) {
+          appState._macBtTries = (appState._macBtTries || 0) + 1;
+          setTimeout(syncMacStatsUI, 3000);
+        } else if (btDevPct >= 0) {
+          appState._macBtTries = 0;
+        }
+      }
+    } catch (_) {}
+
+    if (btDev) {
+      if (macStatsCard) macStatsCard.classList.remove('hidden');
+      if (cpuStat) cpuStat.classList.add('hidden');
+      if (ramStat) ramStat.classList.add('hidden');
+      if (extraStat) extraStat.classList.add('hidden');
+      if (btCard) {
+        btCard.classList.remove('hidden');
+        const nameEl = document.getElementById('mac-bt-dev-name');
+        if (nameEl) nameEl.textContent = btDev.name;
+        const tagEl = document.getElementById('mac-bt-dev-tag');
+        if (tagEl) tagEl.textContent = 'Connected';
+        const icoEl = document.getElementById('mac-bt-dev-ico');
+        if (icoEl) {
+          const kind = btDev.kind || 'bt';
+          const isBuds = (kind === 'headphones' || !kind || kind === 'bt') && /airpod|buds|earbud|earphone|airdope|tws|pods|wf-/i.test(btDev.name || '');
+          icoEl.innerHTML = isBuds && typeof BUDS_SVG !== 'undefined' ? BUDS_SVG.replace(/budg/g, 'budg-card') : ((typeof DEV_ICONS !== 'undefined' && DEV_ICONS[kind]) ? DEV_ICONS[kind] : (typeof DEV_ICONS !== 'undefined' && DEV_ICONS.bt ? DEV_ICONS.bt : '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 14h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a9 9 0 0 1 18 0v7a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3"/></svg>'));
+          icoEl.className = 'mx-bt-ico';
+        }
+        const pctEl = document.getElementById('mac-bt-dev-pct');
+        const ringEl = document.getElementById('mac-bt-dev-ring');
+        if (pctEl) pctEl.textContent = btDevPct >= 0 ? `${btDevPct}%` : 'Connected';
+        if (ringEl) {
+          if (btDevPct >= 0) {
+            const circ = 66; // 2 * PI * 10.5
+            const offset = circ * (1 - Math.max(0, Math.min(100, btDevPct)) / 100);
+            ringEl.style.strokeDashoffset = offset;
+            ringEl.style.stroke = btDevPct <= 15 ? '#ff453a' : btDevPct <= 30 ? '#ff9f0a' : '#30d158';
+            if (ringEl.parentElement) ringEl.parentElement.style.display = 'block';
+          } else {
+            if (ringEl.parentElement) ringEl.parentElement.style.display = 'none';
+          }
+        }
+      }
+      return;
+    }
+
+    // Bluetooth mode selected, but no Bluetooth device connected: hide stats card completely so media expands!
+    if (macStatsCard) macStatsCard.classList.add('hidden');
+    return;
+  }
+
+  if (macStatsCard) macStatsCard.classList.remove('hidden');
+  if (btCard) btCard.classList.add('hidden');
+
+  if (mode === 'battery' && s.battery_pct >= 0) {
+    if (cpuStat) cpuStat.classList.add('hidden');
+    if (ramStat) ramStat.classList.add('hidden');
+    if (extraStat) {
+      extraStat.classList.remove('hidden');
+      const lbl = document.getElementById('mac-extra-lbl');
+      if (lbl) lbl.textContent = s.charging ? 'CHG' : 'BAT';
+      setMacStatMeter('mac-stat-extra', 'mac-extra-val', 'mac-extra-bar', s.battery_pct, 15, 30, true, 'mac-extra-sub', s.charging ? 'Charging' : 'On battery');
+    }
+    return;
+  }
+
+  if (mode === 'disk') {
+    if (cpuStat) cpuStat.classList.add('hidden');
+    if (ramStat) ramStat.classList.add('hidden');
+    if (extraStat) {
+      extraStat.classList.remove('hidden');
+      const lbl = document.getElementById('mac-extra-lbl');
+      if (lbl) lbl.textContent = 'DISK';
+      setMacStatMeter('mac-stat-extra', 'mac-extra-val', 'mac-extra-bar', s.disk_pct, 90, 75, false, 'mac-extra-sub', 'C: used');
+    }
+    return;
+  }
+
+  // Default: CPU & RAM
+  if (cpuStat) cpuStat.classList.remove('hidden');
+  if (ramStat) ramStat.classList.remove('hidden');
+  if (extraStat) extraStat.classList.add('hidden');
+  setMacStatMeter('mac-stat-cpu', 'mac-cpu-val', 'mac-cpu-bar', s.cpu_pct, 85, 65, false, 'mac-cpu-sub', s.cpu_temp > 0 ? `${Math.round(s.cpu_temp)}\u00B0C` : '');
+  setMacStatMeter('mac-stat-ram', 'mac-ram-val', 'mac-ram-bar', s.ram_pct, 85, 70, false, 'mac-ram-sub', s.ram_used_gb > 0 ? `${s.ram_used_gb.toFixed(1)} GB` : '');
 }
 
 async function refreshStats() {
   const stats = await invokeTauri('get_sys_stats');
   if (stats) {
     appState.stats = stats;
+    updateClocks();
     renderWidgets();
+    syncMacStatsUI();
     batteryOverlays(stats);
+    const macWifiSub = document.getElementById('mac-wifi-sub');
+    if (macWifiSub && appState.wifiRadio) {
+      macWifiSub.textContent = (stats.wifi_name && stats.wifi_name !== 'Not connected') ? stats.wifi_name : 'On';
+    }
     if (slotRunning.has('wifi')) {
       document.getElementById('wifi-cap').textContent =
         appState.wifiRadio && stats.wifi_name && stats.wifi_name !== 'Not connected' ? stats.wifi_name : '';
@@ -41,7 +198,11 @@ async function pollSystemAndMedia() {
 // (var, no initializer: switchView() may call syncLoadTimer() before this line has run)
 var loadTimer, loadBusy;
 function loadWanted() {
-  if (document.hidden || appState.currentView !== 'view-compact') return false;
+  if (document.hidden) return false;
+  if (appState.currentView === 'view-control-mac') return !SET.macMenu || SET.macMenu.showStats !== false;
+  if (appState.currentView !== 'view-compact') return false;
+  const compactNeedsLoad = ['cpu', 'ram', 'cycle'].includes(SET.notch?.compactContent);
+  if (compactNeedsLoad) return true;
   if (SET.widgets && SET.widgets.enabled === false) return false;   // Hover Widgets switched off
   const wL = SET.widgets ? SET.widgets.left : null;
   const wR = SET.widgets ? SET.widgets.right : null;
@@ -58,7 +219,9 @@ async function refreshLoad() {
       if (Array.isArray(n)) appState.net = n;
     } catch (_) {}
   }
+  updateClocks();
   renderWidgets();
+  syncMacStatsUI();
 }
 async function loadTick() {
   if (loadBusy) return;
@@ -151,9 +314,9 @@ onTauriEvent('settings-changed', (e) => {
       localStorage.setItem('inex.settings.v1', raw);
     }
   } catch (_) {}
-  if (typeof loadSettings === 'function' && typeof applySettings === 'function') {
+  if (typeof loadSettings === 'function' && typeof scheduleApplySettings === 'function') {
     SET = loadSettings();
-    applySettings();
+    scheduleApplySettings();   // coalesced: one apply per frame, not one per event
   }
 });
 pollSystemAndMedia();
@@ -170,9 +333,7 @@ if (compactBarEl) {
       if (typeof dismissTimerAlarm === 'function') dismissTimerAlarm();
       return;
     }
-    switchView('view-control', 'state-control', 316, 292);
-    try { refreshBtCaption(); } catch (_) {}
-    if (slotRunning.has('mic')) try { refreshMic(); } catch (_) {}
+    openControlMenu();
   });
 }
 document.getElementById('c-center-trigger')?.addEventListener('click', (e) => {
@@ -181,9 +342,7 @@ document.getElementById('c-center-trigger')?.addEventListener('click', (e) => {
     if (typeof dismissTimerAlarm === 'function') dismissTimerAlarm();
     return;
   }
-  switchView('view-control', 'state-control', 316, 292);
-  try { refreshBtCaption(); } catch (_) {}
-  if (slotRunning.has('mic')) try { refreshMic(); } catch (_) {}
+  openControlMenu();
 });
 document.getElementById('c-alarm-box')?.addEventListener('click', (e) => {
   e.stopPropagation();
@@ -215,15 +374,16 @@ document.getElementById('c-peer-badge').addEventListener('click', (e) => {
   openP2PView();
 });
 
-// Small delay + real hover check: while the window resizes the pointer can touch the edge for one frame,
+// Small delay + real hover check: while the island animates the pointer can touch its edge for one frame,
 // which fired mouseleave and closed the media player right after it opened.
 let _leaveT = null;
-island.addEventListener('mouseenter', () => clearTimeout(_leaveT));
+let _pointerOutside = false;   // set by Rust (fixed window mode): the cursor is outside the island, :hover may be stale
+island.addEventListener('mouseenter', () => { _pointerOutside = false; clearTimeout(_leaveT); });
 island.addEventListener('mouseleave', () => {
   if (appState.keepOpen) return;      // typing a Wi-Fi password: do not collapse
   clearTimeout(_leaveT);
   _leaveT = setTimeout(() => {
-    if (appState.keepOpen || island.matches(':hover')) return;
+    if (appState.keepOpen || (island.matches(':hover') && !_pointerOutside)) return;
     if (appState.currentView !== 'view-compact') {
       goCompact();
     }
@@ -233,3 +393,9 @@ island.addEventListener('mouseleave', () => {
 // 4. Control Center Navigation & Sub-Menus
 // (Clock in main menu is display-only; subviews navigate back via their left back-arrow)
 
+// Fixed window mode: Rust tells us when the cursor enters / leaves the island (the window is click-through outside it).
+onTauriEvent('island_pointer', (ev) => {
+  const inside = !!(ev && ev.payload);
+  _pointerOutside = !inside;
+  if (!inside) island.dispatchEvent(new MouseEvent('mouseleave'));
+});

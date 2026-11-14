@@ -8,7 +8,7 @@ Built with Tauri 2 and Rust.
 ![Platform](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D6?style=flat-square&logo=windows)
 ![Tauri](https://img.shields.io/badge/Tauri-2-FFC131?style=flat-square&logo=tauri)
 ![Rust](https://img.shields.io/badge/Rust-2021-DEA584?style=flat-square&logo=rust)
-![Version](https://img.shields.io/badge/version-0.4.1-brightgreen?style=flat-square)
+![Version](https://img.shields.io/badge/version-0.4.2-brightgreen?style=flat-square)
 ![License](https://img.shields.io/badge/license-GPLv3-blue?style=flat-square)
 
 <br/>
@@ -25,6 +25,7 @@ Built with Tauri 2 and Rust.
 
 ## Features
 
+- **Mac Menu option**: new features with seamless control center subviews and sleek navigation.
 - **Island or notch**: sits flush with the top bezel, or floats as a pill. Hides itself in fullscreen apps and games.
 - **Inex Drop**: send and receive files with Android and Windows Quick Share (Nearby protocol written in Rust, no phone app needed), or use P2P Link between PCs.
 - **Media**: shows what is playing from any app, with a 5-band audio visualizer and one-click audio output switching.

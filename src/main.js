@@ -1,5 +1,5 @@
 // GENERATED from main-parts/*.js by scripts/build-main.mjs. Edit the parts, not this file.
-import { load as loadSettings, save as saveSettings, subscribe as onSettings, applyTheme } from './shared.js';
+import { load as loadSettings, save as saveSettings, subscribe as onSettings, applyTheme, menuSurface } from './shared.js';
 
 let SET = loadSettings();
 applyTheme(SET);
@@ -41,23 +41,44 @@ const appState = {
   btRadio: true
 };
 
+let currentMacSubTarget = null;
+function isBtViewOpen() {
+  return appState.currentView === 'view-bt' || (currentMacSubTarget && currentMacSubTarget.id === 'view-bt');
+}
+function isWifiViewOpen() {
+  return appState.currentView === 'view-wifi' || (currentMacSubTarget && currentMacSubTarget.id === 'view-wifi');
+}
+
 // WebRTC Connection Store: peerId -> { pc, dc, name, makingOffer, outgoingQueue }
 const rtcPeers = new Map();
 
-const ISLAND_WIN_W = 316;
+// Nominal island width of the wide views (Mac menu, compact bar with ears): 500px menu + 2×17px ears + safety margin.
+// Only used as the size reported to Rust (clickable area); the OS window itself is fixed.
+const ISLAND_WIN_W = 548;
 const MEDIA_H = 166;
 const MEDIA_H_VOL = 198;
 
+// The OS window is made ONE big transparent size by Rust at startup and is never resized again; the island
+// animates purely in CSS. reportIslandSize() only tells Rust how big the island is (logical px x UI scale), and
+// Rust uses that rectangle to let clicks pass through to the apps underneath everywhere else.
 async function invokeTauri(cmd, args = {}) {
-  if (cmd === 'resize_island') {
-    appState.lastWin = { width: args.width, height: args.height };
-    const k = SET.appearance.scale / 100;
-    args = { width: Math.round(args.width * k), height: Math.round(args.height * k) };
-  }
   if (window.__TAURI__ && window.__TAURI__.core) {
     return await window.__TAURI__.core.invoke(cmd, args);
   }
   return null;
+}
+
+function reportIslandSize(size) {
+  appState.islandSize = { width: size.width, height: size.height };
+  const k = SET.appearance.scale / 100;
+  return invokeTauri('set_island_hit', { width: Math.round(size.width * k), height: Math.round(size.height * k) }).catch(() => {});
+}
+
+function playStatusSound(category, kind) {
+  const s = SET.sounds;
+  if (s && s.enabled === false) return;
+  if (s && category && s[category] === false) return;
+  invokeTauri('play_status_sound', { kind: kind || category }).catch(() => {});
 }
 
 // ---------------------------------------------------------------------------------------
@@ -142,6 +163,10 @@ function applySlots() {
 
   const slotMap = { [a]: 1, [b]: 2, [c]: 3, [d]: 4 };
   const want = new Set([a, b, c, d]);
+  if (SET.appearance && SET.appearance.menuLayout === 'mac') {
+    want.add('wifi');
+    want.add('bt');
+  }
 
   Object.entries(SLOT_DEFS).forEach(([id, def]) => {
     const tile = document.getElementById(def.el);
@@ -164,24 +189,36 @@ function applySlots() {
 }
 
 // Microphone slot: real system mute of the default capture device
+let micMutedState = null;
 function renderMic(m) {
-  const t = document.getElementById('tile-mic');
-  if (!t) return;
+  micMutedState = m;
   const none = m === null || m === undefined;
-  t.classList.toggle('muted', m === true);
-  t.classList.toggle('active', m === false);
-  document.getElementById('mic-sub').textContent = none ? 'No mic' : m ? 'Muted' : 'On';
-  document.getElementById('mic-cap').textContent = none ? 'No mic' : m ? 'Muted' : '';
+  const t = document.getElementById('tile-mic');
+  if (t) {
+    t.classList.toggle('muted', m === true);
+    t.classList.toggle('active', m === false);
+    document.getElementById('mic-sub').textContent = none ? 'No mic' : m ? 'Muted' : 'On';
+    document.getElementById('mic-cap').textContent = none ? 'No mic' : m ? 'Muted' : '';
+  }
+  // Mac menu mic tile
+  const mt = document.getElementById('mac-tile-mic');
+  if (mt) {
+    mt.classList.toggle('muted', m === true);
+    mt.classList.toggle('active', m === false);
+    const ms = document.getElementById('mac-mic-sub');
+    if (ms) ms.textContent = none ? 'No mic' : m ? 'Muted' : 'On';
+  }
 }
 async function refreshMic() {
   renderMic(await invokeTauri('get_mic_muted'));
 }
 async function toggleMic() {
-  const muted = document.getElementById('tile-mic').classList.contains('muted');
-  await invokeTauri('set_mic_muted', { muted: !muted });
+  await invokeTauri('set_mic_muted', { muted: micMutedState !== true });
   refreshMic();
 }
 document.getElementById('tile-mic').addEventListener('click', () => SLOT_DEFS.mic.click());
+document.getElementById('mac-tile-mic')?.addEventListener('click', () => toggleMic());
+refreshMic();
 document.getElementById('tile-notepad').addEventListener('click', () => SLOT_DEFS.notepad.click());
 
 let _wasCompactBusy = false;
@@ -202,31 +239,6 @@ function updateCompactStateClasses() {
   island.classList.toggle('media-active', !!appState.mediaPlaying && !isBusy);
 }
 
-// Window resize that never cuts the island while it is still shrinking:
-// growing = instant, shrinking = the window stays big until the CSS close animation has finished.
-// Also keeps OS window width fixed at ISLAND_WIN_W so height-only resizes never shift HWND sideways.
-let _winT = null;
-function smoothResize(win) {
-  clearTimeout(_winT);
-  const cur = appState.lastWin ? { ...appState.lastWin } : null;
-  const target = { width: ISLAND_WIN_W, height: win.height };
-  if (cur && (target.width < cur.width || target.height < cur.height)) {
-    invokeTauri('resize_island', { width: Math.max(cur.width, target.width), height: Math.max(cur.height, target.height) });
-    _winT = setTimeout(() => {
-      const c = island.classList;
-      // a HUD / alarm owns the window right now: do not shrink under it
-      if (appState.currentView === 'view-compact' &&
-          (c.contains('bt-hud-active') || c.contains('hud-pre') || c.contains('hud-back') ||
-           c.contains('biometric-active') || c.contains('bio-hud') || c.contains('alarm-active'))) return;
-      let w = target;
-      if (appState.currentView === 'view-compact' && typeof compactWindowSize === 'function') w = compactWindowSize(target);
-      invokeTauri('resize_island', w);
-    }, 520);
-  } else {
-    invokeTauri('resize_island', target);
-  }
-}
-
 let _menuCloseT = null;
 function triggerCloseEase(ms) {
   clearTimeout(_menuCloseT);
@@ -239,9 +251,14 @@ function cancelCloseEase() {
 }
 function switchView(viewId, stateClass, winWidth, winHeight) {
   appState.keepOpen = false;
+  if (typeof closeMacSub === 'function') closeMacSub();
+  if (typeof closeMacTrayPane === 'function') closeMacTrayPane();
   if (appState.currentView === 'view-bt' && viewId !== 'view-bt') {
     appState.btBusy = false;
     invokeTauri('bt_discovery', { on: false }); // new-device discovery only runs while the list is open
+  }
+  if (appState.currentView === 'view-clipboard' && viewId !== 'view-clipboard' && typeof closeClipboardView === 'function') {
+    closeClipboardView(); // revoke thumbnail blob URLs & free DOM immediately on close
   }
   document.querySelectorAll('.view').forEach((v) => v.classList.remove('active'));
   const target = document.getElementById(viewId);
@@ -257,8 +274,8 @@ function switchView(viewId, stateClass, winWidth, winHeight) {
   }
 
   island.classList.remove(
-    'state-compact', 'state-drop', 'state-control',
-    'state-tray', 'state-sub', 'state-media', 'state-calendar'
+    'state-compact', 'state-drop', 'state-control', 'state-control-mac',
+    'state-tray', 'state-tray-mac', 'state-sub', 'state-media', 'state-calendar'
   );
   island.classList.add(stateClass);
   appState.currentView = viewId;
@@ -279,13 +296,57 @@ function switchView(viewId, stateClass, winWidth, winHeight) {
   }
 
   let win = { width: winWidth, height: effH };
-  if (viewId === 'view-compact' && typeof compactWindowSize === 'function') win = compactWindowSize(win);
-  smoothResize(win);
+  if (viewId === 'view-compact' && typeof compactIslandSize === 'function') win = compactIslandSize(win);
+  reportIslandSize(win);
 
   if (viewId === 'view-compact' && appState.timerStartPending) {
     appState.timerStartPending = false;
     setTimeout(() => { if (appState.timerRunning && typeof showTimerStartHud === 'function') showTimerStartHud(); }, 450);
   }
+}
+
+function applyMacMenuConfig() {
+  const cfg = (SET.macMenu && typeof SET.macMenu === 'object') ? SET.macMenu : {};
+  const map = {
+    clock: cfg.showClock !== false,
+    weather: cfg.showWeather !== false && (!SET.weather || SET.weather.enabled !== false),
+    stats: cfg.showStats !== false,
+    media: cfg.showMedia !== false && (!SET.notch || SET.notch.musicMode !== false),
+    sliders: cfg.showSliders !== false,
+  };
+  Object.keys(map).forEach((k) => {
+    const el = document.querySelector(`#view-control-mac [data-mac="${k}"]`);
+    if (el) el.classList.toggle('hidden', !map[k]);
+  });
+  const batEl = document.getElementById('mac-stat-bat');
+  if (batEl && appState.stats) {
+    batEl.classList.toggle('hidden', !(appState.stats.battery_pct >= 0));
+  }
+  const topBat = document.getElementById('mac-battery');
+  if (topBat && appState.stats) {
+    topBat.classList.toggle('hidden', !(appState.stats.battery_pct >= 0 && cfg.showBattery !== false));
+  }
+}
+
+function openControlMenu() {
+  if (SET.appearance && SET.appearance.menuLayout === 'mac') {
+    applyMacMenuConfig();
+    invokeTauri('wifi_backend', { on: true }).catch(() => {});
+    invokeTauri('bt_backend', { on: true }).catch(() => {});
+    switchView('view-control-mac', 'state-control-mac', ISLAND_WIN_W, 218);
+    if (typeof refreshRadios === 'function') refreshRadios().catch(() => {});
+    if (typeof refreshLoad === 'function') refreshLoad().catch(() => {});
+    if (typeof syncMacStatsUI === 'function') syncMacStatsUI();
+    if (typeof syncMacWeatherUI === 'function') syncMacWeatherUI();
+    if (typeof syncMacMediaUI === 'function') syncMacMediaUI();
+    if (typeof updateTrayUI === 'function') updateTrayUI();
+    if (typeof updateDropTile === 'function') updateDropTile();
+    if (typeof renderMediaProgress === 'function') renderMediaProgress();
+  } else {
+    switchView('view-control', 'state-control', 316, 292);
+  }
+  try { refreshBtCaption(); } catch (_) {}
+  if (slotRunning.has('mic')) try { refreshMic(); } catch (_) {}
 }
 
 function openMedia() {
@@ -298,11 +359,85 @@ function openMedia() {
 function goCompact() {
   island.classList.remove('vol-open');
   document.getElementById('tray-peer-picker').classList.add('hidden');
-  // Keep OS window width fixed at ISLAND_WIN_W across every view and only shrink height:
-  // changing window width moves the centered HWND sideways and makes WebView2 paint a stale shifted frame.
   switchView('view-compact', 'state-compact', ISLAND_WIN_W, 36);
 }
 
+// Mac-style menu static controls (lock & settings)
+document.getElementById('mac-lock-btn')?.addEventListener('click', () => invokeTauri('lock_screen'));
+document.getElementById('mac-awake-btn')?.addEventListener('click', async () => {
+  const on = await invokeTauri('set_keep_awake', { on: !awakeState });
+  awakeState = on === true;
+  syncAwakeUi();
+});
+document.getElementById('mac-settings-btn')?.addEventListener('click', () => invokeTauri('open_settings'));
+
+let _cycleIdx = 0;
+let _cycleTimer = null;
+
+const COMPACT_STAT_ICONS = {
+  cpu: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><polyline points="2 12 6 12 9 5 14 19 17 12 22 12"/></svg>',
+  ram: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="12" rx="3"/><line x1="8" y1="10" x2="8" y2="14"/><line x1="12" y1="9" x2="12" y2="15"/><line x1="16" y1="11" x2="16" y2="13"/></svg>',
+  battery: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="2" y="7" width="16" height="10" rx="2.5"/><rect x="4.5" y="9.5" width="9.5" height="5" rx="1" fill="currentColor" stroke="none"/><path d="M20.5 10.5v3" stroke-linecap="round" stroke-width="2.2"/></svg>',
+  charging: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z"/></svg>',
+  weather: '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="5"/><g stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></g></svg>'
+};
+
+function renderCompactChip(iconSvg, text, cls) {
+  const c = cls ? ` ${cls}` : '';
+  return `<span class="c-stat-chip${c}">${iconSvg}<span>${escHtml(text)}</span></span>`;
+}
+
+function formatCompactCenterHtml(timeStr) {
+  const mode = (SET.notch && SET.notch.compactContent) || 'clock';
+  if (mode === 'clock') return { html: false, val: timeStr };
+  const stats = appState.stats;
+  const pick = (k) => {
+    if (k === 'weather') {
+      if (!(SET.weather && SET.weather.enabled !== false && typeof weather !== 'undefined' && weather.text)) return null;
+      const ico = (typeof getActiveWeatherIcon === 'function' ? getActiveWeatherIcon() : '') || COMPACT_STAT_ICONS.weather;
+      const wCls = (weather.isDay === false) ? 'is-night' : 'is-weather';
+      return { html: true, val: renderCompactChip(ico, weather.text, wCls) };
+    }
+    if (k === 'cpu') {
+      if (!stats) return null;
+      const cls = stats.cpu_pct >= 85 ? 'is-cpu is-crit' : stats.cpu_pct >= 65 ? 'is-cpu is-warn' : 'is-cpu';
+      return { html: true, val: renderCompactChip(COMPACT_STAT_ICONS.cpu, `${stats.cpu_pct}%`, cls) };
+    }
+    if (k === 'ram') {
+      if (!stats) return null;
+      const cls = stats.ram_pct >= 85 ? 'is-ram is-crit' : stats.ram_pct >= 70 ? 'is-ram is-warn' : 'is-ram';
+      return { html: true, val: renderCompactChip(COMPACT_STAT_ICONS.ram, `${stats.ram_pct}%`, cls) };
+    }
+    if (k === 'battery') {
+      if (!(stats && stats.battery_pct >= 0)) return null;
+      const cls = !stats.charging ? (stats.battery_pct <= 15 ? 'is-bat is-crit' : stats.battery_pct <= 30 ? 'is-bat is-warn' : 'is-bat') : 'is-bat';
+      const ico = stats.charging ? COMPACT_STAT_ICONS.charging : COMPACT_STAT_ICONS.battery;
+      return { html: true, val: renderCompactChip(ico, `${stats.battery_pct}%`, cls) };
+    }
+    return { html: false, val: timeStr };
+  };
+  if (mode === 'cycle') {
+    const order = ['clock', 'weather', 'cpu', 'ram', 'battery'].filter((k) => !!pick(k));
+    if (!order.length) return { html: false, val: timeStr };
+    return pick(order[_cycleIdx % order.length]) || { html: false, val: timeStr };
+  }
+  return pick(mode) || { html: false, val: timeStr };
+}
+
+function syncCompactCycleTimer() {
+  const want = SET.notch && SET.notch.compactContent === 'cycle' && !document.hidden;
+  if (want && !_cycleTimer) {
+    _cycleTimer = setInterval(() => {
+      _cycleIdx = (_cycleIdx + 1) % 60;
+      updateClocks();
+    }, 5000);
+  } else if (!want && _cycleTimer) {
+    clearInterval(_cycleTimer);
+    _cycleTimer = null;
+  }
+}
+
+let _lastCenterRender = '';
 // 1. Live Clock + Media Progress Tick
 function updateClocks() {
   const now = new Date();
@@ -319,10 +454,23 @@ function updateClocks() {
 
   if (!appState.timerRunning && !appState.transferring && !appState.prompting && !appState.lockerPrompting) {
     const cClock = document.getElementById('c-clock');
-    if (cClock && cClock.textContent !== str) cClock.textContent = str;
+    const res = formatCompactCenterHtml(str);
+    const sig = `${res.html ? 'H' : 'T'}:${res.val}`;
+    if (cClock && sig !== _lastCenterRender) {
+      _lastCenterRender = sig;
+      if (res.html) cClock.innerHTML = res.val;
+      else cClock.textContent = res.val;
+    }
   }
   const ctrlClock = document.getElementById('ctrl-clock-tab');
   if (ctrlClock && ctrlClock.textContent !== str) ctrlClock.textContent = str;
+  const macClock = document.getElementById('mac-clock');
+  if (macClock && macClock.textContent !== str) macClock.textContent = str;
+  const macDate = document.getElementById('mac-date');
+  if (macDate) {
+    const dateStr = now.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+    if (macDate.textContent !== dateStr) macDate.textContent = dateStr;
+  }
   const calClock = document.getElementById('cal-top-clock');
   if (calClock && calClock.textContent !== str) calClock.textContent = str;
   const timerClock = document.getElementById('timer-top-clock');
@@ -356,6 +504,18 @@ function renderMediaProgress(pos) {
   const dur = appState.mediaDuration || 0;
   pos = Math.min(dur || pos, Math.max(0, pos));
 
+  if (appState.currentView !== 'view-media' && appState.currentView !== 'view-control-mac') return;
+
+  const pct = dur > 0 ? Math.min(100, (pos / dur) * 100) : 0;
+  const macProgEl = document.getElementById('mac-prog-fill');
+  if (macProgEl && !appState.mediaSeeking) {
+    macProgEl.style.setProperty('--v', pct.toFixed(1));
+  }
+  const macSlider = document.getElementById('mac-seek-slider');
+  if (macSlider && !appState.mediaSeeking) {
+    const v = Math.round(pct * 10);
+    if (macSlider.value != v) macSlider.value = v;
+  }
   if (appState.currentView !== 'view-media') return;
 
   const curTimeEl = document.getElementById('m-cur-time');
@@ -371,7 +531,6 @@ function renderMediaProgress(pos) {
     const str = dur > 0 ? `-${fmtTime(dur - pos)}` : '--:--';
     if (totTimeEl.textContent !== str) totTimeEl.textContent = str;
   }
-  const pct = dur > 0 ? Math.min(100, (pos / dur) * 100) : 0;
   if (progFillEl) {
     const w = `${pct}%`;
     if (progFillEl.style.width !== w) progFillEl.style.width = w;
@@ -386,7 +545,8 @@ function renderMediaProgress(pos) {
 // The timer only exists while the media panel is open and a track is playing.
 var mediaTickT; // var + no initializer: switchView() may call syncMediaTick() early
 function syncMediaTick() {
-  const want = appState.currentView === 'view-media' && appState.mediaPlaying && appState.mediaDuration > 0;
+  const macWantsMedia = appState.currentView === 'view-control-mac' && (!SET.macMenu || SET.macMenu.showMedia !== false);
+  const want = (appState.currentView === 'view-media' || macWantsMedia) && appState.mediaPlaying && appState.mediaDuration > 0;
   if (want && !mediaTickT) {
     mediaTickT = setInterval(() => {
       if (!appState.mediaSeeking) renderMediaProgress();
@@ -397,47 +557,62 @@ function syncMediaTick() {
   }
 }
 
-// Interactive Media Timeline Seek Bar
-const seekSlider = document.getElementById('m-seek-slider');
-seekSlider.addEventListener('input', (e) => {
+// Interactive Media Timeline Seek Bar (Classic + Control Deck)
+function handleSeekInput(sliderVal) {
   if (appState.mediaDuration <= 0) return;
   appState.mediaSeeking = true;
-  const pct = Number(e.target.value) / 1000;
+  const pct = Number(sliderVal) / 1000;
   const targetSec = pct * appState.mediaDuration;
-  document.getElementById('m-prog-fill').style.width = `${pct * 100}%`;
-  document.getElementById('m-cur-time').textContent = fmtTime(targetSec);
-  document.getElementById('m-tot-time').textContent = `-${fmtTime(appState.mediaDuration - targetSec)}`;
-});
+  const mFill = document.getElementById('m-prog-fill');
+  const mCur = document.getElementById('m-cur-time');
+  const mTot = document.getElementById('m-tot-time');
+  if (mFill) mFill.style.width = `${pct * 100}%`;
+  if (mCur) mCur.textContent = fmtTime(targetSec);
+  if (mTot) mTot.textContent = `-${fmtTime(appState.mediaDuration - targetSec)}`;
+  const macFill = document.getElementById('mac-prog-fill');
+  if (macFill) macFill.style.setProperty('--v', (pct * 100).toFixed(1));
+}
 
-seekSlider.addEventListener('change', async (e) => {
+async function handleSeekCommit(sliderVal) {
   if (appState.mediaDuration <= 0) {
     appState.mediaSeeking = false;
     return;
   }
-  const pct = Number(e.target.value) / 1000;
+  const pct = Number(sliderVal) / 1000;
   const targetSec = pct * appState.mediaDuration;
   mediaBackendPos = targetSec;
   mediaBackendTime = Date.now();
   appState.mediaProgressSec = targetSec;
   await invokeTauri('seek_media', { positionSec: targetSec });
   setTimeout(() => { appState.mediaSeeking = false; }, 300);
+}
+
+['m-seek-slider', 'mac-seek-slider'].forEach((id) => {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.addEventListener('input', (e) => handleSeekInput(e.target.value));
+  el.addEventListener('change', (e) => handleSeekCommit(e.target.value));
 });
 
 // Artwork & Dominant Ambient Color
+function setAmb(rgb) {
+  ['view-media', 'mac-media', 'island'].forEach((id) => document.getElementById(id)?.style.setProperty('--amb', rgb));
+}
+
 async function loadMediaArt() {
   const url = await invokeTauri('get_media_art');
-  const cArt = document.getElementById('c-art'), mArt = document.getElementById('m-art');
-  const cFb = document.getElementById('c-art-fallback'), mFb = document.getElementById('m-art-fallback');
-  const card = document.getElementById('view-media');
+  const cArt = document.getElementById('c-art'), mArt = document.getElementById('m-art'), macArt = document.getElementById('mac-art');
+  const cFb = document.getElementById('c-art-fallback'), mFb = document.getElementById('m-art-fallback'), macFb = document.getElementById('mac-art-fallback');
 
   if (!url) {
     appState.loadedArtUrl = '';
-    [cArt, mArt].forEach((i) => {
+    [cArt, mArt, macArt].forEach((i) => {
+      if (!i) return;
       i.classList.add('hidden');
       i.src = '';
     });
-    [cFb, mFb].forEach((i) => (i.style.display = ''));
-    if (card) card.style.setProperty('--amb', '70, 130, 180');
+    [cFb, mFb, macFb].forEach((i) => { if (i) i.style.display = ''; });
+    setAmb('70, 130, 180');
     return;
   }
 
@@ -450,12 +625,13 @@ async function loadMediaArt() {
       return;
     }
     appState.loadedArtUrl = url;
-    cArt.src = url;
-    mArt.src = url;
-    [cArt, mArt].forEach((i) => i.classList.remove('hidden'));
-    [cFb, mFb].forEach((i) => (i.style.display = 'none'));
+    if (cArt) cArt.src = url;
+    if (mArt) mArt.src = url;
+    if (macArt) macArt.src = url;
+    [cArt, mArt, macArt].forEach((i) => { if (i) i.classList.remove('hidden'); });
+    [cFb, mFb, macFb].forEach((i) => { if (i) i.style.display = 'none'; });
     const c = dominantColor(img);
-    if (card) card.style.setProperty('--amb', c);
+    setAmb(c);
     const mBtn = document.getElementById('c-media-btn');
     if (mBtn) mBtn.style.setProperty('--thumb-glow', `rgba(${c}, 0.9)`);
   };
@@ -488,6 +664,117 @@ function tickClock() {
 tickClock();
 onTauriEvent('system-resumed', updateClocks);
 
+function sourceBadgeMeta(src) {
+  const s = (src || '').toLowerCase();
+  if (s.includes('spotify')) {
+    return {
+      cls: 'src-spotify',
+      svg: '<svg viewBox="0 0 24 24" fill="#1ed760"><path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.52 17.34c-.24.36-.66.48-1.02.24-2.82-1.74-6.36-2.1-10.56-1.14-.42.12-.78-.18-.9-.54-.12-.42.18-.78.54-.9 4.56-1.02 8.52-.6 11.64 1.32.42.18.48.66.3 1.02zm1.44-3.3c-.3.42-.84.6-1.26.3-3.24-1.98-8.16-2.58-11.94-1.38-.48.12-1.02-.12-1.14-.6-.12-.48.12-1.02.6-1.14 4.32-1.32 9.72-.66 13.44 1.62.36.18.54.78.3 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.3c-.6.18-1.2-.18-1.38-.72-.18-.6.18-1.2.72-1.38 4.26-1.26 11.28-1.02 15.72 1.62.54.3.72 1.02.42 1.56-.3.42-1.02.6-1.56.3z"/></svg>'
+    };
+  }
+  if (s.includes('youtube')) {
+    if (s.includes('music')) {
+      return {
+        cls: 'src-youtube-music',
+        svg: '<svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="7.5" stroke="#ffffff" stroke-width="1.6"/><polygon points="10,8.5 16,12 10,15.5" fill="#ffffff"/></svg>'
+      };
+    }
+    return {
+      cls: 'src-youtube',
+      svg: '<svg viewBox="0 0 24 24" fill="#ffffff"><path d="M9.5 7.4v9.2L17.2 12 9.5 7.4z"/></svg>'
+    };
+  }
+  if (s.includes('apple')) {
+    return {
+      cls: 'src-apple',
+      svg: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 4v10.2a2.8 2.8 0 1 1-1.8-2.6V7.5l-6 1.5v6.8a2.8 2.8 0 1 1-1.8-2.6V6.2L16 4z"/></svg>'
+    };
+  }
+  if (s.includes('vlc')) {
+    return {
+      cls: 'src-vlc',
+      svg: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3 7.5 18H5v2h14v-2h-2.5L12 3z"/></svg>'
+    };
+  }
+  if (s.includes('chrome') || s.includes('edge') || s.includes('firefox') || s.includes('brave') || s.includes('opera')) {
+    return {
+      cls: 'src-browser',
+      svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="8"/><path d="M4.5 12h15M12 4a11 11 0 0 1 0 16M12 4a11 11 0 0 0 0 16"/></svg>'
+    };
+  }
+  return {
+    cls: '',
+    svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>'
+  };
+}
+
+function updateSourceBadge(badgeId, icoId, _nameId, source) {
+  const badge = document.getElementById(badgeId);
+  const ico = document.getElementById(icoId);
+  if (!badge) return;
+  const label = (source || '').trim();
+  if (!label) {
+    badge.className = 'src-corner hidden';
+    badge.title = '';
+    delete badge.dataset.src;
+    return;
+  }
+  if (badge.dataset.src !== label) {
+    badge.dataset.src = label;
+    const meta = sourceBadgeMeta(label);
+    badge.className = `src-corner${meta.cls ? ' ' + meta.cls : ''}`;
+    badge.title = `Playing from ${label}`;
+    if (ico) ico.innerHTML = meta.svg;
+  }
+  badge.classList.remove('hidden');
+}
+
+function syncMacMediaUI() {
+  const m = appState.cachedMedia;
+  const hasMedia = !!(m && m.title && m.title.trim());
+  const isPlaying = !!(hasMedia && appState.mediaPlaying);
+  const titleEl = document.getElementById('mac-title');
+  const artistEl = document.getElementById('mac-artist');
+  const playSvg = document.getElementById('mac-play-svg');
+  const macArt = document.getElementById('mac-art');
+  const macFb = document.getElementById('mac-art-fallback');
+  const progEl = document.getElementById('mac-prog-fill');
+  document.getElementById('mac-media')?.classList.toggle('has-media', hasMedia);
+
+  const _t = hasMedia ? m.title : 'Not Playing';
+  if (titleEl && titleEl.textContent !== _t) titleEl.textContent = _t;   // same text: keep the sliding animation running
+  if (artistEl) {
+    const _a = !hasMedia
+      ? 'Spotify / YouTube'
+      : isPlaying
+        ? (m.artist || 'Playing on PC')
+        : (m.artist ? `${m.artist} (Paused)` : 'Paused on PC');
+    if (artistEl.textContent !== _a) artistEl.textContent = _a;
+  }
+  updateSourceBadge('mac-source-badge', 'mac-source-ico', 'mac-source-name', hasMedia ? m.source : '');
+  if (playSvg) {
+    playSvg.innerHTML = isPlaying
+      ? '<rect x="5" y="3" width="5" height="18" rx="1"/><rect x="14" y="3" width="5" height="18" rx="1"/>'
+      : '<polygon points="6 3 20 12 6 21"/>';
+  }
+  if (macArt && macFb) {
+    if (hasMedia && appState.loadedArtUrl) {
+      if (macArt.src !== appState.loadedArtUrl) macArt.src = appState.loadedArtUrl;
+      macArt.classList.remove('hidden');
+      macFb.style.display = 'none';
+    } else {
+      macArt.src = '';
+      macArt.classList.add('hidden');
+      macFb.style.display = '';
+    }
+  }
+  if (progEl && !hasMedia) progEl.style.setProperty('--v', '0');
+}
+
+document.querySelector('#mac-media .mx-media-top')?.addEventListener('click', () => {
+  if (appState.cachedMedia && appState.cachedMedia.title) openMedia();
+});
+
 function clearMediaUI() {
   appState.cachedMedia = null;
   appState.mediaPlaying = false;
@@ -504,7 +791,6 @@ function clearMediaUI() {
   const mEqBars = document.getElementById('m-eq-bars');
   const mTitle = document.getElementById('m-title');
   const mArtist = document.getElementById('m-artist');
-  const card = document.getElementById('view-media');
 
   if (eq) eq.classList.add('hidden');
   if (mediaBtn) {
@@ -521,11 +807,13 @@ function clearMediaUI() {
   }
   if (cFb) cFb.style.display = '';
   if (mFb) mFb.style.display = '';
-  if (card) card.style.setProperty('--amb', '70, 130, 180');
+  setAmb('70, 130, 180');
   if (playSvg) playSvg.innerHTML = `<polygon points="6 3 20 12 6 21"/>`;
   if (mEqBars) mEqBars.style.visibility = 'hidden';
   if (mTitle) mTitle.textContent = 'Not Playing';
   if (mArtist) mArtist.textContent = 'Spotify / YouTube';
+  updateSourceBadge('m-source-badge', 'm-source-ico', 'm-source-name', '');
+  syncMacMediaUI();
 
   appState.mediaProgressSec = 0;
   appState.mediaDuration = 0;
@@ -533,6 +821,7 @@ function clearMediaUI() {
   renderMediaProgress();
 
   island.classList.remove('media-active');
+  syncMacMediaUI();
   updateCompactStateClasses();
   syncEq();
 }
@@ -563,6 +852,8 @@ async function refreshMedia() {
     clearMediaUI();
     return;
   }
+  appState.cachedMedia = media;
+  updateSourceBadge('m-source-badge', 'm-source-ico', 'm-source-name', media.source || '');
 
   if (media.duration > 0) appState.mediaDuration = media.duration;
   syncMediaTick();
@@ -631,26 +922,184 @@ async function refreshMedia() {
     renderMediaProgress();
   }
 
+  syncMacMediaUI();
   updateCompactStateClasses();
   syncEq();
 }
 
 async function refreshRadios() {
-  // only ask about radios whose slot is shown (a hidden slot costs nothing)
+  const macOn = SET.appearance && SET.appearance.menuLayout === 'mac';
+  // only ask about radios whose slot is shown (or always in Mac layout)
   const [wifiOn, btOn] = await Promise.all([
-    slotRunning.has('wifi') ? invokeTauri('get_radio_state', { kind: 'wifi' }) : null,
-    slotRunning.has('bt') ? invokeTauri('get_radio_state', { kind: 'bt' }) : null
+    (slotRunning.has('wifi') || macOn) ? invokeTauri('get_radio_state', { kind: 'wifi' }) : null,
+    (slotRunning.has('bt') || macOn) ? invokeTauri('get_radio_state', { kind: 'bt' }) : null
   ]);
   if (typeof wifiOn === 'boolean') applyRadio('wifi', wifiOn);
   if (typeof btOn === 'boolean') applyRadio('bt', btOn);
+}
+
+const MAC_GAUGE_ARC = 80.1;   // 270 degrees of the r=17 ring
+function setMacStatMeter(wrapId, valId, barId, pct, critAt, warnAt, lowIsBad, subId, subText) {
+  const wrap = document.getElementById(wrapId);
+  const val = document.getElementById(valId);
+  const bar = document.getElementById(barId);
+  if (!wrap || !val) return;
+  const n = Math.max(0, Math.min(100, Math.round(Number(pct) || 0)));
+  val.textContent = `${n}%`;
+  if (bar) bar.style.strokeDasharray = `${(n / 100 * MAC_GAUGE_ARC).toFixed(1)} 106.8`;
+  if (subId) {
+    const sub = document.getElementById(subId);
+    if (sub && sub.textContent !== (subText || '')) sub.textContent = subText || '';
+  }
+
+  const isCrit = lowIsBad ? n <= critAt : n >= critAt;
+  const isWarn = !isCrit && (lowIsBad ? n <= warnAt : n >= warnAt);
+  wrap.classList.toggle('crit', isCrit);
+  wrap.classList.toggle('warn', isWarn);
+}
+
+async function syncMacStatsUI() {
+  const s = appState.stats;
+  if (!s) return;
+
+  // 1. Top bar laptop battery indicator (if battery present on PC/laptop)
+  const batTop = document.getElementById('mac-battery');
+  if (batTop) {
+    const hasBat = s.battery_pct >= 0;
+    const showBat = hasBat && (SET.macMenu?.showBattery !== false);
+    batTop.classList.toggle('hidden', !showBat);
+    if (showBat) {
+      const pctEl = document.getElementById('mac-bat-pct');
+      if (pctEl) pctEl.textContent = `${s.battery_pct}%`;
+      const lvl = Math.max(1, Math.min(10, Math.round((s.battery_pct / 100) * 10)));
+      const lvlEl = document.getElementById('mac-bat-level');
+      if (lvlEl) lvlEl.setAttribute('width', lvl);
+      const bolt = document.getElementById('mac-bat-bolt');
+      if (bolt) bolt.classList.toggle('hidden', !s.charging);
+      batTop.classList.toggle('charging', !!s.charging);
+      batTop.classList.toggle('low', s.battery_pct <= 20 && !s.charging);
+    }
+  }
+
+  // 2. Mini Stats Card: CPU & RAM OR Connected Bluetooth Device Card OR Laptop Battery
+  const mode = SET.macMenu?.statsMode || 'sys';
+  const macStatsCard = document.getElementById('mac-stats');
+  const cpuStat = document.getElementById('mac-stat-cpu');
+  const ramStat = document.getElementById('mac-stat-ram');
+  const extraStat = document.getElementById('mac-stat-extra');
+  const btCard = document.getElementById('mac-stat-bt');
+
+  if (mode === 'bt') {
+    let btDev = null;
+    let btDevPct = -1;
+    try {
+      const devices = await invokeTauri('get_bt_devices');
+      if (Array.isArray(devices)) {
+        btDev = devices.find((d) => d.connected);
+      }
+      if (btDev) {
+        const bl = await invokeTauri('get_bt_batteries');
+        if (Array.isArray(bl) && bl.length) appState.btBatt = bl;
+        const p = btBatteryFor(btDev.name);
+        if (p !== null && p !== undefined) btDevPct = p;
+        // Windows may not report the battery immediately after connecting.
+        if (btDevPct < 0 && (appState._macBtTries || 0) < 3) {
+          appState._macBtTries = (appState._macBtTries || 0) + 1;
+          setTimeout(syncMacStatsUI, 3000);
+        } else if (btDevPct >= 0) {
+          appState._macBtTries = 0;
+        }
+      }
+    } catch (_) {}
+
+    if (btDev) {
+      if (macStatsCard) macStatsCard.classList.remove('hidden');
+      if (cpuStat) cpuStat.classList.add('hidden');
+      if (ramStat) ramStat.classList.add('hidden');
+      if (extraStat) extraStat.classList.add('hidden');
+      if (btCard) {
+        btCard.classList.remove('hidden');
+        const nameEl = document.getElementById('mac-bt-dev-name');
+        if (nameEl) nameEl.textContent = btDev.name;
+        const tagEl = document.getElementById('mac-bt-dev-tag');
+        if (tagEl) tagEl.textContent = 'Connected';
+        const icoEl = document.getElementById('mac-bt-dev-ico');
+        if (icoEl) {
+          const kind = btDev.kind || 'bt';
+          const isBuds = (kind === 'headphones' || !kind || kind === 'bt') && /airpod|buds|earbud|earphone|airdope|tws|pods|wf-/i.test(btDev.name || '');
+          icoEl.innerHTML = isBuds && typeof BUDS_SVG !== 'undefined' ? BUDS_SVG.replace(/budg/g, 'budg-card') : ((typeof DEV_ICONS !== 'undefined' && DEV_ICONS[kind]) ? DEV_ICONS[kind] : (typeof DEV_ICONS !== 'undefined' && DEV_ICONS.bt ? DEV_ICONS.bt : '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 14h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a9 9 0 0 1 18 0v7a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3"/></svg>'));
+          icoEl.className = 'mx-bt-ico';
+        }
+        const pctEl = document.getElementById('mac-bt-dev-pct');
+        const ringEl = document.getElementById('mac-bt-dev-ring');
+        if (pctEl) pctEl.textContent = btDevPct >= 0 ? `${btDevPct}%` : 'Connected';
+        if (ringEl) {
+          if (btDevPct >= 0) {
+            const circ = 66; // 2 * PI * 10.5
+            const offset = circ * (1 - Math.max(0, Math.min(100, btDevPct)) / 100);
+            ringEl.style.strokeDashoffset = offset;
+            ringEl.style.stroke = btDevPct <= 15 ? '#ff453a' : btDevPct <= 30 ? '#ff9f0a' : '#30d158';
+            if (ringEl.parentElement) ringEl.parentElement.style.display = 'block';
+          } else {
+            if (ringEl.parentElement) ringEl.parentElement.style.display = 'none';
+          }
+        }
+      }
+      return;
+    }
+
+    // Bluetooth mode selected, but no Bluetooth device connected: hide stats card completely so media expands!
+    if (macStatsCard) macStatsCard.classList.add('hidden');
+    return;
+  }
+
+  if (macStatsCard) macStatsCard.classList.remove('hidden');
+  if (btCard) btCard.classList.add('hidden');
+
+  if (mode === 'battery' && s.battery_pct >= 0) {
+    if (cpuStat) cpuStat.classList.add('hidden');
+    if (ramStat) ramStat.classList.add('hidden');
+    if (extraStat) {
+      extraStat.classList.remove('hidden');
+      const lbl = document.getElementById('mac-extra-lbl');
+      if (lbl) lbl.textContent = s.charging ? 'CHG' : 'BAT';
+      setMacStatMeter('mac-stat-extra', 'mac-extra-val', 'mac-extra-bar', s.battery_pct, 15, 30, true, 'mac-extra-sub', s.charging ? 'Charging' : 'On battery');
+    }
+    return;
+  }
+
+  if (mode === 'disk') {
+    if (cpuStat) cpuStat.classList.add('hidden');
+    if (ramStat) ramStat.classList.add('hidden');
+    if (extraStat) {
+      extraStat.classList.remove('hidden');
+      const lbl = document.getElementById('mac-extra-lbl');
+      if (lbl) lbl.textContent = 'DISK';
+      setMacStatMeter('mac-stat-extra', 'mac-extra-val', 'mac-extra-bar', s.disk_pct, 90, 75, false, 'mac-extra-sub', 'C: used');
+    }
+    return;
+  }
+
+  // Default: CPU & RAM
+  if (cpuStat) cpuStat.classList.remove('hidden');
+  if (ramStat) ramStat.classList.remove('hidden');
+  if (extraStat) extraStat.classList.add('hidden');
+  setMacStatMeter('mac-stat-cpu', 'mac-cpu-val', 'mac-cpu-bar', s.cpu_pct, 85, 65, false, 'mac-cpu-sub', s.cpu_temp > 0 ? `${Math.round(s.cpu_temp)}\u00B0C` : '');
+  setMacStatMeter('mac-stat-ram', 'mac-ram-val', 'mac-ram-bar', s.ram_pct, 85, 70, false, 'mac-ram-sub', s.ram_used_gb > 0 ? `${s.ram_used_gb.toFixed(1)} GB` : '');
 }
 
 async function refreshStats() {
   const stats = await invokeTauri('get_sys_stats');
   if (stats) {
     appState.stats = stats;
+    updateClocks();
     renderWidgets();
+    syncMacStatsUI();
     batteryOverlays(stats);
+    const macWifiSub = document.getElementById('mac-wifi-sub');
+    if (macWifiSub && appState.wifiRadio) {
+      macWifiSub.textContent = (stats.wifi_name && stats.wifi_name !== 'Not connected') ? stats.wifi_name : 'On';
+    }
     if (slotRunning.has('wifi')) {
       document.getElementById('wifi-cap').textContent =
         appState.wifiRadio && stats.wifi_name && stats.wifi_name !== 'Not connected' ? stats.wifi_name : '';
@@ -678,7 +1127,11 @@ async function pollSystemAndMedia() {
 // (var, no initializer: switchView() may call syncLoadTimer() before this line has run)
 var loadTimer, loadBusy;
 function loadWanted() {
-  if (document.hidden || appState.currentView !== 'view-compact') return false;
+  if (document.hidden) return false;
+  if (appState.currentView === 'view-control-mac') return !SET.macMenu || SET.macMenu.showStats !== false;
+  if (appState.currentView !== 'view-compact') return false;
+  const compactNeedsLoad = ['cpu', 'ram', 'cycle'].includes(SET.notch?.compactContent);
+  if (compactNeedsLoad) return true;
   if (SET.widgets && SET.widgets.enabled === false) return false;   // Hover Widgets switched off
   const wL = SET.widgets ? SET.widgets.left : null;
   const wR = SET.widgets ? SET.widgets.right : null;
@@ -695,7 +1148,9 @@ async function refreshLoad() {
       if (Array.isArray(n)) appState.net = n;
     } catch (_) {}
   }
+  updateClocks();
   renderWidgets();
+  syncMacStatsUI();
 }
 async function loadTick() {
   if (loadBusy) return;
@@ -788,9 +1243,9 @@ onTauriEvent('settings-changed', (e) => {
       localStorage.setItem('inex.settings.v1', raw);
     }
   } catch (_) {}
-  if (typeof loadSettings === 'function' && typeof applySettings === 'function') {
+  if (typeof loadSettings === 'function' && typeof scheduleApplySettings === 'function') {
     SET = loadSettings();
-    applySettings();
+    scheduleApplySettings();   // coalesced: one apply per frame, not one per event
   }
 });
 pollSystemAndMedia();
@@ -807,9 +1262,7 @@ if (compactBarEl) {
       if (typeof dismissTimerAlarm === 'function') dismissTimerAlarm();
       return;
     }
-    switchView('view-control', 'state-control', 316, 292);
-    try { refreshBtCaption(); } catch (_) {}
-    if (slotRunning.has('mic')) try { refreshMic(); } catch (_) {}
+    openControlMenu();
   });
 }
 document.getElementById('c-center-trigger')?.addEventListener('click', (e) => {
@@ -818,9 +1271,7 @@ document.getElementById('c-center-trigger')?.addEventListener('click', (e) => {
     if (typeof dismissTimerAlarm === 'function') dismissTimerAlarm();
     return;
   }
-  switchView('view-control', 'state-control', 316, 292);
-  try { refreshBtCaption(); } catch (_) {}
-  if (slotRunning.has('mic')) try { refreshMic(); } catch (_) {}
+  openControlMenu();
 });
 document.getElementById('c-alarm-box')?.addEventListener('click', (e) => {
   e.stopPropagation();
@@ -852,15 +1303,16 @@ document.getElementById('c-peer-badge').addEventListener('click', (e) => {
   openP2PView();
 });
 
-// Small delay + real hover check: while the window resizes the pointer can touch the edge for one frame,
+// Small delay + real hover check: while the island animates the pointer can touch its edge for one frame,
 // which fired mouseleave and closed the media player right after it opened.
 let _leaveT = null;
-island.addEventListener('mouseenter', () => clearTimeout(_leaveT));
+let _pointerOutside = false;   // set by Rust (fixed window mode): the cursor is outside the island, :hover may be stale
+island.addEventListener('mouseenter', () => { _pointerOutside = false; clearTimeout(_leaveT); });
 island.addEventListener('mouseleave', () => {
   if (appState.keepOpen) return;      // typing a Wi-Fi password: do not collapse
   clearTimeout(_leaveT);
   _leaveT = setTimeout(() => {
-    if (appState.keepOpen || island.matches(':hover')) return;
+    if (appState.keepOpen || (island.matches(':hover') && !_pointerOutside)) return;
     if (appState.currentView !== 'view-compact') {
       goCompact();
     }
@@ -870,6 +1322,12 @@ island.addEventListener('mouseleave', () => {
 // 4. Control Center Navigation & Sub-Menus
 // (Clock in main menu is display-only; subviews navigate back via their left back-arrow)
 
+// Fixed window mode: Rust tells us when the cursor enters / leaves the island (the window is click-through outside it).
+onTauriEvent('island_pointer', (ev) => {
+  const inside = !!(ev && ev.payload);
+  _pointerOutside = !inside;
+  if (!inside) island.dispatchEvent(new MouseEvent('mouseleave'));
+});
 const ROW_ICON = {
   link: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>',
   unlink: '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.84 12.25l1.72-1.71a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M5.17 11.75l-1.71 1.71a5 5 0 0 0 7.07 7.07l1.71-1.71"/><line x1="8" y1="2" x2="8" y2="5"/><line x1="2" y1="8" x2="5" y2="8"/><line x1="16" y1="19" x2="16" y2="22"/><line x1="19" y1="16" x2="22" y2="16"/></svg>'
@@ -898,7 +1356,7 @@ async function loadWifiList(soft) {
   if (!soft) netList.innerHTML = `<div class="empty-hint">Scanning…</div>`;
   const res = await invokeTauri('get_wifi_networks');
   btn.classList.remove('spin');
-  if (appState.currentView !== 'view-wifi' || appState.keepOpen) return;
+  if (!isWifiViewOpen() || appState.keepOpen) return;
   const networks = res && Array.isArray(res.networks) ? res.networks : [];
   const scanError = res && res.error ? res.error : '';
   const wn = appState.stats && appState.stats.wifi_name;
@@ -1200,7 +1658,7 @@ function showWifiJoin({ ssid, hidden, security }) {
       msg.textContent = 'Connected';
       if (appState.stats) appState.stats.wifi_name = name;
       appState.keepOpen = false;
-      setTimeout(() => { if (appState.currentView === 'view-wifi') loadWifiList(); }, 700);
+      setTimeout(() => { if (isWifiViewOpen()) loadWifiList(); }, 700);
       return;
     }
     go.disabled = false; cancel.disabled = false;
@@ -1284,7 +1742,7 @@ async function loadBtList(soft) {
   }
   const devices = await invokeTauri('get_bt_devices');
   btn.classList.remove('spin');
-  if (appState.currentView !== 'view-bt' || appState.btBusy) return;
+  if (!isBtViewOpen() || appState.btBusy) return;
   btList.innerHTML = '';
   const subs = [];
   if (!devices || devices.length === 0) {
@@ -1341,7 +1799,7 @@ async function loadBtList(soft) {
             errEl.textContent = 'Could not ' + (d.connected ? 'disconnect' : 'connect');
           } else {
             selectedBtName = null;
-            setTimeout(() => { if (appState.currentView === 'view-bt') loadBtList(true); }, 500);
+            setTimeout(() => { if (isBtViewOpen()) loadBtList(true); }, 500);
           }
         });
 
@@ -1399,7 +1857,7 @@ async function loadBtList(soft) {
 
 async function renderBtNearby() {
   const box = document.getElementById('bt-nearby');
-  if (!box || appState.currentView !== 'view-bt' || appState.btBusy || appState.btPairing) return;
+  if (!box || !isBtViewOpen() || appState.btBusy || appState.btPairing) return;
   const list = (await invokeTauri('get_bt_nearby')) || [];
   if (!box.isConnected || appState.btBusy || appState.btPairing) return;
   box.innerHTML = '';
@@ -1449,7 +1907,7 @@ async function startBtPair(n, row, sub) {
   appState.btPairing = false;
   appState.btBusy = false;
   appState.keepOpen = false;
-  if (appState.currentView !== 'view-bt') return;
+  if (!isBtViewOpen()) return;
   await loadBtList(true);
   if (r !== 'ok') showBtNote(BT_PAIR_ERR[r] || 'Could not pair, try again');
 }
@@ -1457,7 +1915,7 @@ async function startBtPair(n, row, sub) {
 // Windows asks a question while pairing: confirm a number / show a number / type a PIN
 function showBtPrompt(p) {
   if (!p) return;
-  if (appState.currentView !== 'view-bt') {
+  if (!isBtViewOpen()) {
     // the user left the list: do not leave Windows waiting
     if (p.kind !== 'display_pin') invokeTauri('bt_pair_answer', { accept: false });
     return;
@@ -1559,54 +2017,50 @@ const BATT_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" str
 
 function hudIsFloating() { return !!(SET.notch && SET.notch.style === 'floating'); }
 function hudCanShow() { return appState.currentView === 'view-compact'; }   // never fight an open menu
-// The island is zoomed by Settings > UI Scale, so the window has to grow with it, plus room for the spring overshoot.
-// Too small a window cuts the bottom of the pill off (the text line under the name vanishes).
 function hudUiScale() { return Math.max(0.8, ((SET.appearance && SET.appearance.scale) || 100) / 100); }
-function hudWindowSize() {
-  // Keep OS window width invariant (ISLAND_WIN_W) so HUD open/close is height-only and never jumps sideways;
-  // invokeTauri() already applies SET.appearance.scale to both width and height.
+function hudIslandSize() {
+  // Nominal size of the HUD / popup pill; reportIslandSize() applies SET.appearance.scale to it.
   return { width: ISLAND_WIN_W, height: hudIsFloating() ? 64 : 54 };
 }
-// Transfer / toast / lock-prompt popups use the SAME window as the Bluetooth HUD.
-// (Before, only the CSS size matched: the OS window stayed 265x36, so these pills were clipped and looked smaller.)
+// Transfer / toast / lock-prompt popups use the SAME island size as the Bluetooth HUD.
 function popupIsBusy() { return !!(appState.transferring || appState.prompting || appState.lockerPrompting || appState.toast); }
 
-// Window for the compact view: the HUD-size window while a status popup (transfer / toast / prompt) is open,
-// the small notch window otherwise. Used when the menu closes or Settings change, so those never shrink the window
-// under an open popup (that clipped the transfer pill until another status resized it again).
-function compactWindowSize(win) {
+// Island size for the compact view: the HUD size while a status popup (transfer / toast / prompt) is open,
+// the small notch size otherwise. Used when the menu closes or Settings change, so the clickable area never
+// shrinks under an open popup.
+function compactIslandSize(win) {
   if (popupIsBusy() && !(island.classList.contains('alarm-active') || island.classList.contains('bt-hud-active')
       || island.classList.contains('biometric-active') || island.classList.contains('bio-hud'))) {
-    popupWinOn = true;
-    return hudWindowSize();
+    popupSizeOn = true;
+    return hudIslandSize();
   }
   return win;
 }
 
-function hudRestoreWindow() {
-  if (!hudCanShow() || appState.alarmActive) return;   // the timer-end card keeps its own window size
-  if (popupIsBusy()) { tryInvoke('resize_island', hudWindowSize()); return; }   // a popup is still open: keep the HUD-size window
-  tryInvoke('resize_island', { width: ISLAND_WIN_W, height: hudIsFloating() ? 48 : 36 });
+function hudRestoreSize() {
+  if (!hudCanShow() || appState.alarmActive) return;   // the timer-end card keeps its own size
+  if (popupIsBusy()) { reportIslandSize(hudIslandSize()); return; }   // a popup is still open: keep the HUD size
+  reportIslandSize({ width: ISLAND_WIN_W, height: hudIsFloating() ? 48 : 36 });
 }
 
-let popupWinOn = false, popupWinT = null;
-function syncPopupWindow(busy) {
+let popupSizeOn = false, popupSizeT = null;
+function syncPopupSize(busy) {
   if (appState.currentView !== 'view-compact') return;
   if (appState.alarmActive || island.classList.contains('bt-hud-active') || island.classList.contains('hud-pre')
-      || island.classList.contains('biometric-active') || island.classList.contains('bio-hud')) return;   // those own the window
-  clearTimeout(popupWinT);
+      || island.classList.contains('biometric-active') || island.classList.contains('bio-hud')) return;   // those own the island size
+  clearTimeout(popupSizeT);
   if (busy) {
-    popupWinOn = true;
-    tryInvoke('resize_island', hudWindowSize());
-  } else if (popupWinOn) {
-    // let the pill finish shrinking before the window gets small again
-    popupWinT = setTimeout(() => {
-      popupWinOn = false;
+    popupSizeOn = true;
+    reportIslandSize(hudIslandSize());
+  } else if (popupSizeOn) {
+    // let the pill finish shrinking before the clickable area gets small again
+    popupSizeT = setTimeout(() => {
+      popupSizeOn = false;
       // a biometric morph / device HUD / alarm may have started during the 650 ms wait (e.g. the locker prompt closes
-      // and the unlock morph begins right away): they own the window now, shrinking it here clipped the animation
+      // and the unlock morph begins right away): they own the size now, shrinking it here would cut the animation's clickable area
       if (island.classList.contains('bio-hud') || island.classList.contains('biometric-active') || island.classList.contains('hud-pre')
           || island.classList.contains('bt-hud-active') || island.classList.contains('alarm-active') || appState.alarmActive) return;
-      if (!popupIsBusy()) hudRestoreWindow();
+      if (!popupIsBusy()) hudRestoreSize();
     }, 650);
   }
 }
@@ -1681,18 +2135,18 @@ function showDeviceHud(o) {
     requestAnimationFrame(tick);
   }
 
-  const win = hudWindowSize();
+  const win = hudIslandSize();
   if (typeof cancelCloseEase === 'function') cancelCloseEase();
   if (alreadyOpen) {
     // the pill is already out (e.g. next file request right after "saved"): keep it open, only swap the content
-    tryInvoke('resize_island', win);
+    reportIslandSize(win);
     hud.classList.add('hidden');
     void hud.offsetWidth;              // restarts the content animation
     hud.classList.remove('hidden');
   } else {
     hud.classList.remove('hidden');
     // 1) window big enough, 2) old content blurs away, 3) island springs open
-    tryInvoke('resize_island', win);   // wider/taller than the HUD so the spring overshoot is never clipped
+    reportIslandSize(win);   // wider/taller than the HUD so the spring overshoot is never clipped
     island.classList.add('hud-pre');
     btHudStartT = setTimeout(() => {
       island.classList.remove('hud-pre');
@@ -1712,7 +2166,7 @@ function hideDeviceHud(instant) {
   const finish = () => {
     hud.classList.add('hidden');
     island.classList.remove('bt-hud-active', 'hud-out', 'hud-back', 'hud-pre');
-    hudRestoreWindow();
+    hudRestoreSize();
     renderCenter(); updateClocks(); refreshMedia();
   };
   if (instant || hud.classList.contains('hidden')) {
@@ -1726,13 +2180,14 @@ function hideDeviceHud(instant) {
     btHudEndT = setTimeout(() => {
       hud.classList.add('hidden');
       island.classList.remove('hud-back');
-      hudRestoreWindow();
+      hudRestoreSize();
       renderCenter(); updateClocks(); refreshMedia();
     }, 600);
   }, 170);
 }
 
 function showBtConnectHud(name, kind, battPct) {
+  playStatusSound('bluetooth', 'bluetooth');
   const isBuds = kind === 'headphones' && /airpod|buds|earbud|earphone|airdope|tws|pods|wf-/i.test(name || '');
   showDeviceHud({
     iconHTML: isBuds ? BUDS_SVG : (DEV_ICONS[kind] || DEV_ICONS.bt),
@@ -1770,7 +2225,7 @@ onTauriEvent('bluetooth-changed', () => {
   btEvT = setTimeout(() => {
     refreshBtCaption();
     checkNewBtConnections();
-    if (appState.currentView === 'view-bt') loadBtList(true);
+    if (isBtViewOpen()) loadBtList(true);
   }, 400);
 });
 onTauriEvent('bluetooth-nearby', () => { clearTimeout(btNearT); btNearT = setTimeout(renderBtNearby, 500); });
@@ -1794,7 +2249,7 @@ document.getElementById('tile-tray').addEventListener('click', openTrayView);
 
 document.querySelectorAll('.back-btn').forEach((btn) => {
   btn.addEventListener('click', () => {
-    switchView('view-control', 'state-control', 316, 292);
+    openControlMenu();
   });
 });
 
@@ -1804,11 +2259,24 @@ function applyRadio(kind, on) {
     document.getElementById('tile-wifi').classList.toggle('active', on);
     if (!on) document.getElementById('wifi-sub').textContent = 'Off';
     document.getElementById('wifi-master-toggle').checked = on;
+    const macTile = document.getElementById('mac-tile-wifi');
+    const macSub = document.getElementById('mac-wifi-sub');
+    if (macTile) macTile.classList.toggle('active', on);
+    if (macSub) {
+      if (!on) macSub.textContent = 'Off';
+      else if (appState.stats && appState.stats.wifi_name && appState.stats.wifi_name !== 'Not connected') macSub.textContent = appState.stats.wifi_name;
+      else macSub.textContent = 'On';
+    }
   } else {
     appState.btRadio = on;
     document.getElementById('tile-bt').classList.toggle('active', on);
     document.getElementById('bt-sub').textContent = on ? 'On' : 'Off';
     document.getElementById('bt-master-toggle').checked = on;
+    const macTile = document.getElementById('mac-tile-bt');
+    const macSub = document.getElementById('mac-bt-sub');
+    if (macTile) macTile.classList.toggle('active', on);
+    if (macSub && !on) macSub.textContent = 'Off';
+    else if (macSub && on && macSub.textContent === 'Off') macSub.textContent = 'On';
   }
 }
 
@@ -1863,6 +2331,17 @@ const ACTION_TILE_TITLES = {
 
 let awakeState = false;
 
+// Keep-awake button exists in both menus (Classic tile row + Mac top bar): keep both in step
+function syncAwakeUi() {
+  const title = awakeState ? 'Keep screen awake: ON' : 'Keep screen awake: off';
+  ['act-awake', 'mac-awake-btn'].forEach((id) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.classList.toggle('active', awakeState);
+    el.title = title;
+  });
+}
+
 function renderQuickActionTiles() {
   const row = document.getElementById('quick-icons-row');
   if (!row) return;
@@ -1871,7 +2350,7 @@ function renderQuickActionTiles() {
     : ['awake', 'snip', 'calendar', 'timer', 'clipboard', 'lock', 'settings'];
 
   row.innerHTML = '';
-  list.forEach((id) => {
+  list.slice(0, 7).forEach((id) => {   // the row fits 7 circles at most
     const ico = ACTION_TILE_ICONS[id];
     const title = ACTION_TILE_TITLES[id] || id;
     if (!ico) return;
@@ -1889,8 +2368,7 @@ function renderQuickActionTiles() {
         const want = !awakeState;
         const on = await invokeTauri('set_keep_awake', { on: want });
         awakeState = on === true;
-        btn.classList.toggle('active', awakeState);
-        btn.title = awakeState ? 'Keep screen awake: ON' : 'Keep screen awake: off';
+        syncAwakeUi();
       });
     } else if (id === 'snip') {
       btn.addEventListener('click', () => {
@@ -1955,6 +2433,10 @@ function setVolumeUI(level) {
     ms.value = level;
     ms.style.setProperty('--val', `${level}%`);
   }
+  const macVal = document.getElementById('mac-val-vol');
+  if (macVal) macVal.textContent = `${level}%`;
+  const macSlider = document.getElementById('mac-slider-vol');
+  if (macSlider) macSlider.value = level;
   appState.lastVolume = level;
 }
 function handleVolumeChange(newVal) {
@@ -1966,24 +2448,35 @@ document.getElementById('m-vol-toggle').addEventListener('click', () => {
   appState.volOpen = !appState.volOpen;
   island.classList.toggle('vol-open', appState.volOpen);
   document.getElementById('m-vol-toggle').classList.toggle('muted-ico', !appState.volOpen);
-  invokeTauri('resize_island', { width: 316, height: appState.volOpen ? MEDIA_H_VOL : MEDIA_H });
+  reportIslandSize({ width: ISLAND_WIN_W, height: appState.volOpen ? MEDIA_H_VOL : MEDIA_H });
 });
 document.getElementById('m-bt-btn').addEventListener('click', () => openAudioView());
 invokeTauri('get_system_volume').then((v) => { if (typeof v === 'number') setVolumeUI(v); });
 
 document.getElementById('slider-vol').addEventListener('input', (e) => handleVolumeChange(e.target.value));
+document.getElementById('mac-slider-vol')?.addEventListener('input', (e) => handleVolumeChange(e.target.value));
 document.getElementById('m-vol-slider').addEventListener('input', (e) => handleVolumeChange(e.target.value));
 
-document.getElementById('slider-bright').addEventListener('change', (e) => {
-  const level = parseInt(e.target.value, 10);
-  document.getElementById('val-bright').textContent = `${level}%`;
-  e.target.style.setProperty('--val', `${level}%`);
-  invokeTauri('set_system_brightness', { level });
-});
-document.getElementById('slider-bright').addEventListener('input', (e) => {
-  document.getElementById('val-bright').textContent = `${e.target.value}%`;
-  e.target.style.setProperty('--val', `${e.target.value}%`);
-});
+function syncBrightTextAndApply(level, commit) {
+  const n = parseInt(level, 10);
+  const vEl = document.getElementById('val-bright');
+  if (vEl) vEl.textContent = `${n}%`;
+  const s = document.getElementById('slider-bright');
+  if (s) {
+    s.value = n;
+    s.style.setProperty('--val', `${n}%`);
+  }
+  const mvEl = document.getElementById('mac-val-bright');
+  if (mvEl) mvEl.textContent = `${n}%`;
+  const ms = document.getElementById('mac-slider-bright');
+  if (ms) ms.value = n;
+  if (commit) invokeTauri('set_system_brightness', { level: n });
+}
+
+document.getElementById('slider-bright').addEventListener('change', (e) => syncBrightTextAndApply(e.target.value, true));
+document.getElementById('slider-bright').addEventListener('input', (e) => syncBrightTextAndApply(e.target.value, false));
+document.getElementById('mac-slider-bright')?.addEventListener('change', (e) => syncBrightTextAndApply(e.target.value, true));
+document.getElementById('mac-slider-bright')?.addEventListener('input', (e) => syncBrightTextAndApply(e.target.value, false));
 // Brightness follows Windows (Fn keys, quick settings, auto-brightness) through an event, no polling
 function setBrightUI(level) {
   if (typeof level !== 'number') return;
@@ -1994,12 +2487,179 @@ function setBrightUI(level) {
   }
   const valEl = document.getElementById('val-bright');
   if (valEl) valEl.textContent = `${level}%`;
+  const ms = document.getElementById('mac-slider-bright');
+  if (ms && ms.dataset.drag !== '1') ms.value = level;
+  const mvEl = document.getElementById('mac-val-bright');
+  if (mvEl) mvEl.textContent = `${level}%`;
 }
 document.getElementById('slider-bright').addEventListener('pointerdown', (e) => { e.target.dataset.drag = '1'; });
-window.addEventListener('pointerup', () => { const s = document.getElementById('slider-bright'); if (s) s.dataset.drag = ''; });
+document.getElementById('mac-slider-bright')?.addEventListener('pointerdown', (e) => { e.target.dataset.drag = '1'; });
+window.addEventListener('pointerup', () => {
+  const s = document.getElementById('slider-bright'); if (s) s.dataset.drag = '';
+  const ms = document.getElementById('mac-slider-bright'); if (ms) ms.dataset.drag = '';
+});
 onTauriEvent('brightness-changed', (e) => setBrightUI(e && e.payload));
 invokeTauri('get_system_brightness').then(setBrightUI);
 setTimeout(() => invokeTauri('get_system_brightness').then(setBrightUI), 5000);
+
+// Mac in-place subview management (keeps 500x210 locked, zero window resize or jitter)
+currentMacSubTarget = null;
+function openMacSub(viewId, title, from) {
+  if (typeof closeMacTrayPane === 'function') closeMacTrayPane();
+  closeMacSub();
+  const src = document.getElementById(viewId);
+  const mount = document.getElementById('mac-sub-mount');
+  const actionsSlot = document.getElementById('mac-sub-actions');
+  if (!src || !mount) return;
+  currentMacSubTarget = { id: viewId, parent: src.parentNode, next: src.nextSibling };
+  mount.appendChild(src);
+  src.classList.add('active', 'in-mac-sub');
+  const titleEl = document.getElementById('mac-sub-title');
+  if (titleEl) titleEl.textContent = title;
+
+  if (actionsSlot) {
+    actionsSlot.innerHTML = '';
+    const headerRight = src.querySelector('.bt-header-right, .panel-top-right, .qs-header-right, .cal-nav-bar, .top-tool-btn');
+    if (headerRight) {
+      currentMacSubTarget.actions = headerRight;
+      currentMacSubTarget.actionsParent = headerRight.parentNode;
+      currentMacSubTarget.actionsNext = headerRight.nextSibling;
+      actionsSlot.appendChild(headerRight);
+    }
+    if (viewId === 'view-p2p') mountP2PBarItems(actionsSlot);   // Generate / code / Cancel / status sit in the Back line, like Wi-Fi / Bluetooth
+  }
+
+  document.getElementById('mac-right-home')?.classList.add('hidden');
+  const subPanel = document.getElementById('mac-right-sub');
+  if (subPanel) {
+    subPanel.classList.remove('from-bottom');
+    subPanel.classList.remove('hidden');
+    if (from === 'bottom') {
+      const host = subPanel.parentElement;
+      host.classList.add('mx-clip');                       // the panel slides in from under the bottom edge
+      void subPanel.offsetWidth;
+      subPanel.classList.add('from-bottom');
+      setTimeout(() => host.classList.remove('mx-clip'), 420);
+    }
+  }
+
+  if (viewId === 'view-wifi') {
+    invokeTauri('wifi_backend', { on: true }).catch(() => {});
+    if (typeof loadWifiList === 'function') loadWifiList();
+  }
+  if (viewId === 'view-bt') {
+    invokeTauri('bt_backend', { on: true }).catch(() => {});
+    invokeTauri('bt_discovery', { on: true }).catch(() => {});
+    if (typeof loadBtList === 'function') loadBtList();
+  }
+  if (viewId === 'view-tray' && typeof updateTrayUI === 'function') updateTrayUI();
+  if (viewId === 'view-calendar' && typeof renderCalendarGrid === 'function') renderCalendarGrid();
+  if (viewId === 'view-notepad' && typeof focusNotepad === 'function') focusNotepad();
+  if (viewId === 'view-clipboard' && typeof openClipboardView === 'function') openClipboardView();
+  if (viewId === 'view-alarm' && typeof openAlarmView === 'function') openAlarmView();
+  if (typeof syncDropRail === 'function') syncDropRail(viewId);   // Quick Share <-> P2P side rail (only for those two views)
+}
+
+// P2P: move its option controls into the Back line (right side) and put them back on close
+function mountP2PBarItems(slot) {
+  const wrap = document.createElement('div');
+  wrap.className = 'mx-p2p-actions';
+  currentMacSubTarget.moved = [];
+  ['btn-gen-code', 'code-display-box', 'p2p-expiry-timer', 'btn-exit-room', 'p2p-status-pill'].forEach((id) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    currentMacSubTarget.moved.push({ el, parent: el.parentNode, next: el.nextSibling });
+    wrap.appendChild(el);
+  });
+  slot.appendChild(wrap);
+}
+
+function closeMacSub() {
+  if (!currentMacSubTarget) return;
+  const el = document.getElementById(currentMacSubTarget.id);
+  if (currentMacSubTarget.moved) {
+    for (let i = currentMacSubTarget.moved.length - 1; i >= 0; i--) {
+      const m = currentMacSubTarget.moved[i];
+      if (m.parent) m.parent.insertBefore(m.el, m.next);
+    }
+  }
+  if (currentMacSubTarget.actions && currentMacSubTarget.actionsParent) {
+    currentMacSubTarget.actionsParent.insertBefore(currentMacSubTarget.actions, currentMacSubTarget.actionsNext);
+  }
+  const actionsSlot = document.getElementById('mac-sub-actions');
+  if (actionsSlot) actionsSlot.innerHTML = '';
+  if (el && currentMacSubTarget.parent) {
+    el.classList.remove('active', 'in-mac-sub');
+    currentMacSubTarget.parent.insertBefore(el, currentMacSubTarget.next);
+  }
+  if (currentMacSubTarget.id === 'view-bt') {
+    invokeTauri('bt_discovery', { on: false });
+  }
+  if (currentMacSubTarget.id === 'view-clipboard' && typeof closeClipboardView === 'function') {
+    closeClipboardView();
+  }
+  currentMacSubTarget = null;
+  island.classList.remove('has-rail');
+  document.getElementById('mac-right-sub')?.classList.add('hidden');
+  document.getElementById('mac-right-home')?.classList.remove('hidden');
+}
+
+document.getElementById('mac-sub-back')?.addEventListener('click', () => {
+  const sp = document.getElementById('mac-right-sub');
+  if (sp && sp.classList.contains('from-bottom') && !sp.classList.contains('sinking')) {
+    const host = sp.parentElement;
+    host.classList.add('mx-clip');
+    sp.classList.add('sinking');                           // goes back down the same way it came
+    setTimeout(() => { sp.classList.remove('sinking'); host.classList.remove('mx-clip'); closeMacSub(); }, 210);
+  } else closeMacSub();
+});
+
+// Mac 2x2 Control Center tiles
+// Clicking tile body toggles power directly (just like normal mode); clicking chevron or right-click opens in-place subpanel
+document.getElementById('mac-tile-wifi')?.addEventListener('click', (e) => {
+  if (e.target.closest('.mx-tile-chev')) openMacSub('view-wifi', 'Wi-Fi');
+  else toggleRadio('wifi', !appState.wifiRadio);
+});
+document.getElementById('mac-tile-wifi')?.addEventListener('contextmenu', (e) => {
+  e.preventDefault();
+  openMacSub('view-wifi', 'Wi-Fi');
+});
+
+document.getElementById('mac-tile-bt')?.addEventListener('click', (e) => {
+  if (e.target.closest('.mx-tile-chev')) openMacSub('view-bt', 'Bluetooth');
+  else toggleRadio('bt', !appState.btRadio);
+});
+document.getElementById('mac-tile-bt')?.addEventListener('contextmenu', (e) => {
+  e.preventDefault();
+  openMacSub('view-bt', 'Bluetooth');
+});
+
+document.getElementById('mac-tile-drop')?.addEventListener('click', (e) => {
+  if (e.target.closest('.mx-tile-chev')) openMacDrop();
+  else if (getDropMode() === 'p2p') openMacDrop('p2p');
+  else toggleInexDrop();
+});
+document.getElementById('mac-tile-drop')?.addEventListener('contextmenu', (e) => {
+  e.preventDefault();
+  openMacDrop();
+});
+
+document.getElementById('mac-tray-btn')?.addEventListener('click', () => {
+  if (macTrayPaneOpen()) closeMacTrayPane();   // tray icon again = back to the menu
+  else openMacTrayView(false);
+});
+
+// Mac Quick Actions strip: open right in place inside Control Deck
+document.querySelectorAll('#mac-quick-row .mx-q').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    const act = btn.dataset.action;
+    if (act === 'notepad') openMacSub('view-notepad', 'Quick Notes', 'bottom');
+    else if (act === 'clipboard') openMacSub('view-clipboard', 'Clipboard', 'bottom');
+    else if (act === 'timer') openMacSub('view-timer', 'Focus Timer', 'bottom');
+    else if (act === 'alarm') openMacSub('view-alarm', 'Alarm', 'bottom');
+    else if (act === 'calendar') openMacSub('view-calendar', 'Calendar', 'bottom');
+  });
+});
 
 // 7. Audio Output Switcher (Headphones / Speakers)
 let lastAudioOrigin = 'view-media';
@@ -2014,7 +2674,7 @@ document.getElementById('audio-back-btn')?.addEventListener('click', () => {
   if (lastAudioOrigin === 'view-media' && appState.mediaPlaying) {
     openMedia();
   } else {
-    switchView('view-control', 'state-control', 316, 292);
+    openControlMenu();
   }
 });
 
@@ -2097,7 +2757,7 @@ function escHtml(s) {
 // Files dropped from Explorer: Tauri's native drop hands over the REAL path. Nothing is copied,
 // nothing is read into RAM or the clipboard; the tray only remembers {path, name, size}.
 // Dragging out and P2P sending both read straight from that original location.
-async function addDroppedPaths(paths) {
+async function addDroppedPaths(paths, target) {
   const metas = (await tryInvoke('file_info', { paths })) || [];
   let added = 0;
   for (const m of metas) {
@@ -2107,6 +2767,10 @@ async function addDroppedPaths(paths) {
   }
   if (!added && !metas.length) { goCompact(); return; } // folders / unreadable items are skipped
   updateTrayUI();
+  if (isMacMenu()) {
+    if (target === 'drop') macSendToInexDrop(); else openMacTrayView(false);
+    return;
+  }
   openTrayView();
 }
 
@@ -2128,6 +2792,7 @@ let dropLeaveTimeout = null;
 
 function onNativeDrop(p) {
   if (!p) return;
+  if (isMacMenu()) { onNativeDropMac(p); return; }
   if (p.type === 'enter' || p.type === 'over') {
     clearTimeout(dropLeaveTimeout);
     if (!appState.draggingOut && appState.currentView !== 'view-drop') {
@@ -2147,6 +2812,161 @@ function onNativeDrop(p) {
   }
 }
 
+// ---------- Mac menu mode: tray + Inex Drop open as a two-panel view (Inex Drop | Drop files here) ----------
+function isMacMenu() { return !!(SET.appearance && SET.appearance.menuLayout === 'mac'); }
+const MAC_TRAY_H = 172;
+
+// which panel is under the mouse (position = client px from the native drag events)
+function macDropTargetAt(pos) {
+  if (!pos || typeof pos.x !== 'number') return null;
+  const dpr = window.devicePixelRatio || 1;
+  const el = document.elementFromPoint(pos.x / dpr, pos.y / dpr);
+  const panel = el && el.closest ? el.closest('#view-tray-mac [data-drop-target]') : null;
+  return panel ? panel.dataset.dropTarget : null;
+}
+
+function setMacDropHover(t) {
+  appState.macDropTarget = t;
+  document.querySelectorAll('#view-tray-mac [data-drop-target]').forEach((el) => {
+    el.classList.toggle('over', el.dataset.dropTarget === t);
+  });
+  const sub = document.getElementById('mt-drop-sub');
+  if (sub) sub.textContent = t === 'drop' ? 'Release to send' : 'Send to phone';
+}
+
+// Tray opened from the Control Deck: the tray (Inex Drop | Drop files here) fills the WHOLE body, only the top strip
+// (clock, weather, icons) stays. The Tray icon in the strip toggles it. No resize, no animation.
+// (functions + var on purpose: switchView can run before this part has executed)
+var macTrayHome = null;
+function macTrayPaneOpen() { return !!macTrayHome; }
+
+function openMacTrayPane() {
+  const deck = document.getElementById('view-control-mac');
+  const tray = document.getElementById('view-tray-mac');
+  if (!deck || !tray) return;
+  if (macTrayHome) { renderMacTray(); return; }
+  if (typeof closeMacSub === 'function') closeMacSub();
+  macTrayHome = { parent: tray.parentNode, next: tray.nextSibling };
+  deck.appendChild(tray);
+  tray.classList.add('active', 'in-mac-tray');
+  tray.classList.remove('dragging');
+  deck.classList.add('tray-open');
+  document.getElementById('mac-tray-btn')?.classList.add('on');
+  renderMacTray();
+  setMacDropHover(null);
+}
+
+function closeMacTrayPane() {
+  if (!macTrayHome) return;
+  const tray = document.getElementById('view-tray-mac');
+  if (tray) {
+    tray.classList.remove('active', 'in-mac-tray', 'dragging');
+    macTrayHome.parent.insertBefore(tray, macTrayHome.next);
+  }
+  macTrayHome = null;
+  document.getElementById('view-control-mac')?.classList.remove('tray-open');
+  document.getElementById('mac-tray-btn')?.classList.remove('on');
+}
+
+function openMacTrayView(byDrag) {
+  appState.macTrayByDrag = !!byDrag;
+  if (!byDrag) {                       // Tray icon / after a drop: inside the Control Deck
+    if (appState.currentView !== 'view-control-mac') openControlMenu();
+    openMacTrayPane();
+    return;
+  }
+  renderMacTray();
+  switchView('view-tray-mac', 'state-tray-mac', ISLAND_WIN_W, MAC_TRAY_H);
+  document.getElementById('view-tray-mac')?.classList.toggle('dragging', !!byDrag);
+  setMacDropHover(null);
+}
+
+function renderMacTray() {
+  const files = appState.trayFiles || [];
+  const empty = document.getElementById('mt-empty');
+  const filled = document.getElementById('mt-filled');
+  if (!empty || !filled) return;
+  empty.classList.toggle('hidden', files.length > 0);
+  filled.classList.toggle('hidden', files.length === 0);
+  document.getElementById('mt-count').textContent = `Tray · ${files.length} file${files.length === 1 ? '' : 's'}`;
+  const list = document.getElementById('mt-files');
+  list.innerHTML = '';
+  files.forEach((f) => {
+    const card = document.createElement('div');
+    card.className = 'mt-file';
+    card.title = f.name;
+    card.innerHTML = `
+      <button class="mt-del" title="Remove file">×</button>
+      <svg viewBox="0 0 24 24" width="22" height="22" stroke="currentColor" stroke-width="1.8" fill="none"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>
+      <div class="mt-fname">${escHtml(f.name)}</div>`;
+    card.querySelector('.mt-del').addEventListener('click', (e) => {
+      e.stopPropagation();
+      appState.trayFiles = appState.trayFiles.filter((t) => t.id !== f.id);
+      if (appState.traySelectedIds) appState.traySelectedIds.delete(f.id);
+      updateTrayUI();
+    });
+    // press + move = drag the file out
+    card.addEventListener('mousedown', (e) => {
+      if (e.button !== 0 || e.target.closest('.mt-del')) return;
+      const sx = e.clientX, sy = e.clientY;
+      const cleanup = () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', cleanup); };
+      const move = (ev) => {
+        if (Math.abs(ev.clientX - sx) + Math.abs(ev.clientY - sy) > 8) { cleanup(); startDragOut(f); }
+      };
+      window.addEventListener('mousemove', move);
+      window.addEventListener('mouseup', cleanup);
+    });
+    list.appendChild(card);
+  });
+}
+
+// Dropped / sent to Inex Drop in the Mac menu: whatever mode the side switch has selected is used.
+//  Quick Share -> turns on by itself (files are staged for the phone)
+//  P2P         -> NO code is generated for you; with a connected peer the files are offered to it, otherwise the
+//                 P2P panel opens and you press Generate yourself
+async function macSendToInexDrop() {
+  const files = appState.trayFiles || [];
+  if (getDropMode() === 'p2p') {
+    if (files.length && (appState.peers || []).length > 0) {
+      appState.peers.forEach((p) => offerFilesToPeer(p.id, [...files]));
+    } else if (files.length) {
+      showToast('info', 'Press Generate, connect a peer, then send', 2200);
+    }
+    openMacDrop('p2p');
+    return;
+  }
+  if (files.length > 0) await stageTrayFilesForPhone();
+  if (!dropActive) await startInexDrop();
+  openMacDrop('qs');
+}
+
+function onNativeDropMac(p) {
+  if (p.type === 'enter' || p.type === 'over') {
+    clearTimeout(dropLeaveTimeout);
+    if (appState.draggingOut) return;
+    if (macTrayPaneOpen() || appState.currentView === 'view-tray-mac') document.getElementById('view-tray-mac').classList.add('dragging');
+    else openMacTrayView(true);
+    if (p.position) setMacDropHover(macDropTargetAt(p.position));
+  } else if (p.type === 'leave') {
+    clearTimeout(dropLeaveTimeout);
+    dropLeaveTimeout = setTimeout(() => {
+      const inPane = macTrayPaneOpen();
+      if (appState.draggingOut || (!inPane && appState.currentView !== 'view-tray-mac')) return;
+      setMacDropHover(null);
+      document.getElementById('view-tray-mac').classList.remove('dragging');
+      if (!inPane && appState.macTrayByDrag) goCompact();   // opened only by the drag: close again. Opened by the Tray icon: stay.
+    }, 200);
+  } else if (p.type === 'drop') {
+    clearTimeout(dropLeaveTimeout);
+    if (appState.draggingOut) { appState.draggingOut = false; goCompact(); return; }
+    const target = (p.position && macDropTargetAt(p.position)) || appState.macDropTarget || 'tray';
+    setMacDropHover(null);
+    document.getElementById('view-tray-mac')?.classList.remove('dragging');
+    appState.macTrayByDrag = false;
+    if (p.paths && p.paths.length) addDroppedPaths(p.paths, target); else goCompact();
+  }
+}
+
 (function bindNativeDrop() {
   // Hook native OLE drop target on main window and all WebView2 child windows
   const registerDrop = () => {
@@ -2159,14 +2979,17 @@ function onNativeDrop(p) {
   // Native OLE shelf events from shelf.rs
   onTauriEvent('shelf-drag-enter', (e) => {
     const paths = e && e.payload && e.payload.paths;
-    onNativeDrop({ type: 'enter', paths });
+    onNativeDrop({ type: 'enter', paths, position: e && e.payload && e.payload.position });
+  });
+  onTauriEvent('shelf-drag-over', (e) => {
+    onNativeDrop({ type: 'over', position: e && e.payload && e.payload.position });
   });
   onTauriEvent('shelf-drag-leave', () => {
     onNativeDrop({ type: 'leave' });
   });
   onTauriEvent('shelf-drag-drop', (e) => {
     const paths = e && e.payload && e.payload.paths;
-    onNativeDrop({ type: 'drop', paths });
+    onNativeDrop({ type: 'drop', paths, position: e && e.payload && e.payload.position });
   });
 
   // Tauri 2 standard drag-drop handler on webviewWindow / window / webview
@@ -2177,11 +3000,11 @@ function onNativeDrop(p) {
         const payload = e && e.payload;
         if (!payload) return;
         if (payload.type === 'enter' || payload.type === 'over') {
-          onNativeDrop({ type: 'enter', paths: payload.paths });
+          onNativeDrop({ type: 'enter', paths: payload.paths, position: payload.position });
         } else if (payload.type === 'leave') {
           onNativeDrop({ type: 'leave' });
         } else if (payload.type === 'drop') {
-          onNativeDrop({ type: 'drop', paths: payload.paths });
+          onNativeDrop({ type: 'drop', paths: payload.paths, position: payload.position });
         }
       });
       if (r && r.catch) r.catch(() => {});
@@ -2197,10 +3020,10 @@ function onNativeDrop(p) {
   }
 
   // Plain Tauri events fallback
-  onTauriEvent('tauri://drag-enter', (e) => onNativeDrop({ type: 'enter', paths: e?.payload?.paths }));
-  onTauriEvent('tauri://drag-over', (e) => onNativeDrop({ type: 'over', paths: e?.payload?.paths }));
+  onTauriEvent('tauri://drag-enter', (e) => onNativeDrop({ type: 'enter', paths: e?.payload?.paths, position: e?.payload?.position }));
+  onTauriEvent('tauri://drag-over', (e) => onNativeDrop({ type: 'over', paths: e?.payload?.paths, position: e?.payload?.position }));
   onTauriEvent('tauri://drag-leave', () => onNativeDrop({ type: 'leave' }));
-  onTauriEvent('tauri://drag-drop', (e) => onNativeDrop({ type: 'drop', paths: e?.payload?.paths }));
+  onTauriEvent('tauri://drag-drop', (e) => onNativeDrop({ type: 'drop', paths: e?.payload?.paths, position: e?.payload?.position }));
 
   // HTML5 drag/drop events on window
   window.addEventListener('dragenter', (e) => {
@@ -2228,6 +3051,7 @@ function onNativeDrop(p) {
 })();
 
 function openTrayView() {
+  if (isMacMenu()) { openMacTrayView(false); return; }
   if (!appState.traySelectedIds) appState.traySelectedIds = new Set();
   if (appState.traySelectedIds.size === 0 && appState.trayFiles.length > 0) {
     appState.trayFiles.forEach((f) => appState.traySelectedIds.add(f.id));
@@ -2255,7 +3079,11 @@ function updateTrayUI() {
   document.getElementById('tile-tray-sub').textContent = `${count} File${count === 1 ? '' : 's'}`;
   document.getElementById('tray-cap').textContent = count > 0 ? `${count} file${count > 1 ? 's' : ''}` : '';
   document.getElementById('tile-tray').classList.toggle('active', count > 0);
+  const macTrayBadge = document.getElementById('mac-tray-badge');
+  if (macTrayBadge) { macTrayBadge.textContent = count; macTrayBadge.classList.toggle('hidden', count === 0); }
+  document.getElementById('mac-tray-btn')?.setAttribute('title', `File Tray (${count} File${count === 1 ? '' : 's'})`);
   document.getElementById('c-tray-btn').classList.toggle('hidden', count === 0);
+  if (typeof renderMacTray === 'function') renderMacTray();
   updateCompactStateClasses();
 
   if (!appState.traySelectedIds) appState.traySelectedIds = new Set();
@@ -2355,6 +3183,15 @@ document.getElementById('view-tray').addEventListener('wheel', (e) => {
   scrollTrayList(e);
 }, { passive: false });
 
+document.getElementById('mt-clear')?.addEventListener('click', () => {
+  appState.trayFiles = [];
+  if (appState.traySelectedIds) appState.traySelectedIds.clear();
+  updateTrayUI();
+});
+
+// Left panel of the Mac tray view = Inex Drop
+document.getElementById('mt-drop')?.addEventListener('click', () => macSendToInexDrop());
+
 document.getElementById('btn-clear-tray').addEventListener('click', () => {
   appState.trayFiles = [];
   appState.traySelect = null;
@@ -2441,13 +3278,13 @@ function trayP2PShare() {
   if (picker && !picker.classList.contains('hidden')) {
     picker.classList.add('hidden');
     island.classList.remove('picker-open');
-    invokeTauri('resize_island', { width: 316, height: 218 });
+    reportIslandSize({ width: ISLAND_WIN_W, height: 218 });
     return;
   }
   appState.traySelect = null;
   renderPeerPicker();
   island.classList.add('picker-open');
-  invokeTauri('resize_island', { width: 316, height: 252 });
+  reportIslandSize({ width: ISLAND_WIN_W, height: 252 });
 }
 
 function sendTrayFiles(peerId, files) {
@@ -3025,6 +3862,7 @@ function promptTitle(p) {
 
 // Island notch prompt HUD
 function showPromptHud(p) {
+  playStatusSound('transfer', 'transfer');
   if (typeof showDeviceHud === 'function') {
     showDeviceHud({
       iconHTML: getBatchIcon(p.names || [p.name]),
@@ -3053,11 +3891,13 @@ function clearPrompt() {
 var DROP_W = 316, DROP_H = 208;
 
 function openQsView() {
+  if (SET.appearance && SET.appearance.menuLayout === 'mac') { openMacDrop('qs'); return; }
   switchView('view-inexdrop', 'state-sub', DROP_W, DROP_H);
   refreshDropUI();
 }
 
 function openP2PView() {
+  if (SET.appearance && SET.appearance.menuLayout === 'mac') { openMacDrop('p2p'); return; }
   switchView('view-p2p', 'state-sub', DROP_W, DROP_H);
 }
 
@@ -3083,17 +3923,14 @@ async function refreshDropUI() {
   if (tileDrop) {
     tileDrop.classList.toggle('active', dropActive);
   }
+  const macDrop = document.getElementById('mac-tile-drop');
+  if (macDrop) macDrop.classList.toggle('active', dropActive);
 
+  const dropText = inTransfer ? 'Transferring' : (dropActive ? 'Ready' : 'Off');
   const subEl = document.getElementById('tile-drop-sub');
-  if (subEl) {
-    if (inTransfer) {
-      subEl.textContent = 'Transferring';
-    } else if (dropActive) {
-      subEl.textContent = 'Ready';
-    } else {
-      subEl.textContent = 'Off';
-    }
-  }
+  if (subEl) subEl.textContent = dropText;
+  const macDropSub = document.getElementById('mac-drop-sub');
+  if (macDropSub) macDropSub.textContent = dropText;
 
   if (typeof updateDropTile === 'function') updateDropTile();
 
@@ -3659,6 +4496,7 @@ onTauriEvent('quickshare-event', (event) => {
     case 'rx_session_end': {
       clearPrompt();
       if (p.ok) {
+        playStatusSound('transfer', 'transfer');
         const tBar = document.getElementById('qs-xfer-bar');
         const tPct = document.getElementById('qs-xfer-pct');
         const tSub = document.getElementById('qs-xfer-sub');
@@ -3887,18 +4725,29 @@ function updateDropTile() {
   const title = document.getElementById('tile-drop-title');
   const count = (appState.peers || []).length;
   const direct = rtcPeers.has('direct-peer');
+  const macTile = document.getElementById('mac-tile-drop');
+  const macSub = document.getElementById('mac-drop-sub');
+  const macTitle = macTile ? macTile.querySelector('.mx-txt b') : null;
   if (p2p) {
+    const p2pText = count > 0 ? (direct ? 'Direct 1:1' : `${count}/5 Peers`) : 'Standby';
     tile.classList.toggle('active', count > 0);
-    if (sub) sub.textContent = count > 0 ? (direct ? 'Direct 1:1' : `${count}/5 Peers`) : 'Standby';
+    if (sub) sub.textContent = p2pText;
     if (cap) cap.textContent = count > 0 ? (direct ? '1 direct peer' : `${count} peer${count > 1 ? 's' : ''}`) : '';
     if (title) title.textContent = 'P2P Link';
     tile.title = 'Inex Drop · P2P (click to open)';
+    if (macTile) macTile.classList.toggle('active', count > 0);
+    if (macSub) macSub.textContent = p2pText;
+    if (macTitle) macTitle.textContent = 'P2P Link';
   } else {
+    const qsText = inTransfer ? 'Transferring' : (dropActive ? 'Ready' : 'Off');
     tile.classList.toggle('active', dropActive);
-    if (sub) sub.textContent = inTransfer ? 'Transferring' : (dropActive ? 'Ready' : 'Off');
+    if (sub) sub.textContent = qsText;
     if (cap) cap.textContent = '';
     if (title) title.textContent = 'Inex Drop';
     tile.title = 'Inex Drop · Quick Share (click to turn on / off)';
+    if (macTile) macTile.classList.toggle('active', dropActive);
+    if (macSub) macSub.textContent = qsText;
+    if (macTitle) macTitle.textContent = 'Inex Drop';
   }
 }
 
@@ -3929,9 +4778,34 @@ function syncDropRail(viewId) {
   document.getElementById('rail-p2p')?.classList.toggle('on', idx === 1);
 }
 
+// Mac menu: open Quick Share or P2P in the right-hand panel (the rail on the side switches between them)
+function openMacDrop(mode) {
+  const m = mode || getDropMode();
+  if (appState.currentView !== 'view-control-mac') openControlMenu();
+  if (m === 'p2p') {
+    openMacSub('view-p2p', 'P2P');
+  } else {
+    openMacSub('view-inexdrop', 'Inex Drop');
+    if (typeof refreshDropUI === 'function') refreshDropUI();
+  }
+}
+
+// which rail slot is open right now (classic view, or in-place sub panel of the Mac menu)
+function currentDropRailIdx() {
+  if (appState.currentView === 'view-control-mac' && typeof currentMacSubTarget !== 'undefined' && currentMacSubTarget) {
+    return dropRailViews().indexOf(currentMacSubTarget.id);
+  }
+  return dropRailViews().indexOf(appState.currentView);
+}
+
 function goDropRail(idx) {
   if (idx < 0 || idx >= dropRailViews().length) return;
-  if (appState.currentView === dropRailViews()[idx]) return;
+  if (currentDropRailIdx() === idx) return;
+  if (appState.currentView === 'view-control-mac') {          // Mac menu: swap the panel in place
+    if (idx === 0) { openMacSub('view-inexdrop', 'Inex Drop'); refreshDropUI(); }
+    else openMacSub('view-p2p', 'P2P');
+    return;
+  }
   if (idx === 0) openQsView();
   else openP2PView();
 }
@@ -3952,7 +4826,7 @@ document.getElementById('drop-rail')?.addEventListener('wheel', (e) => {
   const now = Date.now();
   if (now - dropRailWheelAt < 250) return;
   dropRailWheelAt = now;
-  const cur = dropRailViews().indexOf(appState.currentView);
+  const cur = currentDropRailIdx();
   if (cur === -1) return;
   goDropRail(cur + (e.deltaY > 0 ? 1 : -1));
 }, { passive: false });
@@ -4140,6 +5014,7 @@ async function handlePeerMessage(peerId, entry, msg) {
     }
     case 'all-done':
       if (entry.recv && entry.recv.accepted) {
+        playStatusSound('transfer', 'transfer');
         entry.recv = null;
         refreshTransferUI();
       }
@@ -4311,6 +5186,7 @@ function updateOfferGlow() {
   document.getElementById('tile-p2p')?.classList.toggle('offer', pending);
   document.getElementById('rail-p2p')?.classList.toggle('offer', pending);
   document.getElementById('tile-drop')?.classList.toggle('offer', pending);
+  document.getElementById('mac-tile-drop')?.classList.toggle('offer', pending);
 }
 
 function refreshStatusPill() {
@@ -4444,7 +5320,7 @@ function renderCenter() {
   const xferLive = !!(appState.transferring && !isPrompt && !toast);
   island.classList.toggle('transferring', busy);
   island.classList.toggle('xfer-live', xferLive);
-  if (typeof syncPopupWindow === 'function') syncPopupWindow(busy);   // same window as the Bluetooth HUD
+  if (typeof syncPopupSize === 'function') syncPopupSize(busy);   // same window as the Bluetooth HUD
   document.getElementById('c-clock').classList.toggle('hidden', busy);
   document.getElementById('c-transfer-anim').classList.toggle('hidden', !xferLive);
   document.getElementById('c-prompt-anim').classList.toggle('hidden', !(isPrompt && !toast));
@@ -4540,11 +5416,12 @@ function triggerBiometricMorph(type, label) {
   const glyph = document.getElementById('bio-glyph-wrap');
   const txt = document.getElementById('bio-label');
   if (!box || !glyph || !txt) return;
+  if (typeof nexusAbort === 'function') nexusAbort();   // unlock morph has priority over the Nexus voice card
 
   clearTimeout(bioTimer); clearTimeout(bioAnimPhaseTimer); clearTimeout(bioStartTimer); clearTimeout(bioEndTimer);
   // a pending "shrink the popup window" timer (left by the locker prompt that just closed) must not cut the morph
-  if (typeof popupWinT !== 'undefined') clearTimeout(popupWinT);
-  if (typeof popupWinOn !== 'undefined') popupWinOn = false;
+  if (typeof popupSizeT !== 'undefined') clearTimeout(popupSizeT);
+  if (typeof popupSizeOn !== 'undefined') popupSizeOn = false;
   // a device HUD may be open: close it instantly
   clearTimeout(btHudTimer); clearTimeout(btHudStartT); clearTimeout(btHudBackT);
   island.classList.remove('bt-hud-active', 'hud-out', 'hud-back');
@@ -4557,7 +5434,7 @@ function triggerBiometricMorph(type, label) {
 
   // 1) window big enough, 2) old content blurs away, 3) island springs into the rounded square
   if (typeof cancelCloseEase === 'function') cancelCloseEase();
-  tryInvoke('resize_island', { width: ISLAND_WIN_W, height: 112 });
+  reportIslandSize({ width: ISLAND_WIN_W, height: 112 });
   island.classList.add('hud-pre');
   bioStartTimer = setTimeout(() => {
     island.classList.remove('hud-pre');
@@ -4581,7 +5458,7 @@ function triggerBiometricMorph(type, label) {
         box.classList.add('hidden');
         glyph.innerHTML = '';
         island.classList.remove('hud-back', 'bio-hud');
-        hudRestoreWindow();
+        hudRestoreSize();
         renderCenter(); updateClocks(); refreshMedia();
       }, 560);
     }, 170);
@@ -4714,6 +5591,7 @@ onTauriEvent('locker-unlock', (event) => {
     if (kind === 'alarm') {
       if (typeof triggerTimerAlarm === 'function') triggerTimerAlarm();
     } else if (kind === 'scan' || kind === 'fingerprint') {
+      playStatusSound('lock', 'lock');
       triggerBiometricMorph(kind, targetName);
     } else if (kind === 'charging') {
       showDeviceHud({ iconHTML: BOLT_SVG, battery: true, plain: true, accent: 'green', name: 'Charging', tag: `${payload.target || '85%'} • MagSafe Power`, pct: parseInt(payload.target, 10) || 85, ms: 3200 });
@@ -4902,17 +5780,194 @@ onTauriEvent('session-lock-changed', (event) => {
 
 
 // 9. Media Transport Controls
-document.getElementById('m-play').addEventListener('click', async () => {
-  await invokeTauri('media_play_pause');
-  setTimeout(pollSystemAndMedia, 250);
+['m-play', 'mac-play'].forEach((id) => {
+  document.getElementById(id)?.addEventListener('click', async () => {
+    await invokeTauri('media_play_pause');
+    setTimeout(pollSystemAndMedia, 250);
+  });
 });
-document.getElementById('m-next').addEventListener('click', async () => {
-  await invokeTauri('media_next');
-  setTimeout(pollSystemAndMedia, 250);
+['m-next', 'mac-next'].forEach((id) => {
+  document.getElementById(id)?.addEventListener('click', async () => {
+    await invokeTauri('media_next');
+    setTimeout(pollSystemAndMedia, 250);
+  });
 });
-document.getElementById('m-prev').addEventListener('click', async () => {
-  await invokeTauri('media_prev');
-  setTimeout(pollSystemAndMedia, 250);
+['m-prev', 'mac-prev'].forEach((id) => {
+  document.getElementById(id)?.addEventListener('click', async () => {
+    await invokeTauri('media_prev');
+    setTimeout(pollSystemAndMedia, 250);
+  });
+});
+
+// ---- Nexus voice assistant: same card as the lock / unlock morph (Face ID style, 92 x 92), different glyph inside ----
+// wake     -> island drops down exactly like triggerBiometricMorph, waveform glyph + "Listening..."
+// thinking -> waveform blurs out, aurora orb blurs in
+// done     -> green tick (same tick as unlock) + green glow, then springs back to the notch in ~1.5 s
+// cancel   -> straight back to the notch
+// Fixed window mode: the OS window never resizes, only reportIslandSize() (clickable area) is used.
+const NX_TEXT = { wake: 'Listening...', thinking: 'Thinking...', done: 'Done' };
+const NX_GLYPH = {
+  wake: '<div class="nx-wave"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>',
+  thinking: '<div class="nx-aurora"><b></b><b></b><b></b></div>'
+};
+const NX_HOLD_DONE_MS = 800;     // tick visible, then 170 ms fade + 560 ms spring back = ~1.5 s total
+const NX_LEASE_MS = 45000;       // safety: if Nexus dies without done/cancel, the card closes by itself
+let nxActive = false;            // card is open and owned by Nexus
+let nxExiting = false;           // card is collapsing
+let nxMode = '';
+let nxEnterT = null, nxSwapT = null, nxHoldT = null, nxEndT = null, nxBackT = null, nxLeaseT = null, nxGlowT = null;
+
+function nexusClearTimers() {
+  clearTimeout(nxEnterT); clearTimeout(nxSwapT); clearTimeout(nxHoldT);
+  clearTimeout(nxEndT); clearTimeout(nxBackT); clearTimeout(nxLeaseT);
+}
+
+// the unlock morph takes the card over: just let go (it resets the glyph / timers itself)
+function nexusAbort() {
+  nexusClearTimers();
+  clearTimeout(nxGlowT);
+  nxActive = false; nxExiting = false; nxMode = '';
+  island.classList.remove('hud-out', 'hud-back', 'hud-pre', 'island-locker-glow');
+}
+
+function nexusCleanup() {
+  const box = document.getElementById('c-biometric-box');
+  const glyph = document.getElementById('bio-glyph-wrap');
+  if (box) box.classList.add('hidden');
+  if (glyph) glyph.innerHTML = '';
+  nxMode = ''; nxExiting = false;
+  island.classList.remove('biometric-active', 'hud-pre', 'hud-out', 'hud-back', 'bio-hud', 'island-locker-glow');
+  hudRestoreSize();
+  renderCenter(); updateClocks(); refreshMedia();
+}
+
+function nexusEnter() {
+  const box = document.getElementById('c-biometric-box');
+  const glyph = document.getElementById('bio-glyph-wrap');
+  if (!box || !glyph) return false;
+  if (appState.currentView !== 'view-compact' || appState.alarmActive) {
+    if (nxActive) nexusAbort();      // a menu / alarm took over
+    return false;
+  }
+  if (nxActive) return true;         // already open: only the state changes
+
+  if (nxExiting) {                   // re-wake while collapsing: spring straight back up
+    nexusClearTimers();
+    nxExiting = false; nxActive = true;
+    island.classList.remove('hud-out', 'hud-back');
+    island.classList.add('bio-hud', 'biometric-active');
+    box.classList.remove('hidden');
+    return true;
+  }
+  // a real unlock morph is running: it keeps the card
+  if (island.classList.contains('biometric-active') || island.classList.contains('bio-hud')) return false;
+
+  nexusClearTimers();
+  nxActive = true; nxMode = '';
+  glyph.innerHTML = '';
+  // a pending "shrink the popup window" timer must not cut the animation
+  if (typeof popupSizeT !== 'undefined') clearTimeout(popupSizeT);
+  if (typeof popupSizeOn !== 'undefined') popupSizeOn = false;
+  // a device HUD may be open: close it instantly
+  clearTimeout(btHudTimer); clearTimeout(btHudStartT); clearTimeout(btHudBackT);
+  island.classList.remove('bt-hud-active', 'hud-out', 'hud-back');
+  document.getElementById('c-bt-hud').classList.add('hidden');
+  island.classList.add('bio-hud');
+  box.classList.remove('hidden');
+
+  // same start as triggerBiometricMorph: window big enough, old content blurs away, island springs into the card
+  if (typeof cancelCloseEase === 'function') cancelCloseEase();
+  reportIslandSize({ width: ISLAND_WIN_W, height: 112 });
+  island.classList.add('hud-pre');
+  nxEnterT = setTimeout(() => {
+    island.classList.remove('hud-pre');
+    island.classList.add('biometric-active');
+  }, 130);
+  return true;
+}
+
+function nexusSetMode(mode, text) {
+  const glyph = document.getElementById('bio-glyph-wrap');
+  const txt = document.getElementById('bio-label');
+  if (!glyph || !txt) return;
+  // 92 px card: drop trailing dots ("Listening..." -> "Listening") so the label is never cut off
+  txt.textContent = ((text && String(text).trim()) || NX_TEXT[mode] || '').replace(/[.\u2026]+$/, '');
+  clearTimeout(nxHoldT);
+  if (mode !== nxMode) {
+    nxMode = mode;
+    clearTimeout(nxSwapT);
+    const html = mode === 'done' ? BIO_SVGS.check : (NX_GLYPH[mode] || '');
+    const cur = glyph.firstElementChild;
+    if (cur) {
+      cur.classList.add('bio-leave');                  // old glyph blurs out, new one pops in (same as scan -> tick)
+      nxSwapT = setTimeout(() => { glyph.innerHTML = html; }, 150);
+    } else {
+      glyph.innerHTML = html;
+    }
+    if (mode === 'done') {
+      island.classList.add('island-locker-glow');      // same soft green glow as a successful unlock
+      clearTimeout(nxGlowT);
+      nxGlowT = setTimeout(() => island.classList.remove('island-locker-glow'), 600);   // short flash only: it must be gone before the collapse
+    }
+  }
+  if (mode === 'done') nxHoldT = setTimeout(nexusExit, NX_HOLD_DONE_MS);
+  clearTimeout(nxLeaseT);
+  nxLeaseT = setTimeout(nexusExit, NX_LEASE_MS);
+}
+
+function nexusExit() {
+  if (!nxActive) return;
+  nxActive = false; nxExiting = true;
+  clearTimeout(nxHoldT); clearTimeout(nxLeaseT); clearTimeout(nxEnterT); clearTimeout(nxSwapT); clearTimeout(nxGlowT);
+  island.classList.remove('hud-pre', 'island-locker-glow');   // no green outline on the shrinking notch
+  island.classList.add('hud-out');                     // content fades, shrink back to the pill, restore the normal window
+  nxEndT = setTimeout(() => {
+    island.classList.remove('biometric-active', 'hud-out');
+    island.classList.add('hud-back');
+    nxBackT = setTimeout(nexusCleanup, 560);
+  }, 170);
+}
+
+window.triggerNexusVoiceAnimation = function (status, text, payload) {
+  const st = String(status || '').toLowerCase();
+  if (st === 'wake' || st === 'thinking' || st === 'done') {
+    if (!nexusEnter()) return;
+    nexusSetMode(st, text);
+  } else if (st === 'cancel') {
+    nexusExit();
+  }
+};
+
+// 10. Nexus Assistant Bridge (Named Pipe \\.\pipe\InexIslandNexus -> event 'nexus-voice')
+// Passive receiver: Nexus sends events:
+//   { event: "nexus_voice", status: "wake" | "thinking" | "done" | "cancel", text: "...", seq: 1, ts: 123456789 }
+let lastNexusSeq = -1;
+let lastNexusTs = 0;
+
+onTauriEvent('nexus-voice', (event) => {
+  let payload = event.payload;
+  if (typeof payload === 'string') {
+    try { payload = JSON.parse(payload); } catch (_) {}
+  }
+  if (!payload || typeof payload !== 'object') payload = {};
+
+  const evTs = Number(payload.ts) || 0;
+  if (evTs) {
+    if (evTs < lastNexusTs && lastNexusTs - evTs < 60000) return;
+    lastNexusTs = evTs;
+  }
+  const seq = Number(payload.seq) || 0;
+  lastNexusSeq = seq;
+
+  const status = payload.status || '';
+  const text = payload.text || '';
+
+  // Forward to the voice card (triggerNexusVoiceAnimation, defined above)
+  if (typeof window.triggerNexusVoiceAnimation === 'function') {
+    window.triggerNexusVoiceAnimation(status, text, payload);
+  } else {
+    console.log('[NexusBridge]', status, text);
+  }
 });
 
 // 10. Focus Timer + Apple Crystal Alarm (100% Native Windows Sound, Zero Chromium AudioService)
@@ -4981,7 +6036,7 @@ function triggerTimerAlarm(opts) {
 
   // 1) window big enough, 2) old content blurs away, 3) island springs open
   if (typeof cancelCloseEase === 'function') cancelCloseEase();
-  tryInvoke('resize_island', { width: ISLAND_WIN_W, height: hudIsFloating() ? 64 : 56 });  // same width as compact/HUDs so never jumps sideways
+  reportIslandSize({ width: ISLAND_WIN_W, height: hudIsFloating() ? 64 : 56 });  // same width as compact/HUDs so never jumps sideways
   island.classList.add('hud-pre');
   alarmStartT = setTimeout(() => {
     island.classList.remove('hud-pre');
@@ -5024,7 +6079,7 @@ function dismissTimerAlarm() {
       island.classList.remove('hud-back');
       appState.alarmActive = false;
       appState.alarmClosing = false;
-      hudRestoreWindow();
+      hudRestoreSize();
       renderCenter();
       updateClocks();
       refreshMedia();
@@ -5238,7 +6293,7 @@ function renderCalendarGrid(dir) {
 
   // 6 rows need a bit more room than the other sub menus
   if (appState.currentView === 'view-calendar') {
-    invokeTauri('resize_island', { width: 316, height: 268 + (hudIsFloating() ? 12 : 0) });
+    reportIslandSize({ width: ISLAND_WIN_W, height: 268 + (hudIsFloating() ? 12 : 0) });
   }
 }
 
@@ -5603,8 +6658,12 @@ async function detectLocation() {
 // Weather runs ONLY while "Live Weather" is on AND Weather is picked as a hover widget (left or right).
 // Not picked = no request, no timer, nothing.
 function weatherWanted() {
+  if (!(SET.weather && SET.weather.enabled)) return false;
+  const compactNeedsWeather = ['weather', 'cycle'].includes(SET.notch?.compactContent);
+  const macNeedsWeather = SET.appearance?.menuLayout === 'mac' && (!SET.macMenu || SET.macMenu.showWeather !== false);
   const w = SET.widgets || {};
-  return w.enabled !== false && !!(SET.weather && SET.weather.enabled) && (w.left === 'weather' || w.right === 'weather');
+  const hoverNeedsWeather = w.enabled !== false && (w.left === 'weather' || w.right === 'weather');
+  return compactNeedsWeather || macNeedsWeather || hoverNeedsWeather;
 }
 
 async function refreshWeather() {
@@ -5662,6 +6721,7 @@ async function refreshWeather() {
     weather.place = loc.city || '';
     if (!weather.text) weather.at = 0;
     try { localStorage.setItem('inex.weather.cached', JSON.stringify({ text: weather.text, iconSvg: weather.iconSvg, condition: weather.condition, place: weather.place, at: Date.now() })); } catch (_) {}
+    updateClocks();
     renderWidgets();
   } finally {
     weather.busy = false;
@@ -5691,6 +6751,26 @@ function widgetHtml(kind) {
   }
 }
 
+function syncMacWeatherUI() {
+  const pill = document.getElementById('mac-weather');
+  const tempEl = document.getElementById('mac-weather-temp');
+  if (!pill || !tempEl) return;
+  const hasWx = !!(SET.weather && SET.weather.enabled && weather.text);
+  tempEl.textContent = hasWx ? weather.text : '--°';
+  pill.title = weather.place ? `${weather.condition || 'Weather'} • ${weather.place}` : 'Weather';
+  const oldSvg = pill.querySelector('svg');
+  if (hasWx && oldSvg && typeof getActiveWeatherIcon === 'function') {
+    const tmp = document.createElement('span');
+    tmp.innerHTML = getActiveWeatherIcon();
+    const newSvg = tmp.querySelector('svg');
+    if (newSvg) {
+      newSvg.setAttribute('width', '12');
+      newSvg.setAttribute('height', '12');
+      oldSvg.replaceWith(newSvg);
+    }
+  }
+}
+
 function renderWidgets() {
   const on = SET.widgets.enabled !== false;   // Hover Widgets switch in Settings
   const left = on ? widgetHtml(SET.widgets.left) : '', right = on ? widgetHtml(SET.widgets.right) : '';
@@ -5700,6 +6780,8 @@ function renderWidgets() {
   if (cRam) cRam.innerHTML = right;
   document.getElementById('c-left-box').classList.toggle('has-widget', !!left);
   document.getElementById('c-right-box').classList.toggle('has-widget', !!right);
+  // Prevent empty side-stretch when hover widgets are disabled or both set to None.
+  island.classList.toggle('no-hover-expand', !(left || right));
 
   cTemp.title = SET.widgets.left === 'weather' && weather.place ? `Forecast • ${weather.place}` : '';
   cRam.title = SET.widgets.right === 'weather' && weather.place ? `Forecast • ${weather.place}` : '';
@@ -5712,6 +6794,7 @@ function renderWidgets() {
   if (calLeft) calLeft.innerHTML = left;
   if (topRam) topRam.innerHTML = right;
   if (calRam) calRam.innerHTML = right;
+  syncMacWeatherUI();
 }
 
 function batteryOverlays(stats) {
@@ -5719,6 +6802,7 @@ function batteryOverlays(stats) {
   const g = SET.general;
   // charger plugged in / removed
   if (appState.prevCharging !== undefined && stats.charging !== appState.prevCharging && g.chargeToast) {
+    playStatusSound('power', stats.charging ? 'power' : 'power-off');
     if (stats.charging && hudCanShow()) {
       showDeviceHud({
         iconHTML: BOLT_SVG,
@@ -5751,6 +6835,7 @@ function batteryOverlays(stats) {
   // low battery alert HUD
   const low = g.lowBatteryAlert && !stats.charging && stats.battery_pct <= g.lowBattery;
   if (low && !appState.lowShown) {
+    playStatusSound('power', 'low');
     if (hudCanShow()) {
       showDeviceHud({
         iconHTML: LOW_BATT_SVG,
@@ -5770,6 +6855,69 @@ function batteryOverlays(stats) {
   if (!low && (stats.charging || stats.battery_pct > g.lowBattery + 3)) appState.lowShown = false;
 }
 
+const MAC_BT_GLYPH = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6.5 6.5 17.5 17.5 12 23 12 1 17.5 6.5 6.5 17.5"/></svg>';
+// Control Deck Bluetooth tile: show the connected device's icon (earbuds, headphones...) with a battery ring,
+// same look as the device status card. Each copy of BUDS_SVG gets its own gradient id: a duplicate id that
+// sits inside a hidden element makes the gradient fail and the buds turn invisible.
+function syncMacBtTileIcon(dev) {
+  const ico = document.querySelector('#mac-tile-bt .mx-ico');
+  if (!ico) return;
+  let key = 'bt', html = MAC_BT_GLYPH;
+  if (dev && appState.btRadio) {
+    const kind = dev.kind || 'bt';
+    const isBuds = (kind === 'headphones' || kind === 'bt') && /airpod|buds|earbud|earphone|airdope|tws|pods|wf-/i.test(dev.name || '');
+    if (isBuds && typeof BUDS_SVG !== 'undefined') { key = 'buds'; html = BUDS_SVG.replace(/budg/g, 'budg-tile'); }
+    else if (kind !== 'bt' && typeof DEV_ICONS !== 'undefined' && DEV_ICONS[kind]) { key = kind; html = DEV_ICONS[kind]; }
+  }
+  if (ico.dataset.k !== key) {
+    ico.dataset.k = key;
+    ico.innerHTML = html;
+    ico.classList.toggle('has-dev', key !== 'bt');
+  }
+  let pct = null;
+  if (key !== 'bt' && typeof btBatteryFor === 'function') pct = btBatteryFor(dev.name);
+  if (pct === null || pct === undefined || !(pct >= 0)) {
+    ico.classList.remove('has-batt');
+    ico.style.removeProperty('--p');
+  } else {
+    ico.classList.add('has-batt');
+    ico.style.setProperty('--p', Math.max(0, Math.min(100, pct)));
+    ico.style.setProperty('--bc', pct <= 15 ? '#ff453a' : pct <= 30 ? '#ff9f0a' : '#30d158');
+  }
+}
+
+// Long text (song title, Bluetooth name) slides slowly instead of being cut with "...". Only runs while text overflows.
+function mqFit(el) {
+  if (!el || el._mqBusy) return;
+  el._mqBusy = true;
+  const inner = el.querySelector(':scope > .mq-in');
+  const text = inner ? inner.textContent : el.textContent;
+  el.classList.remove('mq');
+  if (inner) el.textContent = text;
+  if (el.clientWidth > 0) {
+    const over = el.scrollWidth - el.clientWidth;
+    if (over > 2) {
+      const s = document.createElement('span');
+      s.className = 'mq-in';
+      s.textContent = text;
+      el.textContent = '';
+      el.appendChild(s);
+      el.style.setProperty('--mq-d', `-${over + 6}px`);
+      el.style.setProperty('--mq-t', `${Math.max(4, (over + 6) / 20).toFixed(1)}s`);
+      el.classList.add('mq');
+    }
+  }
+  requestAnimationFrame(() => { el._mqBusy = false; });
+}
+['mac-title', 'mac-artist', 'mac-bt-sub'].forEach((id) => {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const fit = () => mqFit(el);
+  new MutationObserver(fit).observe(el, { childList: true, characterData: true, subtree: true });
+  if (typeof ResizeObserver !== 'undefined') new ResizeObserver(fit).observe(el);
+  fit();
+});
+
 function setBtCaption(devices) {
   const first = (devices || []).find((d) => d.connected);
   let txt = appState.btRadio && first ? first.name : '';
@@ -5778,9 +6926,15 @@ function setBtCaption(devices) {
     if (pct !== null) txt += ` • ${pct}%`;
   }
   document.getElementById('bt-cap').textContent = txt;
+  syncMacBtTileIcon(first);
+  const macBtSub = document.getElementById('mac-bt-sub');
+  if (macBtSub) {
+    const _s = appState.btRadio ? (first ? first.name : 'On') : 'Off';
+    if (macBtSub.textContent !== _s) macBtSub.textContent = _s;
+  }
 }
 async function refreshBtCaption() {
-  if (!slotRunning.has('bt')) return;
+  if (!slotRunning.has('bt') && SET.appearance?.menuLayout !== 'mac') return;
   if (!appState.btRadio) { setBtCaption([]); return; }
   setBtCaption(await invokeTauri('get_bt_devices'));
 }
@@ -5820,74 +6974,89 @@ async function applyPrivacy() {
   renderPrivacyDot();
 }
 // ==================== 14c. CLIPBOARD HISTORY SHELF ====================
-// Keeps the last CLIPBOARD_MAX copies: text, images and copied files.
-// Text and image thumbnails live in localStorage; the full-size images live in IndexedDB (much bigger quota).
+// Keeps ONLY the last CLIPBOARD_MAX copied text snippets and OS screenshot paths.
+// Zero internal image storage (no IndexedDB blobs, no base64 thumbnails in localStorage).
+// Deleted screenshot files are dropped automatically via ReadDirectoryChangesW & existence checks.
 const CLIPBOARD_STORAGE_KEY = 'inex.island.clipboard.v1';
-const CLIPBOARD_MAX = 20;            // how many items we remember
-const CLIPBOARD_TEXT_LIMIT = 50000;  // longest text kept per item
-const CLIPBOARD_THUMB_W = 520;       // thumbnail box (px), shown ~2x sharper than the card
-const CLIPBOARD_THUMB_H = 180;
+const CLIPBOARD_MAX = 20;
+const CLIPBOARD_TEXT_LIMIT = 50000;
 let clipboardItems = [];
+let clipPreviewUrls = [];
+let clipRenderGen = 0;
 
-// ---------- full-size image store (IndexedDB) ----------
-let clipDbPromise = null;
-function clipDb() {
-  if (!clipDbPromise) {
-    clipDbPromise = new Promise((resolve) => {
-      try {
-        const req = indexedDB.open('inex-island-clipboard', 1);
-        req.onupgradeneeded = () => req.result.createObjectStore('images', { keyPath: 'id' });
-        req.onsuccess = () => resolve(req.result);
-        req.onerror = () => resolve(null);
-      } catch (_) { resolve(null); }
-    });
+// Purge legacy IndexedDB full-image cache from older versions if present.
+try { indexedDB.deleteDatabase('inex-island-clipboard'); } catch (_) {}
+
+function revokeClipPreviews() {
+  for (const url of clipPreviewUrls) {
+    try { URL.revokeObjectURL(url); } catch (_) {}
   }
-  return clipDbPromise;
+  clipPreviewUrls = [];
 }
-async function clipIdb(mode, fn) {
-  const db = await clipDb();
-  if (!db) return null;
-  return new Promise((resolve) => {
-    try {
-      const tx = db.transaction('images', mode);
-      const req = fn(tx.objectStore('images'));
-      tx.oncomplete = () => resolve(req ? req.result : true);
-      tx.onerror = () => resolve(null);
-      tx.onabort = () => resolve(null);
-    } catch (_) { resolve(null); }
-  });
+
+function closeClipboardView() {
+  clipRenderGen++;
+  revokeClipPreviews();
+  const container = document.getElementById('clipboard-list');
+  if (container) container.innerHTML = '';
 }
-const clipBlobPut = (id, blob) => clipIdb('readwrite', (s) => s.put({ id, blob }));
-const clipBlobGet = async (id) => { const r = await clipIdb('readonly', (s) => s.get(id)); return r && r.blob ? r.blob : null; };
-const clipBlobClear = () => clipIdb('readwrite', (s) => s.clear());
-// Drop stored images that no longer belong to a history item
-async function pruneClipboardBlobs() {
-  const keys = await clipIdb('readonly', (s) => s.getAllKeys());
-  if (!Array.isArray(keys)) return;
-  const keep = new Set(clipboardItems.filter((i) => i.kind === 'image').map((i) => i.id));
-  const stale = keys.filter((k) => !keep.has(k));
-  if (stale.length) await clipIdb('readwrite', (s) => { stale.forEach((k) => s.delete(k)); return null; });
+
+function clipPathKey(p) {
+  return String(p || '').replace(/\//g, '\\').replace(/\\+$/, '').toLowerCase();
+}
+
+function clipFileName(p) {
+  const parts = String(p).split(/[\\/]/).filter(Boolean);
+  return parts.length ? parts[parts.length - 1] : String(p);
 }
 
 // ---------- history list ----------
 function loadClipboardHistory() {
   try {
     const raw = localStorage.getItem(CLIPBOARD_STORAGE_KEY);
-    clipboardItems = raw ? JSON.parse(raw) : [];
-    if (!Array.isArray(clipboardItems)) clipboardItems = [];
+    const parsed = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(parsed)) {
+      clipboardItems = [];
+      return;
+    }
+    clipboardItems = parsed
+      .filter((it) => {
+        if (!it) return false;
+        const kind = it.kind || (typeof it.text === 'string' ? 'text' : '');
+        if (kind === 'text') return typeof it.text === 'string' && it.text.trim().length > 0;
+        if (kind === 'screenshot') return typeof it.path === 'string' && it.path.trim().length > 0;
+        return false; // Drop legacy 'image' blobs and regular 'files' entries
+      })
+      .map((it) => {
+        const kind = it.kind || 'text';
+        if (kind === 'screenshot') {
+          return {
+            id: it.id || (Date.now() + Math.random().toString(36).slice(2, 6)),
+            kind: 'screenshot',
+            hash: clipPathKey(it.path),
+            path: it.path,
+            name: it.name || clipFileName(it.path),
+            time: it.time || Date.now()
+          };
+        }
+        return {
+          id: it.id || (Date.now() + Math.random().toString(36).slice(2, 6)),
+          kind: 'text',
+          hash: it.hash || clipHashString(it.text),
+          text: it.text,
+          time: it.time || Date.now()
+        };
+      })
+      .slice(0, CLIPBOARD_MAX);
   } catch (_) {
     clipboardItems = [];
   }
-  // items saved by older versions have no "kind": they are text
-  clipboardItems.forEach((it) => { if (!it.kind) it.kind = 'text'; });
-  clipboardItems = clipboardItems.slice(0, CLIPBOARD_MAX);
 }
 
 function saveClipboardHistory() {
   try {
     localStorage.setItem(CLIPBOARD_STORAGE_KEY, JSON.stringify(clipboardItems.slice(0, CLIPBOARD_MAX)));
   } catch (_) {
-    // storage full: drop the oldest half and try once more
     try {
       clipboardItems = clipboardItems.slice(0, Math.ceil(CLIPBOARD_MAX / 2));
       localStorage.setItem(CLIPBOARD_STORAGE_KEY, JSON.stringify(clipboardItems));
@@ -5907,24 +7076,6 @@ function formatRelativeTime(ts) {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
-function formatBytes(n) {
-  if (!n) return '';
-  if (n < 1024) return `${n} B`;
-  if (n < 1024 * 1024) return `${Math.round(n / 1024)} KB`;
-  return `${(n / 1024 / 1024).toFixed(1)} MB`;
-}
-
-function clipFileName(p) {
-  const parts = String(p).split(/[\\/]/).filter(Boolean);
-  return parts.length ? parts[parts.length - 1] : String(p);
-}
-
-// Same content as before? (cheap 32-bit FNV-1a)
-function clipHashBytes(u8) {
-  let h = 0x811c9dc5;
-  for (let i = 0; i < u8.length; i++) { h ^= u8[i]; h = Math.imul(h, 16777619); }
-  return (h >>> 0).toString(16) + ':' + u8.length;
-}
 function clipHashString(s) {
   let h = 0x811c9dc5;
   for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
@@ -5932,19 +7083,16 @@ function clipHashString(s) {
 }
 
 function trimClipboardItems() {
-  // newest first: a new copy pushes the oldest one (text, image or file) out once there are more than CLIPBOARD_MAX
   clipboardItems = clipboardItems.slice(0, CLIPBOARD_MAX);
 }
 
-// Put a new item on top. A copy of something already in the list just moves that item to the top.
 function pushClipboardItem(item) {
   const idx = clipboardItems.findIndex((it) => it.kind === item.kind && it.hash === item.hash);
-  if (idx === 0) return false;                       // already the newest
+  if (idx === 0) return false;
   if (idx > 0) clipboardItems.splice(idx, 1);
   clipboardItems.unshift(item);
   trimClipboardItems();
   saveClipboardHistory();
-  pruneClipboardBlobs();
   if (appState.currentView === 'view-clipboard') renderClipboardList();
   return true;
 }
@@ -5954,7 +7102,6 @@ function addClipboardText(text) {
   let clean = text.trim();
   if (!clean) return false;
   if (clean.length > CLIPBOARD_TEXT_LIMIT) clean = clean.slice(0, CLIPBOARD_TEXT_LIMIT);
-  // reuse the id of an identical item, otherwise make a new one
   return pushClipboardItem({
     id: Date.now() + Math.random().toString(36).slice(2, 6),
     kind: 'text',
@@ -5964,122 +7111,92 @@ function addClipboardText(text) {
   });
 }
 
-const CLIP_IMG_EXT = /\.(png|jpe?g|gif|webp|bmp)$/i;
-const CLIP_VID_EXT = /\.(mp4|mkv|mov|avi|webm|wmv|flv|m4v|mpg|mpeg|3gp)$/i;
-const CLIP_ICON_FILE_BIG = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><polyline points="14 3 14 8 19 8"/></svg>';
-const CLIP_ICON_VIDEO = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="3"/><polygon points="10.5 9.5 15 12 10.5 14.5" fill="currentColor" stroke="none"/></svg>';
-
-// Small preview of a picture file (null for videos, documents, missing or huge files)
-async function makeFileThumb(path) {
-  try {
-    if (!CLIP_IMG_EXT.test(path)) return null;
-    const dataUrl = await tryInvoke('read_image_file', { path });
-    if (!dataUrl || typeof dataUrl !== 'string' || dataUrl.length < 32) return null;
-    const img = new Image();
-    img.src = dataUrl;
-    await img.decode();
-    const w = img.naturalWidth, h = img.naturalHeight;
-    if (!w || !h) return null;
-    const scale = Math.min(1, 360 / w, 160 / h);
-    const tw = Math.max(1, Math.round(w * scale)), th = Math.max(1, Math.round(h * scale));
-    const c = document.createElement('canvas');
-    c.width = tw; c.height = th;
-    c.getContext('2d').drawImage(img, 0, 0, tw, th);
-    return c.toDataURL('image/webp', 0.8);
-  } catch (_) {
-    return null;
-  }
-}
-
-// thumbs[i] belongs to paths[i] (only the first 3 are shown, so only those get a preview)
-async function makeFileThumbs(paths) {
-  const out = [];
-  for (let i = 0; i < Math.min(3, paths.length); i++) out.push(await makeFileThumb(paths[i]));
-  return out;
-}
-
-async function addClipboardFiles(paths) {
-  if (!Array.isArray(paths) || paths.length === 0) return false;
-  const list = paths.slice(0, 200);
-  const hash = clipHashString(list.join('|'));
-  const old = clipboardItems.find((it) => it.kind === 'files' && it.hash === hash);
-  if (old) { old.time = Date.now(); return pushClipboardItem(old); }
-  const thumbs = await makeFileThumbs(list);
+function addClipboardScreenshot(path) {
+  if (!path || typeof path !== 'string') return false;
+  const clean = path.trim();
+  if (!clean) return false;
   return pushClipboardItem({
     id: Date.now() + Math.random().toString(36).slice(2, 6),
-    kind: 'files',
-    hash,
-    paths: list,
-    thumbs: thumbs.some(Boolean) ? thumbs : null,
-    thumbsDone: true,
+    kind: 'screenshot',
+    hash: clipPathKey(clean),
+    path: clean,
+    name: clipFileName(clean),
     time: Date.now()
   });
 }
 
-// Files copied before previews existed: make them once, then redraw
-async function fillMissingFileThumbs() {
-  let changed = false;
-  for (const it of clipboardItems) {
-    if (it.kind !== 'files' || it.thumbsDone) continue;
-    it.thumbsDone = true;
-    const thumbs = await makeFileThumbs(it.paths);
-    if (thumbs.some(Boolean)) { it.thumbs = thumbs; changed = true; }
-  }
-  if (changed) {
-    saveClipboardHistory();
-    if (appState.currentView === 'view-clipboard') renderClipboardList();
-  }
+function removeScreenshotByPath(path) {
+  const key = clipPathKey(path);
+  if (!key) return false;
+  const before = clipboardItems.length;
+  clipboardItems = clipboardItems.filter((it) => !(it.kind === 'screenshot' && clipPathKey(it.path) === key));
+  if (clipboardItems.length === before) return false;
+  saveClipboardHistory();
+  if (appState.currentView === 'view-clipboard') renderClipboardList();
+  return true;
 }
 
-async function addClipboardImage(dataUrl) {
-  if (!dataUrl || typeof dataUrl !== 'string') return false;
+async function pruneMissingScreenshots() {
+  const shots = clipboardItems.filter((it) => it.kind === 'screenshot').map((it) => it.path);
+  if (shots.length === 0) return false;
+  const existing = await tryInvoke('filter_existing_paths', { paths: shots });
+  if (!Array.isArray(existing)) return false;
+  const keep = new Set(existing.map(clipPathKey));
+  const before = clipboardItems.length;
+  clipboardItems = clipboardItems.filter((it) => it.kind !== 'screenshot' || keep.has(clipPathKey(it.path)));
+  if (clipboardItems.length === before) return false;
+  saveClipboardHistory();
+  return true;
+}
+
+const CLIP_ICON_SCREENSHOT = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2.5"/><circle cx="9" cy="10.5" r="1.5"/><path d="M21 15l-4.5-4.5L7 19"/></svg>';
+
+// Transient 96px thumbnail created ONLY while Clipboard view is open; cleared on close.
+async function hydrateScreenshotThumb(path, containerEl, gen) {
   try {
-    const img = new Image();
-    img.src = dataUrl;
-    await img.decode();
-    const w = img.naturalWidth, h = img.naturalHeight;
-    if (!w || !h) return false;
-
-    // full image as PNG (a PNG from the clipboard is kept as it is; a bitmap is converted)
-    let blob;
-    if (dataUrl.startsWith('data:image/png')) {
-      blob = await (await fetch(dataUrl)).blob();
-    } else {
-      const c = document.createElement('canvas');
-      c.width = w; c.height = h;
-      c.getContext('2d').drawImage(img, 0, 0);
-      blob = await new Promise((r) => c.toBlob(r, 'image/png'));
+    const ab = await invokeTauri('read_screenshot_bytes', { path });
+    if (gen !== clipRenderGen || appState.currentView !== 'view-clipboard') return;
+    if (!ab || ab.byteLength === 0) {
+      if (removeScreenshotByPath(path)) return;
+      return;
     }
-    if (!blob) return false;
-    const hash = clipHashBytes(new Uint8Array(await blob.arrayBuffer()));
-
-    // thumbnail for the list
-    const scale = Math.min(1, CLIPBOARD_THUMB_W / w, CLIPBOARD_THUMB_H / h);
-    const tw = Math.max(1, Math.round(w * scale)), th = Math.max(1, Math.round(h * scale));
-    const tc = document.createElement('canvas');
-    tc.width = tw; tc.height = th;
-    tc.getContext('2d').drawImage(img, 0, 0, tw, th);
-    const thumb = tc.toDataURL('image/webp', 0.82);
-
-    const id = Date.now() + Math.random().toString(36).slice(2, 6);
-    // same picture copied again: just bring the old item to the top
-    const old = clipboardItems.find((it) => it.kind === 'image' && it.hash === hash);
-    if (old) { old.time = Date.now(); return pushClipboardItem(old); }
-
-    await clipBlobPut(id, blob);
-    return pushClipboardItem({ id, kind: 'image', hash, thumb, w, h, bytes: blob.size, time: Date.now() });
+    const rawBlob = new Blob([ab]);
+    const bmp = await createImageBitmap(rawBlob, { resizeWidth: 96, resizeHeight: 96, resizeQuality: 'medium' });
+    let thumbUrl = '';
+    try {
+      const c = document.createElement('canvas');
+      c.width = bmp.width;
+      c.height = bmp.height;
+      c.getContext('2d').drawImage(bmp, 0, 0);
+      const smallBlob = await new Promise((r) => c.toBlob(r, 'image/webp', 0.8));
+      if (smallBlob && gen === clipRenderGen && appState.currentView === 'view-clipboard') {
+        thumbUrl = URL.createObjectURL(smallBlob);
+      }
+    } finally {
+      bmp.close();
+    }
+    if (!thumbUrl) return;
+    clipPreviewUrls.push(thumbUrl);
+    const im = document.createElement('img');
+    im.src = thumbUrl;
+    im.alt = '';
+    im.draggable = false;
+    containerEl.innerHTML = '';
+    containerEl.appendChild(im);
   } catch (_) {
-    return false;
+    // Missing or deleted screenshot file: remove from history automatically
+    removeScreenshotByPath(path);
   }
 }
 
 // ---------- drawing ----------
-
 function renderClipboardList() {
+  if (appState.currentView !== 'view-clipboard') return;
   const container = document.getElementById('clipboard-list');
   if (!container) return;
 
-  // text, images / screenshots and copied files (photos, videos ...) all show here
+  const gen = ++clipRenderGen;
+  revokeClipPreviews();
   const visibleItems = clipboardItems;
 
   if (visibleItems.length === 0) {
@@ -6087,7 +7204,7 @@ function renderClipboardList() {
       <div class="clipboard-empty">
         <svg viewBox="0 0 24 24" width="22" height="22" stroke="currentColor" stroke-width="1.8" fill="none" opacity="0.4"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>
         <span>Nothing copied yet</span>
-        <small style="opacity:0.4; font-size:9.5px;">Copy text, an image or a file (Ctrl+C)</small>
+        <small style="opacity:0.4; font-size:9.5px;">Copied text &amp; screenshots appear here</small>
       </div>
     `;
     return;
@@ -6103,13 +7220,8 @@ function renderClipboardList() {
     header.className = 'clipboard-item-header';
 
     const timeSpan = document.createElement('span');
-    if (item.kind === 'image') {
-      timeSpan.textContent = `${formatRelativeTime(item.time)} • Image`;
-    } else if (item.kind === 'files') {
-      const n = item.paths.length;
-      const only = n === 1 ? item.paths[0] : '';
-      const what = only ? (CLIP_IMG_EXT.test(only) ? 'Image' : CLIP_VID_EXT.test(only) ? 'Video' : 'File') : `${n} files`;
-      timeSpan.textContent = `${formatRelativeTime(item.time)} • ${what}`;
+    if (item.kind === 'screenshot') {
+      timeSpan.textContent = `${formatRelativeTime(item.time)} • Screenshot`;
     } else {
       timeSpan.textContent = `${formatRelativeTime(item.time)} • ${item.text.length} chars`;
     }
@@ -6129,7 +7241,6 @@ function renderClipboardList() {
       ev.stopPropagation();
       clipboardItems = clipboardItems.filter((x) => x.id !== item.id);
       saveClipboardHistory();
-      pruneClipboardBlobs();
       renderClipboardList();
     });
 
@@ -6138,37 +7249,22 @@ function renderClipboardList() {
     header.appendChild(timeSpan);
     header.appendChild(actions);
 
-    if (item.kind === 'image' || item.kind === 'files') {
-      // same card height as a text item: small thumbnail in front, details on the side
+    if (item.kind === 'screenshot') {
       card.classList.add('clip-media');
       const row = document.createElement('div');
       row.className = 'clip-media-row';
 
       const th = document.createElement('div');
       th.className = 'clip-thumb';
-      const firstPath = item.kind === 'files' ? item.paths[0] : '';
-      const thumbSrc = item.kind === 'image' ? item.thumb : (item.thumbs && item.thumbs[0]);
-      if (thumbSrc) {
-        const im = document.createElement('img');
-        im.src = thumbSrc;
-        im.alt = '';
-        im.draggable = false;
-        th.appendChild(im);
-      } else {
-        th.innerHTML = (item.kind === 'files' && CLIP_VID_EXT.test(firstPath)) ? CLIP_ICON_VIDEO : CLIP_ICON_FILE_BIG;
-      }
+      th.innerHTML = CLIP_ICON_SCREENSHOT;
+      hydrateScreenshotThumb(item.path, th, gen);
 
       const info = document.createElement('div');
       info.className = 'clip-media-info';
       info.appendChild(header);
       const det = document.createElement('div');
       det.className = 'clip-media-name';
-      if (item.kind === 'image') {
-        det.textContent = `${item.w}×${item.h}${item.bytes ? ' • ' + formatBytes(item.bytes) : ''}`;
-      } else {
-        const more = item.paths.length > 1 ? `  +${item.paths.length - 1} more` : '';
-        det.textContent = clipFileName(item.paths[0]) + more;
-      }
+      det.textContent = item.name || clipFileName(item.path);
       info.appendChild(det);
 
       row.appendChild(th);
@@ -6185,15 +7281,13 @@ function renderClipboardList() {
     card.addEventListener('click', async () => {
       let ok = false;
       try {
-        if (item.kind === 'image') {
-          const blob = await clipBlobGet(item.id);
-          if (blob) {
-            clipSelfImageUntil = Date.now() + 1500; // do not record our own copy as a new item
-            await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
-            ok = true;
+        if (item.kind === 'screenshot') {
+          ok = !!(await tryInvoke('set_clipboard_files', { paths: [item.path] }));
+          if (!ok) {
+            removeScreenshotByPath(item.path);
+            showToast('snip', 'Screenshot deleted', 1200);
+            return;
           }
-        } else if (item.kind === 'files') {
-          ok = !!(await tryInvoke('set_clipboard_files', { paths: item.paths }));
         } else {
           await navigator.clipboard.writeText(item.text);
           ok = true;
@@ -6205,7 +7299,7 @@ function renderClipboardList() {
         showToast('snip', 'Copied to clipboard', 1200);
         setTimeout(() => { card.classList.remove('copied'); }, 1100);
       } else {
-        showToast('snip', item.kind === 'image' && !(await clipBlobGet(item.id)) ? 'Image no longer stored' : 'Copy failed', 1200);
+        showToast('snip', 'Copy failed', 1200);
       }
     });
 
@@ -6213,24 +7307,24 @@ function renderClipboardList() {
   });
 }
 
-// ---------- reading the system clipboard ----------
-let clipSelfImageUntil = 0; // set when WE put an image on the clipboard (history click)
-let clipLastSeq = 0;        // Windows clipboard change counter we already recorded
+// ---------- reading the system clipboard (Text + Screenshot paths only) ----------
+let clipLastSeq = 0;
 
-// What is on the clipboard right now? Files first, then text, then image
-// (Excel and Word put text AND a picture of it: the text is what we want there).
 async function readClipboardOnce() {
   const files = await tryInvoke('get_clipboard_files', {});
-  if (Array.isArray(files) && files.length) return { kind: 'files', paths: files };
+  if (Array.isArray(files) && files.length > 0) {
+    // Only record screenshots copied from the OS Screenshots folder; ignore other copied/cut files.
+    const shots = await tryInvoke('filter_screenshot_paths', { paths: files });
+    if (Array.isArray(shots) && shots.length > 0) {
+      return { kind: 'screenshot', path: shots[0] };
+    }
+    return { kind: 'ignored' };
+  }
   const t = await tryInvoke('get_clipboard_text', {});
   if (t && typeof t === 'string' && t.trim()) return { kind: 'text', text: t };
-  const img = await tryInvoke('get_clipboard_image', {});
-  if (img && typeof img === 'string' && img.length > 32) return { kind: 'image', dataUrl: img };
   return null;
 }
 
-// Windows fires "clipboard changed" while the copying app can still be holding the clipboard open, so a single
-// read often comes back empty. Read again a few times before giving up.
 async function readClipboardWithRetry() {
   const waits = [0, 50, 120, 250, 450];
   for (const w of waits) {
@@ -6247,124 +7341,176 @@ async function readClipboardWithRetry() {
   return null;
 }
 
-async function recordClipboardPayload(got) {
-  if (!got) return false;
-  if (got.kind === 'files') return addClipboardFiles(got.paths);
+function recordClipboardPayload(got) {
+  if (!got || got.kind === 'ignored') return false;
+  if (got.kind === 'screenshot') return addClipboardScreenshot(got.path);
   if (got.kind === 'text') return addClipboardText(got.text);
-  if (got.kind === 'image') {
-    if (Date.now() < clipSelfImageUntil) return false;
-    return await addClipboardImage(got.dataUrl);
-  }
   return false;
 }
 
-// Catches copies we did not see live (copied before the island started, or while it was asleep)
 async function checkSystemClipboard() {
   try {
     const seq = await tryInvoke('clipboard_seq', {});
-    if (seq && seq === clipLastSeq) return;      // nothing new since the last time
+    if (seq && seq === clipLastSeq) return;
     const got = await readClipboardOnce();
     if (seq) clipLastSeq = seq;
-    await recordClipboardPayload(got);
+    recordClipboardPayload(got);
   } catch (_) {}
 }
 
 function openClipboardView() {
-  checkSystemClipboard().then(renderClipboardList).then(fillMissingFileThumbs);
+  Promise.all([checkSystemClipboard(), pruneMissingScreenshots()]).then(() => {
+    renderClipboardList();
+  });
 }
 
-// Initialise
+// Initialise & prune stale/deleted items immediately
 loadClipboardHistory();
-pruneClipboardBlobs();
-setTimeout(fillMissingFileThumbs, 1500);
+saveClipboardHistory();
+pruneMissingScreenshots();
 
 document.getElementById('btn-clipboard-clear')?.addEventListener('click', () => {
   if (clipboardItems.length === 0) return;
   clipboardItems = [];
+  revokeClipPreviews();
   saveClipboardHistory();
-  clipBlobClear();
   renderClipboardList();
   showToast('unlock', 'Clipboard cleared', 1200);
 });
 
-// Periodic and event-driven clipboard capture when user interacts
 window.addEventListener('focus', checkSystemClipboard);
 document.getElementById('island')?.addEventListener('mouseenter', checkSystemClipboard);
 
-// System-wide copy -> little "Copied" popup in the island (Windows tells us the clipboard changed, no matter which app copied)
 const CLIP_HUD_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/><path class="clip-tick" d="M8.5 14.5l2.5 2.5 4.5-5"/></svg>';
 let clipHudAt = 0;
 
-let clipCopySeq = 0;
-onTauriEvent('clipboard-copied', async () => {
-  if (SET.general && SET.general.copyToast === false) return; // toggle OFF: do nothing
-  const mySeq = ++clipCopySeq;
-  const got = await readClipboardWithRetry();
-  if (mySeq !== clipCopySeq) return;   // a newer copy arrived while waiting: that one shows the popup
-  const seq = await tryInvoke('clipboard_seq', {});
-  if (seq) clipLastSeq = seq;
-  const selfImage = got && got.kind === 'image' && Date.now() < clipSelfImageUntil;
-  await recordClipboardPayload(got);
-  if (selfImage) return;               // our own history click: no popup
-
-  // our own copy buttons already show a toast; do not stack a second popup
+function showClipboardHud(tag) {
+  if (SET.general && SET.general.copyToast === false) return;
   if (appState.toast) return;
   const now = Date.now();
   if (now - clipHudAt < 500) return;
   clipHudAt = now;
-
-  let tag = 'Copied to Clipboard';
-  if (got && got.kind === 'text') {
-    const one = got.text.replace(/\s+/g, ' ').trim();
-    tag = one.length > 24 ? one.slice(0, 24) + '\u2026' : one;
-  } else if (got && got.kind === 'image') {
-    tag = 'Image copied';
-  } else if (got && got.kind === 'files') {
-    tag = got.paths.length === 1 ? clipFileName(got.paths[0]) : `${got.paths.length} files`;
-    if (tag.length > 24) tag = tag.slice(0, 24) + '\u2026';
-  }
   showDeviceHud({
     iconHTML: CLIP_HUD_SVG, plain: true,
     name: 'Copied',
     tag,
     ms: 1700
   });
+}
+
+// Native zero-polling OS screenshot folder watcher events (ReadDirectoryChangesW)
+onTauriEvent('screenshot-added', (ev) => {
+  const path = ev && ev.payload && ev.payload.path;
+  if (!path) return;
+  if (addClipboardScreenshot(path)) {
+    const name = clipFileName(path);
+    showClipboardHud(name.length > 24 ? name.slice(0, 24) + '\u2026' : name);
+  }
 });
-let resizeDebounce = null;
+
+onTauriEvent('screenshot-removed', (ev) => {
+  const path = ev && ev.payload && ev.payload.path;
+  if (path) removeScreenshotByPath(path);
+});
+
+let clipCopySeq = 0;
+onTauriEvent('clipboard-copied', async () => {
+  const mySeq = ++clipCopySeq;
+  const got = await readClipboardWithRetry();
+  if (mySeq !== clipCopySeq) return;
+  const seq = await tryInvoke('clipboard_seq', {});
+  if (seq) clipLastSeq = seq;
+  if (!got || got.kind === 'ignored') return;
+  recordClipboardPayload(got);
+
+  if (got.kind === 'text') {
+    const one = got.text.replace(/\s+/g, ' ').trim();
+    showClipboardHud(one.length > 24 ? one.slice(0, 24) + '\u2026' : one);
+  } else if (got.kind === 'screenshot') {
+    const name = clipFileName(got.path);
+    showClipboardHud(name.length > 24 ? name.slice(0, 24) + '\u2026' : name);
+  }
+});
+let _lastSettingsWinSig = '';
+
+// ---- Smooth live settings (UI Scale slider, colour picker, corner roundness ...) ----
+// Dragging a slider fires dozens of settings events per second. Before, every one of them re-ran the whole
+// pipeline (weather, media, widgets ...). Now:
+//  1. events are coalesced to one apply per animation frame,
+//  2. look-only changes (scale, colours, roundness, font) skip the heavy work,
+//  3. the OS window never changes size (fixed, set by Rust), so nothing can get out of step and shake.
+const FAST_APPEARANCE_KEYS = ['scale', 'notchColor', 'notchOpacity', 'cornerRadius', 'borderColor', 'borderOpacity',
+  'notchBorderColor', 'notchBorderOpacity', 'fontStyle', 'menuStyle'];
+let _lastHeavySig = null;
+
+function heavySettingsSig() {
+  const ap = { ...SET.appearance };
+  FAST_APPEARANCE_KEYS.forEach((k) => delete ap[k]);
+  return JSON.stringify({ ...SET, appearance: ap });
+}
+
+function computeIslandSize() {
+  const isFloating = SET.notch && SET.notch.style === 'floating';
+  if (appState.currentView === 'view-compact' || !appState.currentView) {
+    const small = { width: ISLAND_WIN_W, height: isFloating ? 48 : 36 };
+    return typeof compactIslandSize === 'function' ? compactIslandSize(small) : small;
+  }
+  if (appState.islandSize) return { width: appState.islandSize.width, height: appState.islandSize.height };
+  return null;
+}
+
+// Report the island's size to Rust (clickable area). Same size again = nothing to do.
+function syncIslandHit(targetZoom) {
+  const targetWin = computeIslandSize();
+  if (!targetWin) return;
+  const sig = `${targetWin.width}x${targetWin.height}@${targetZoom}`;
+  if (sig === _lastSettingsWinSig) return;
+  _lastSettingsWinSig = sig;
+  reportIslandSize(targetWin);
+}
 
 function applySettings() {
   applyTheme(SET);
-  applySlots();
-  island.dataset.menu = SET.appearance.menuStyle;
+  island.dataset.menu = menuSurface(SET.appearance).style;
   const validTheme = ['default', 'matrix'].includes(SET.appearance.themeStyle) ? SET.appearance.themeStyle : 'default';
   island.dataset.theme = validTheme;
   island.setAttribute('data-mode', SET.notch.mode);
   island.setAttribute('data-style', SET.notch.style || 'attached');
   island.setAttribute('data-theme', validTheme);
+  const macEars = SET.notch && SET.notch.macEars !== false && SET.notch.style !== 'floating';
+  island.classList.toggle('has-mac-ears', !!macEars);
   if (SET.notch.mode !== 'smart') island.classList.remove('smart-hidden');
-  
+
   const targetZoom = (SET.appearance.scale || 100) / 100;
   island.style.zoom = targetZoom;
   island.classList.toggle('no-anim', SET.appearance.animations === false);
-  
-  const isFloating = SET.notch && SET.notch.style === 'floating';
-  if (appState.currentView === 'view-compact' || !appState.currentView) {
-    clearTimeout(resizeDebounce);
-    resizeDebounce = setTimeout(() => {
-      const small = { width: ISLAND_WIN_W, height: isFloating ? 48 : 36 };
-      invokeTauri('resize_island', typeof compactWindowSize === 'function' ? compactWindowSize(small) : small);
-    }, 35);
-  } else if (appState.lastWin) {
-    clearTimeout(resizeDebounce);
-    resizeDebounce = setTimeout(() => {
-      invokeTauri('resize_island', appState.lastWin);
-    }, 35);
+
+  // Look-only change (scale / colour / roundness / font): report the island size and stop. No need to rebuild
+  // slots, tiles, widgets or to hit weather / media again.
+  const heavySig = heavySettingsSig();
+  const lookOnly = _lastHeavySig !== null && heavySig === _lastHeavySig;
+  _lastHeavySig = heavySig;
+  if (lookOnly && appState.currentView !== 'view-control' && appState.currentView !== 'view-control-mac') {
+    syncIslandHit(targetZoom);
+    return;
+  }
+
+  applySlots();
+  if (typeof applyMacMenuConfig === 'function') applyMacMenuConfig();
+
+  const wantMacMenu = SET.appearance && SET.appearance.menuLayout === 'mac';
+  if ((wantMacMenu && appState.currentView === 'view-control') || (!wantMacMenu && appState.currentView === 'view-control-mac')) {
+    if (typeof openControlMenu === 'function') openControlMenu();
+  } else {
+    syncIslandHit(targetZoom);
   }
   renderQuickActionTiles();
   document.getElementById('view-media').classList.toggle('no-ambient', !SET.notch.ambientGlow);
+  document.getElementById('mac-media')?.classList.toggle('no-ambient', !SET.notch.ambientGlow);
   document.getElementById('c-media-btn').classList.toggle('glow', SET.notch.compactGlow);
   if (SET.share.deviceName) myDeviceName = SET.share.deviceName;
   updateClocks();
+  if (typeof syncCompactCycleTimer === 'function') syncCompactCycleTimer();
   renderWidgets();
   if (typeof syncLoadTimer === 'function') syncLoadTimer();
   applyPrivacy();
@@ -6374,7 +7520,14 @@ function applySettings() {
   refreshMedia();
 }
 
-onSettings((incoming) => { SET = incoming; applySettings(); pollSystemAndMedia(); });
+// Settings arrive twice per change (storage event + Tauri event) and many times per second while a slider
+// moves: keep only the latest and apply it once per frame.
+let _applyRaf = 0;
+function scheduleApplySettings() {
+  if (_applyRaf) return;
+  _applyRaf = requestAnimationFrame(() => { _applyRaf = 0; applySettings(); });
+}
+onSettings((incoming) => { SET = incoming; scheduleApplySettings(); });
 applySettings();
 // Weather timer exists ONLY while weather is wanted (Live Weather on + picked as a hover widget).
 // One request every 12 min; after a failure wait longer each time (2, 4, 8 ... up to 15 min).
@@ -6402,9 +7555,29 @@ syncWeatherTimer();
 // back on screen after a long pause: refresh (refreshWeather keeps its own cache and does nothing when weather is not wanted)
 document.addEventListener('visibilitychange', () => { if (!document.hidden && weatherWanted()) refreshWeather(); });
 
-// ---- Intro animation: island is immediately visible without delay ----
+// ---- Intro animation: the island drops gently from the top edge ----
+// The island stays invisible (intro-pre) until the first size has been reported, then drops in.
 (function introAnimation() {
-  island.classList.remove('intro-pre', 'intro-play');
+  let started = false;
+  const play = () => {
+    if (started) return;
+    started = true;
+    island.classList.remove('intro-pre');
+    void island.offsetWidth;                      // restart the animation cleanly
+    island.classList.add('intro-play');
+    setTimeout(() => island.classList.remove('intro-play'), 900);
+  };
+  island.classList.add('intro-pre');
+  setTimeout(play, 1500);                         // failsafe: never stay invisible
+  (async () => {
+    try {
+      const h = (SET.notch && SET.notch.style === 'floating') ? 48 : 36;
+      await reportIslandSize({ width: ISLAND_WIN_W, height: h });
+    } catch (_) {}
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    await new Promise((r) => setTimeout(r, 160)); // let WebView2 finish the new width
+    play();
+  })();
 })();
 
 // Auto Update: checked ONCE, ~25 s after the app starts. If Auto Update is ON and a new version
@@ -6620,3 +7793,21 @@ onTauriEvent('system-resumed', () => {
   }
   scheduleNextAlarm();
 });
+
+// ---- Pixel snap: the island is centred inside its window, so on Windows scales like 125% / 150% (and in the built app, where the
+// window size is rounded to whole device pixels) its left edge can land on a half pixel. The bezel ear hangs off that edge and
+// got anti-aliased away on one side only (left ear slightly cut, right ear fine). Nudge the island so its left edge sits on a whole
+// device pixel; the right ear then follows the same grid.
+(function pixelSnap() {
+  const snap = () => {
+    const dpr = window.devicePixelRatio || 1;
+    const zoom = parseFloat(island.style.zoom) || 1;
+    island.style.left = '0px';
+    const r = island.getBoundingClientRect();
+    const d = Math.round(r.left * dpr) / dpr - r.left;
+    if (Math.abs(d) > 0.001) island.style.left = (d / zoom) + 'px';
+  };
+  if (typeof ResizeObserver === 'function') new ResizeObserver(snap).observe(island);
+  window.addEventListener('resize', snap);
+  snap();
+})();

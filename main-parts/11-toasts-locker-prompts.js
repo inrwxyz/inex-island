@@ -85,11 +85,12 @@ function triggerBiometricMorph(type, label) {
   const glyph = document.getElementById('bio-glyph-wrap');
   const txt = document.getElementById('bio-label');
   if (!box || !glyph || !txt) return;
+  if (typeof nexusAbort === 'function') nexusAbort();   // unlock morph has priority over the Nexus voice card
 
   clearTimeout(bioTimer); clearTimeout(bioAnimPhaseTimer); clearTimeout(bioStartTimer); clearTimeout(bioEndTimer);
   // a pending "shrink the popup window" timer (left by the locker prompt that just closed) must not cut the morph
-  if (typeof popupWinT !== 'undefined') clearTimeout(popupWinT);
-  if (typeof popupWinOn !== 'undefined') popupWinOn = false;
+  if (typeof popupSizeT !== 'undefined') clearTimeout(popupSizeT);
+  if (typeof popupSizeOn !== 'undefined') popupSizeOn = false;
   // a device HUD may be open: close it instantly
   clearTimeout(btHudTimer); clearTimeout(btHudStartT); clearTimeout(btHudBackT);
   island.classList.remove('bt-hud-active', 'hud-out', 'hud-back');
@@ -102,7 +103,7 @@ function triggerBiometricMorph(type, label) {
 
   // 1) window big enough, 2) old content blurs away, 3) island springs into the rounded square
   if (typeof cancelCloseEase === 'function') cancelCloseEase();
-  tryInvoke('resize_island', { width: ISLAND_WIN_W, height: 112 });
+  reportIslandSize({ width: ISLAND_WIN_W, height: 112 });
   island.classList.add('hud-pre');
   bioStartTimer = setTimeout(() => {
     island.classList.remove('hud-pre');
@@ -126,7 +127,7 @@ function triggerBiometricMorph(type, label) {
         box.classList.add('hidden');
         glyph.innerHTML = '';
         island.classList.remove('hud-back', 'bio-hud');
-        hudRestoreWindow();
+        hudRestoreSize();
         renderCenter(); updateClocks(); refreshMedia();
       }, 560);
     }, 170);
@@ -259,6 +260,7 @@ onTauriEvent('locker-unlock', (event) => {
     if (kind === 'alarm') {
       if (typeof triggerTimerAlarm === 'function') triggerTimerAlarm();
     } else if (kind === 'scan' || kind === 'fingerprint') {
+      playStatusSound('lock', 'lock');
       triggerBiometricMorph(kind, targetName);
     } else if (kind === 'charging') {
       showDeviceHud({ iconHTML: BOLT_SVG, battery: true, plain: true, accent: 'green', name: 'Charging', tag: `${payload.target || '85%'} • MagSafe Power`, pct: parseInt(payload.target, 10) || 85, ms: 3200 });
@@ -447,16 +449,193 @@ onTauriEvent('session-lock-changed', (event) => {
 
 
 // 9. Media Transport Controls
-document.getElementById('m-play').addEventListener('click', async () => {
-  await invokeTauri('media_play_pause');
-  setTimeout(pollSystemAndMedia, 250);
+['m-play', 'mac-play'].forEach((id) => {
+  document.getElementById(id)?.addEventListener('click', async () => {
+    await invokeTauri('media_play_pause');
+    setTimeout(pollSystemAndMedia, 250);
+  });
 });
-document.getElementById('m-next').addEventListener('click', async () => {
-  await invokeTauri('media_next');
-  setTimeout(pollSystemAndMedia, 250);
+['m-next', 'mac-next'].forEach((id) => {
+  document.getElementById(id)?.addEventListener('click', async () => {
+    await invokeTauri('media_next');
+    setTimeout(pollSystemAndMedia, 250);
+  });
 });
-document.getElementById('m-prev').addEventListener('click', async () => {
-  await invokeTauri('media_prev');
-  setTimeout(pollSystemAndMedia, 250);
+['m-prev', 'mac-prev'].forEach((id) => {
+  document.getElementById(id)?.addEventListener('click', async () => {
+    await invokeTauri('media_prev');
+    setTimeout(pollSystemAndMedia, 250);
+  });
+});
+
+// ---- Nexus voice assistant: same card as the lock / unlock morph (Face ID style, 92 x 92), different glyph inside ----
+// wake     -> island drops down exactly like triggerBiometricMorph, waveform glyph + "Listening..."
+// thinking -> waveform blurs out, aurora orb blurs in
+// done     -> green tick (same tick as unlock) + green glow, then springs back to the notch in ~1.5 s
+// cancel   -> straight back to the notch
+// Fixed window mode: the OS window never resizes, only reportIslandSize() (clickable area) is used.
+const NX_TEXT = { wake: 'Listening...', thinking: 'Thinking...', done: 'Done' };
+const NX_GLYPH = {
+  wake: '<div class="nx-wave"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>',
+  thinking: '<div class="nx-aurora"><b></b><b></b><b></b></div>'
+};
+const NX_HOLD_DONE_MS = 800;     // tick visible, then 170 ms fade + 560 ms spring back = ~1.5 s total
+const NX_LEASE_MS = 45000;       // safety: if Nexus dies without done/cancel, the card closes by itself
+let nxActive = false;            // card is open and owned by Nexus
+let nxExiting = false;           // card is collapsing
+let nxMode = '';
+let nxEnterT = null, nxSwapT = null, nxHoldT = null, nxEndT = null, nxBackT = null, nxLeaseT = null, nxGlowT = null;
+
+function nexusClearTimers() {
+  clearTimeout(nxEnterT); clearTimeout(nxSwapT); clearTimeout(nxHoldT);
+  clearTimeout(nxEndT); clearTimeout(nxBackT); clearTimeout(nxLeaseT);
+}
+
+// the unlock morph takes the card over: just let go (it resets the glyph / timers itself)
+function nexusAbort() {
+  nexusClearTimers();
+  clearTimeout(nxGlowT);
+  nxActive = false; nxExiting = false; nxMode = '';
+  island.classList.remove('hud-out', 'hud-back', 'hud-pre', 'island-locker-glow');
+}
+
+function nexusCleanup() {
+  const box = document.getElementById('c-biometric-box');
+  const glyph = document.getElementById('bio-glyph-wrap');
+  if (box) box.classList.add('hidden');
+  if (glyph) glyph.innerHTML = '';
+  nxMode = ''; nxExiting = false;
+  island.classList.remove('biometric-active', 'hud-pre', 'hud-out', 'hud-back', 'bio-hud', 'island-locker-glow');
+  hudRestoreSize();
+  renderCenter(); updateClocks(); refreshMedia();
+}
+
+function nexusEnter() {
+  const box = document.getElementById('c-biometric-box');
+  const glyph = document.getElementById('bio-glyph-wrap');
+  if (!box || !glyph) return false;
+  if (appState.currentView !== 'view-compact' || appState.alarmActive) {
+    if (nxActive) nexusAbort();      // a menu / alarm took over
+    return false;
+  }
+  if (nxActive) return true;         // already open: only the state changes
+
+  if (nxExiting) {                   // re-wake while collapsing: spring straight back up
+    nexusClearTimers();
+    nxExiting = false; nxActive = true;
+    island.classList.remove('hud-out', 'hud-back');
+    island.classList.add('bio-hud', 'biometric-active');
+    box.classList.remove('hidden');
+    return true;
+  }
+  // a real unlock morph is running: it keeps the card
+  if (island.classList.contains('biometric-active') || island.classList.contains('bio-hud')) return false;
+
+  nexusClearTimers();
+  nxActive = true; nxMode = '';
+  glyph.innerHTML = '';
+  // a pending "shrink the popup window" timer must not cut the animation
+  if (typeof popupSizeT !== 'undefined') clearTimeout(popupSizeT);
+  if (typeof popupSizeOn !== 'undefined') popupSizeOn = false;
+  // a device HUD may be open: close it instantly
+  clearTimeout(btHudTimer); clearTimeout(btHudStartT); clearTimeout(btHudBackT);
+  island.classList.remove('bt-hud-active', 'hud-out', 'hud-back');
+  document.getElementById('c-bt-hud').classList.add('hidden');
+  island.classList.add('bio-hud');
+  box.classList.remove('hidden');
+
+  // same start as triggerBiometricMorph: window big enough, old content blurs away, island springs into the card
+  if (typeof cancelCloseEase === 'function') cancelCloseEase();
+  reportIslandSize({ width: ISLAND_WIN_W, height: 112 });
+  island.classList.add('hud-pre');
+  nxEnterT = setTimeout(() => {
+    island.classList.remove('hud-pre');
+    island.classList.add('biometric-active');
+  }, 130);
+  return true;
+}
+
+function nexusSetMode(mode, text) {
+  const glyph = document.getElementById('bio-glyph-wrap');
+  const txt = document.getElementById('bio-label');
+  if (!glyph || !txt) return;
+  // 92 px card: drop trailing dots ("Listening..." -> "Listening") so the label is never cut off
+  txt.textContent = ((text && String(text).trim()) || NX_TEXT[mode] || '').replace(/[.\u2026]+$/, '');
+  clearTimeout(nxHoldT);
+  if (mode !== nxMode) {
+    nxMode = mode;
+    clearTimeout(nxSwapT);
+    const html = mode === 'done' ? BIO_SVGS.check : (NX_GLYPH[mode] || '');
+    const cur = glyph.firstElementChild;
+    if (cur) {
+      cur.classList.add('bio-leave');                  // old glyph blurs out, new one pops in (same as scan -> tick)
+      nxSwapT = setTimeout(() => { glyph.innerHTML = html; }, 150);
+    } else {
+      glyph.innerHTML = html;
+    }
+    if (mode === 'done') {
+      island.classList.add('island-locker-glow');      // same soft green glow as a successful unlock
+      clearTimeout(nxGlowT);
+      nxGlowT = setTimeout(() => island.classList.remove('island-locker-glow'), 600);   // short flash only: it must be gone before the collapse
+    }
+  }
+  if (mode === 'done') nxHoldT = setTimeout(nexusExit, NX_HOLD_DONE_MS);
+  clearTimeout(nxLeaseT);
+  nxLeaseT = setTimeout(nexusExit, NX_LEASE_MS);
+}
+
+function nexusExit() {
+  if (!nxActive) return;
+  nxActive = false; nxExiting = true;
+  clearTimeout(nxHoldT); clearTimeout(nxLeaseT); clearTimeout(nxEnterT); clearTimeout(nxSwapT); clearTimeout(nxGlowT);
+  island.classList.remove('hud-pre', 'island-locker-glow');   // no green outline on the shrinking notch
+  island.classList.add('hud-out');                     // content fades, shrink back to the pill, restore the normal window
+  nxEndT = setTimeout(() => {
+    island.classList.remove('biometric-active', 'hud-out');
+    island.classList.add('hud-back');
+    nxBackT = setTimeout(nexusCleanup, 560);
+  }, 170);
+}
+
+window.triggerNexusVoiceAnimation = function (status, text, payload) {
+  const st = String(status || '').toLowerCase();
+  if (st === 'wake' || st === 'thinking' || st === 'done') {
+    if (!nexusEnter()) return;
+    nexusSetMode(st, text);
+  } else if (st === 'cancel') {
+    nexusExit();
+  }
+};
+
+// 10. Nexus Assistant Bridge (Named Pipe \\.\pipe\InexIslandNexus -> event 'nexus-voice')
+// Passive receiver: Nexus sends events:
+//   { event: "nexus_voice", status: "wake" | "thinking" | "done" | "cancel", text: "...", seq: 1, ts: 123456789 }
+let lastNexusSeq = -1;
+let lastNexusTs = 0;
+
+onTauriEvent('nexus-voice', (event) => {
+  let payload = event.payload;
+  if (typeof payload === 'string') {
+    try { payload = JSON.parse(payload); } catch (_) {}
+  }
+  if (!payload || typeof payload !== 'object') payload = {};
+
+  const evTs = Number(payload.ts) || 0;
+  if (evTs) {
+    if (evTs < lastNexusTs && lastNexusTs - evTs < 60000) return;
+    lastNexusTs = evTs;
+  }
+  const seq = Number(payload.seq) || 0;
+  lastNexusSeq = seq;
+
+  const status = payload.status || '';
+  const text = payload.text || '';
+
+  // Forward to the voice card (triggerNexusVoiceAnimation, defined above)
+  if (typeof window.triggerNexusVoiceAnimation === 'function') {
+    window.triggerNexusVoiceAnimation(status, text, payload);
+  } else {
+    console.log('[NexusBridge]', status, text);
+  }
 });
 

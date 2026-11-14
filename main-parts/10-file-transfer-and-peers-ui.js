@@ -178,6 +178,7 @@ async function handlePeerMessage(peerId, entry, msg) {
     }
     case 'all-done':
       if (entry.recv && entry.recv.accepted) {
+        playStatusSound('transfer', 'transfer');
         entry.recv = null;
         refreshTransferUI();
       }
@@ -349,6 +350,7 @@ function updateOfferGlow() {
   document.getElementById('tile-p2p')?.classList.toggle('offer', pending);
   document.getElementById('rail-p2p')?.classList.toggle('offer', pending);
   document.getElementById('tile-drop')?.classList.toggle('offer', pending);
+  document.getElementById('mac-tile-drop')?.classList.toggle('offer', pending);
 }
 
 function refreshStatusPill() {
@@ -482,7 +484,7 @@ function renderCenter() {
   const xferLive = !!(appState.transferring && !isPrompt && !toast);
   island.classList.toggle('transferring', busy);
   island.classList.toggle('xfer-live', xferLive);
-  if (typeof syncPopupWindow === 'function') syncPopupWindow(busy);   // same window as the Bluetooth HUD
+  if (typeof syncPopupSize === 'function') syncPopupSize(busy);   // same window as the Bluetooth HUD
   document.getElementById('c-clock').classList.toggle('hidden', busy);
   document.getElementById('c-transfer-anim').classList.toggle('hidden', !xferLive);
   document.getElementById('c-prompt-anim').classList.toggle('hidden', !(isPrompt && !toast));

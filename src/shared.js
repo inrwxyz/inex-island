@@ -4,17 +4,34 @@
 export const KEY = 'inex.settings.v1';
 
 export const DEFAULTS = {
-  general: { launchAtLogin: false, hour24: false, autoUpdate: false, lowBatteryAlert: true, lowBattery: 20, chargeToast: true, lockToast: true, copyToast: false },
+  general: { launchAtLogin: false, hour24: false, autoUpdate: false, lowBatteryAlert: true, lowBattery: 20, chargeToast: true, lockToast: true, copyToast: false, settingsTheme: 'system' },
   appearance: {
+    menuLayout: 'classic',
     notchColor: '#030305', notchOpacity: 100, notchBorderColor: '#000000', notchBorderOpacity: 0, cornerRadius: 9,
-    menuStyle: 'color', menuColor: '#ffffff', menuOpacity: 100,
+    menuStyle: 'color',
     themeStyle: 'default',
-    tileAccent: '#000000', borderColor: '#000000', borderOpacity: 10,
+    borderColor: '#000000', borderOpacity: 0,
     fontStyle: 'mono', scale: 110, animations: true
   },
   notch: {
-    mode: 'smart', style: 'attached', musicMode: true, compactMode: true, ambientGlow: true, compactGlow: true,
+    mode: 'smart', style: 'attached', macEars: true, compactContent: 'clock', musicMode: true, compactMode: true, ambientGlow: true, compactGlow: true,
     calendarTimer: true, timerSound: true, eqSync: true, eqSensitivity: 100
+  },
+  sounds: {
+    enabled: true,
+    power: true,
+    bluetooth: true,
+    transfer: true,
+    lock: true
+  },
+  macMenu: {
+    showClock: true,
+    showWeather: true,
+    showStats: true,
+    showMedia: true,
+    showSliders: true,
+    showBattery: true,
+    statsMode: 'sys'
   },
   weather: { enabled: true, unit: 'C', city: '' },
   widgets: { enabled: true, left: 'weather', right: 'ram' },
@@ -26,7 +43,8 @@ export const DEFAULTS = {
   share: { deviceName: '' }
 };
 
-export const DEFAULT_ACTION_TILES = ['awake', 'snip', 'calendar', 'timer', 'clipboard', 'notepad', 'lock', 'settings'];
+export const MAX_ACTION_TILES = 7;   // the classic menu row fits 7 circles; more would be cut off
+export const DEFAULT_ACTION_TILES = ['awake', 'snip', 'calendar', 'timer', 'clipboard', 'lock', 'settings'];
 
 export const ALL_ACTION_TILES = {
   awake: { id: 'awake', label: 'Keep Awake', desc: 'Prevent PC from sleeping', icon: 'sun' },
@@ -93,10 +111,10 @@ export function load() {
     if (base.menu.actionTiles.length === 0) {
       base.menu.actionTiles = [...DEFAULT_ACTION_TILES];
     }
-    if (!base.menu.actionTiles.includes('notepad')) {
-      const lockIdx = base.menu.actionTiles.indexOf('lock');
-      if (lockIdx !== -1) base.menu.actionTiles.splice(lockIdx, 0, 'notepad');
-      else base.menu.actionTiles.push('notepad');
+    // never more than MAX_ACTION_TILES (older saves had 8 because Quick Notes was force-added): drop Quick Notes first
+    if (base.menu.actionTiles.length > MAX_ACTION_TILES) {
+      const withoutNotes = base.menu.actionTiles.filter((id) => id !== 'notepad');
+      base.menu.actionTiles = (withoutNotes.length >= MAX_ACTION_TILES ? withoutNotes : base.menu.actionTiles).slice(0, MAX_ACTION_TILES);
     }
     if (!base.slots) base.slots = { a: 'wifi', b: 'drop', c: 'bt', d: 'tray' };
     if (!base.slots.a) base.slots.a = 'bt';
@@ -159,28 +177,35 @@ function isLightRgb(r, g, b) {
   return (r * 299 + g * 587 + b * 114) / 1000 > 155;
 }
 
+// The surface the menu is painted with. main.js imports this, so it must exist.
+// Notch, bezel ears and menu are ONE piece: the menu always uses the notch colour and opacity
+// (picked once in Settings > System > Island Color). Only the glass style is separate.
+export function menuSurface(a) {
+  return { style: a.menuStyle, color: a.notchColor, opacity: a.notchOpacity };
+}
+
 // Writes the CSS variables the island styles read (with Auto Contrast for White/Light themes)
 export function applyTheme(s) {
   const root = document.documentElement.style;
   const a = s.appearance;
   const [nr, ng, nb] = hexToRgb(a.notchColor);
-  const [mr, mg, mb] = hexToRgb(a.menuColor);
+  const ms = menuSurface(a);
+  const [mr, mg, mb] = hexToRgb(ms.color);
   const [br, bg, bb] = hexToRgb(a.borderColor);
 
-  const nbc = a.notchBorderColor || a.borderColor || '#ffffff';
-  const nbo = a.notchBorderOpacity !== undefined ? a.notchBorderOpacity : (a.borderOpacity !== undefined ? a.borderOpacity : 45);
-  const [nbr, nbg, nbb] = hexToRgb(nbc);
-  root.setProperty('--notch-line', `rgba(${nbr}, ${nbg}, ${nbb}, ${nbo / 100})`);
+  root.setProperty('--notch-line', 'transparent');
 
   const notchLight = isLightRgb(nr, ng, nb) && a.notchOpacity > 45;
-  const menuLight = a.menuStyle === 'color' && isLightRgb(mr, mg, mb) && a.menuOpacity > 45;
+  const menuLight = ms.style === 'color' && isLightRgb(mr, mg, mb) && ms.opacity > 45;
 
   root.setProperty('--font-main', FONT_MAP[a.fontStyle] || FONT_MAP.jakarta);
   root.setProperty('--notch-bg', `rgba(${nr}, ${ng}, ${nb}, ${a.notchOpacity / 100})`);
+  // ears overlap the island by half a pixel to hide the seam, but only when opaque (translucent colours would double up)
+  root.setProperty('--ear-overlap', a.notchOpacity >= 98 ? '1px' : '0px');
   root.setProperty('--notch-fg', notchLight ? '#050507' : '#f5f5f7');
   root.setProperty('--notch-fg-dim', notchLight ? 'rgba(5, 5, 7, 0.62)' : '#8e8e98');
 
-  root.setProperty('--menu-bg', `rgba(${mr}, ${mg}, ${mb}, ${a.menuOpacity / 100})`);
+  root.setProperty('--menu-bg', `rgba(${mr}, ${mg}, ${mb}, ${ms.opacity / 100})`);
   root.setProperty('--menu-fg', menuLight ? '#050507' : '#f5f5f7');
   root.setProperty('--menu-fg-dim', menuLight ? 'rgba(5, 5, 7, 0.58)' : '#8e8e98');
 
@@ -191,21 +216,16 @@ export function applyTheme(s) {
   root.setProperty('--color-tile-on-fg', menuLight ? '#ffffff' : '#050507');
 
   // Active glow is automatic now: always the opposite of the menu background, so it never disappears
-  const menuBgRgb = a.menuStyle === 'color' ? [mr, mg, mb] : [14, 14, 20];
-  const menuBgLight = isLightRgb(menuBgRgb[0], menuBgRgb[1], menuBgRgb[2]) && (a.menuStyle !== 'color' || a.menuOpacity > 45);
+  const menuBgRgb = ms.style === 'color' ? [mr, mg, mb] : [14, 14, 20];
+  const menuBgLight = isLightRgb(menuBgRgb[0], menuBgRgb[1], menuBgRgb[2]) && (ms.style !== 'color' || ms.opacity > 45);
   root.setProperty('--on', menuBgLight ? '5, 5, 7' : '245, 245, 247');
 
-  // Tile accent: icon on the accent circle is black/white (whichever is readable),
-  // and the accent coloured status text falls back to the menu text colour if it would blend into the panel
-  const accentHex = a.tileAccent || '#0a84ff';
-  const [ar, ag, ab] = hexToRgb(accentHex);
-  const accentLight = isLightRgb(ar, ag, ab);
-  const lum = (r, g, b) => (r * 299 + g * 587 + b * 114) / 1000;
-  const accentBlends = Math.abs(lum(ar, ag, ab) - lum(menuBgRgb[0], menuBgRgb[1], menuBgRgb[2])) < 60;
-  root.setProperty('--mac-accent', accentHex);
-  root.setProperty('--mac-accent-fg', accentLight ? '#050507' : '#ffffff');
-  root.setProperty('--mac-accent-text', accentBlends ? 'var(--menu-fg)' : accentHex);
-  root.setProperty('--line', `rgba(${br}, ${bg}, ${bb}, ${a.borderOpacity / 100})`);
+  // Accent is automatic: always the opposite of the menu surface (light menu -> near-black, dark menu -> white),
+  // so active tiles, icons, sliders and gauges can never blend into the panel.
+  root.setProperty('--mac-accent', menuBgLight ? '#111114' : '#f5f5f7');
+  root.setProperty('--mac-accent-fg', menuBgLight ? '#ffffff' : '#050507');
+  root.setProperty('--mac-accent-text', 'var(--menu-fg)');
+  root.setProperty('--line', 'transparent');
   root.setProperty('--radius', a.cornerRadius + 'px');
   root.setProperty('--radius-menu', Math.round(a.cornerRadius * 1.15) + 'px');
 }

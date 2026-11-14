@@ -78,13 +78,72 @@ body {
               transform 0.28s var(--spring), opacity 0.22s ease,
               border-color 0.22s ease, background 0.25s ease,
               border-radius 0.4s var(--ease-close),
-              zoom 0.22s cubic-bezier(0.16, 1, 0.3, 1), top 0.28s var(--spring);
+              top 0.28s var(--spring);   /* no zoom transition: it animated the scale while the OS window resized instantly = shaking */
   transition-timing-function: initial;
-  will-change: width, height;
   backface-visibility: hidden;
   overflow: hidden;
   position: relative;
 }
+
+.island.has-mac-ears {
+  overflow: visible !important;
+}
+.island.has-mac-ears > .view {
+  overflow: hidden;
+  border-radius: inherit;
+}
+
+/* Mac-style concave curved ears for bezel notch & menu.
+   The ear is a 16px flare that sits exactly against the island's outer side edge (1px border) and shares its
+   fill, so notch, ears and menu read as ONE piece. --ear-overlap hides the sub-pixel seam when the colour is
+   opaque (set by applyTheme; 0 when translucent so no darker line shows). */
+.notch-ear {
+  --ear-size: 16px;
+  position: absolute;
+  top: 0;
+  width: var(--ear-size);
+  height: var(--ear-size);
+  pointer-events: none;
+  z-index: 100;
+  display: block;
+}
+.notch-ear.ear-left  { left:  calc(-1 * var(--ear-edge, 1px) - var(--ear-size) + var(--ear-overlap, 0.5px)); }
+.notch-ear.ear-right { right: calc(-1 * var(--ear-edge, 1px) - var(--ear-size) + var(--ear-overlap, 0.5px)); }
+.notch-ear svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  shape-rendering: geometricPrecision;
+}
+.notch-ear .ear-fill {
+  fill: var(--notch-bg);
+  transition: fill 0.25s ease;
+}
+/* every open menu uses the menu surface, which now follows the notch colour */
+.island:not(.state-compact) .notch-ear .ear-fill {
+  fill: var(--menu-bg, var(--notch-bg));
+}
+.island[data-menu="transparent"]:not(.state-compact) .notch-ear .ear-fill,
+.island[data-mode="ghost"]:not(.state-compact) .notch-ear .ear-fill {
+  fill: rgba(6, 6, 9, 0.40) !important;
+}
+/* The faint top highlight line stops at the island edge and made the ears look cut off: no highlight with ears */
+.island.island.island.island.has-mac-ears:not(.state-compact) { box-shadow: none !important; }
+.island[data-style="floating"] .notch-ear,
+.island:not(.has-mac-ears) .notch-ear,
+.island.smart-hidden .notch-ear,
+.island.intro-pre .notch-ear,
+.island.biometric-active .notch-ear,
+.island.has-status .notch-ear,
+.island.state-status .notch-ear,
+.island[data-status-active="true"] .notch-ear {
+  display: none !important;
+}
+/* popups that open from the notch have border:0, so the ear sits flush with the island edge (no 1px gap = no cut-off curve) */
+.island.state-compact:is(.bt-hud-active, .alarm-active, .transferring, .has-toast, .incoming-open) { --ear-edge: 0px; }
+/* the ear must always show in the exact colour of the popup (= Island Color) */
+.island.state-compact:is(.bt-hud-active, .alarm-active, .transferring, .has-toast, .incoming-open) .notch-ear .ear-fill { fill: var(--notch-bg) !important; }
 
 /* Growing = spring (tiny overshoot, Dynamic Island feel). Shrinking = smooth ease-out, no bounce. */
 .island.state-drop, .island.state-control, .island.state-tray, .island.state-sub,
@@ -100,7 +159,7 @@ body {
               border-color 0.22s ease, background 0.25s ease, top 0.4s var(--ease-close);
 }
 /* compact pill growing (hover / media / badges / toast) gets the little spring */
-.island.state-compact:hover:not(.media-active):not(.transferring):not(.incoming-open):not(.alarm-active),
+.island.state-compact:hover:not(.no-hover-expand):not(.media-active):not(.transferring):not(.incoming-open):not(.alarm-active),
 .island.state-compact.has-badges, .island.state-compact.media-active,
 .island.state-compact.has-toast, .island.state-compact.transferring,
 .island.state-compact.incoming-open {
@@ -140,20 +199,20 @@ body {
 /* Intro: the island drops out of the top edge when the app opens */
 .island.intro-pre {
   opacity: 0;
-  transform: translateY(-130%) scale(0.65, 0.4);
+  transform: translateY(-100%);
   transition: none !important;
   /* safety: if the script ever fails, the island still appears after 20 s */
   animation: introFailsafe 0.01s 20s forwards;
 }
 @keyframes introFailsafe { to { opacity: 1; transform: none; } }
 .island.intro-play {
-  animation: islandIntro 0.95s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: islandIntro 0.75s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 @keyframes islandIntro {
-  0%   { opacity: 0; transform: translateY(-130%) scale(0.65, 0.4); filter: blur(4px); }
-  50%  { opacity: 1; transform: translateY(4px) scale(1.05, 1.04); filter: blur(0px); }
-  75%  { transform: translateY(-1px) scale(0.98, 0.99); }
-  100% { opacity: 1; transform: translateY(0) scale(1, 1); }
+  0%   { opacity: 0; transform: translateY(-100%); }
+  35%  { opacity: 1; }
+  70%  { transform: translateY(2px); }
+  100% { opacity: 1; transform: translateY(0); }
 }
 
 /* Smart Mode Fullscreen Hide: smooth subtle slide & fade */
@@ -183,7 +242,7 @@ body {
 .island.state-compact.media-active {
   width: 192px;
 }
-.island.state-compact:hover:not(.media-active):not(.transferring):not(.incoming-open):not(.alarm-active) {
+.island.state-compact:hover:not(.no-hover-expand):not(.media-active):not(.transferring):not(.incoming-open):not(.alarm-active) {
   width: 256px;
 }
 .island.state-compact.incoming-open {
@@ -1187,10 +1246,11 @@ body {
   padding: 12px 14px 4px;
 }
 .media-cover {
+  position: relative;
   width: 44px;
   height: 44px;
   border-radius: 9px;
-  overflow: hidden;
+  overflow: visible;
   background: rgba(255, 255, 255, 0.14);
   border: 1px solid rgba(255, 255, 255, 0.22);
   display: flex;
@@ -1198,6 +1258,7 @@ body {
   justify-content: center;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
 }
+.media-cover .art-img { border-radius: 8px; }
 .media-meta { flex: 1; overflow: hidden; }
 .media-meta strong {
   font-size: 13px;
@@ -1543,6 +1604,7 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   display: -webkit-box;
+  line-clamp: 2;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
 }
@@ -2122,8 +2184,11 @@ body {
   background: rgba(255, 255, 255, 0.25);
   border-radius: 0;
   overflow: hidden;
+  mask-image: radial-gradient(circle, #000000 2.3px, transparent 2.8px);
   -webkit-mask-image: radial-gradient(circle, #000000 2.3px, transparent 2.8px);
+  mask-size: 8px 12px;
   -webkit-mask-size: 8px 12px;
+  mask-repeat: repeat-x;
   -webkit-mask-repeat: repeat-x;
 }
 .island[data-theme="matrix"]:not(.state-compact) :is(.ctrl-slider-row, .media-vol-row) input[type="range"]::-webkit-slider-runnable-track {
@@ -2183,7 +2248,7 @@ body {
 /* NOTE: Face ID / Touch ID keeps its ORIGINAL look and timing (92px square, 33px radius, original spring). */
 .island.state-compact.biometric-active {
   width: 92px !important; height: 92px !important; border-radius: 33px !important; top: 10px !important;
-  background: #000 !important; border: 0 !important;
+  background: var(--notch-bg) !important; color: var(--notch-fg) !important; border: 0 !important;
   box-shadow: none !important;
   transition: width 0.6s cubic-bezier(0.34, 1.5, 0.64, 1), height 0.6s cubic-bezier(0.34, 1.5, 0.64, 1),
               top 0.5s cubic-bezier(0.22, 1, 0.36, 1), border-radius 0.5s cubic-bezier(0.22, 1, 0.36, 1) !important;
@@ -2261,7 +2326,7 @@ body {
 /* ---------- Device HUD (Bluetooth connect / charger) ---------- */
 .island.state-compact.bt-hud-active {
   width: 220px !important; height: 37px !important; border-radius: 19px !important; top: 7px !important;
-  background: #000 !important; border: 0 !important;
+  background: var(--notch-bg) !important; color: var(--notch-fg) !important; border: 0 !important;
   box-shadow: none !important;
   transition: width 0.65s var(--spring-pop), height 0.6s var(--spring-pop),
               top 0.45s var(--ease-close), border-radius 0.5s var(--ease-close) !important;
@@ -2293,11 +2358,11 @@ body {
 @keyframes budsSpin { 0% { transform: rotateY(-90deg) scale(0.7); opacity: 0; } 60% { opacity: 1; } 100% { transform: rotateY(0) scale(1); opacity: 1; } }
 
 .bt-hud-text { display: flex; flex-direction: column; min-width: 0; flex: 1 1 auto; line-height: 1.2; }
-.bt-hud-name { font-size: 10.5px; font-weight: 600; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: -0.015em; }
-.bt-hud-tag { font-size: 8.5px; font-weight: 500; color: rgba(255, 255, 255, 0.55); letter-spacing: -0.005em; }
+.bt-hud-name { font-size: 10.5px; font-weight: 600; color: var(--notch-fg, #fff); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: -0.015em; }
+.bt-hud-tag { font-size: 8.5px; font-weight: 500; color: var(--notch-fg-dim, rgba(255, 255, 255, 0.55)); letter-spacing: -0.005em; }
 
 .bt-hud-batt-box { display: flex; align-items: center; gap: 5px; flex: none; }
-.bt-hud-batt-pct { font-size: 10.5px; font-weight: 600; color: #fff; font-variant-numeric: tabular-nums; letter-spacing: -0.015em; }
+.bt-hud-batt-pct { font-size: 10.5px; font-weight: 600; color: var(--notch-fg, #fff); font-variant-numeric: tabular-nums; letter-spacing: -0.015em; }
 .bt-ring { flex: none; overflow: visible; width: 17px; height: 17px; }
 .bt-ring-bg { fill: none; stroke: rgba(255, 255, 255, 0.16); stroke-width: 3; }
 .bt-ring-fg { fill: none; stroke: #30d158; stroke-width: 3; stroke-linecap: round; stroke-dasharray: 66; stroke-dashoffset: 66;
@@ -2340,7 +2405,8 @@ body {
   height: 37px !important;
   border-radius: 19px !important;
   top: 7px !important;
-  background: #000 !important;
+  background: var(--notch-bg) !important;
+  color: var(--notch-fg) !important;
   border: 0 !important;
   box-shadow: 0 0 0 1px rgba(255, 159, 10, 0.4) !important;   /* amber border only, no glow */
   transition: width 0.65s var(--spring-pop), height 0.6s var(--spring-pop),
@@ -2412,11 +2478,11 @@ body {
   46% { transform: rotate(6deg); }
 }
 .alarm-text-wrap { display: flex; flex-direction: column; flex: 1; min-width: 0; line-height: 1.2; }
-.alarm-title { font-size: 10.5px; font-weight: 600; color: #fff; letter-spacing: -0.02em; }
+.alarm-title { font-size: 10.5px; font-weight: 600; color: var(--notch-fg, #fff); letter-spacing: -0.02em; }
 .alarm-sub {
   font-size: 8.5px;
   font-weight: 500;
-  color: rgba(255, 255, 255, 0.55);
+  color: var(--notch-fg-dim, rgba(255, 255, 255, 0.55));
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2942,7 +3008,7 @@ body {
 /* same width / height / corners / spring as .bt-hud-active; attached notch follows Settings > Corner Roundness */
 .island.state-compact:is(.transferring, .has-toast, .incoming-open):not(.biometric-active):not(.bt-hud-active):not(.alarm-active) {
   width: 220px !important; height: 37px !important; border-radius: 19px !important; top: 7px !important;
-  background: #000 !important; border: 0 !important;
+  background: var(--notch-bg) !important; color: var(--notch-fg) !important; border: 0 !important;
   box-shadow: none !important;
   transition: width 0.65s var(--spring-pop), height 0.6s var(--spring-pop),
               top 0.45s var(--ease-close), border-radius 0.5s var(--ease-close) !important;
@@ -3058,3 +3124,857 @@ body {
 @keyframes p2pGenPulse { 0%, 100% { opacity: 0.5; } 50% { opacity: 1; } }
 @keyframes p2pCodeIn { from { opacity: 0; transform: translateY(4px) scale(0.96); filter: blur(3px); } to { opacity: 1; transform: none; filter: none; } }
 .island.no-anim .gen-code-btn.busy, .island.no-anim .code-badge.pop { animation: none; }
+
+
+/* ===== Mac-Style Expanded Notch Menu: 500 x 210 ===== */
+.island.state-control-mac { width: 500px; height: 210px; }
+
+.island.state-control-mac {
+  transition: width 0.55s var(--spring-menu), height 0.55s var(--spring-menu),
+              border-radius 0.4s var(--ease-close), opacity 0.22s ease,
+              border-color 0.22s ease, background 0.25s ease, top 0.4s var(--ease-close);
+  border-radius: 0 0 var(--radius-menu) var(--radius-menu) !important;
+  border: 1px solid var(--line) !important;
+  border-top: none !important;
+  box-shadow: none;
+}
+/* Transparent glass */
+.island[data-menu="transparent"].state-control-mac,
+.island[data-mode="ghost"].state-control-mac {
+  background: rgba(6, 6, 9, 0.40) !important;
+  backdrop-filter: blur(24px) saturate(160%) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(160%) !important;
+  color: #f5f5f7 !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12) !important;
+}
+/* Solid colour (Light / Dark via --menu-bg / --menu-fg) */
+.island[data-menu="color"]:not([data-mode="ghost"]).state-control-mac {
+  background: var(--menu-bg) !important;
+  color: var(--menu-fg) !important;
+  backdrop-filter: blur(28px) saturate(180%) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.10) !important;
+}
+
+#view-control-mac.view.active {
+  display: flex !important; flex-direction: column; gap: 6px;
+  padding: 6px 10px 10px; font-family: var(--font-main); color: inherit;
+  box-sizing: border-box; overflow: hidden;
+}
+#view-control-mac button {
+  font-family: inherit; color: inherit; border: 0; background: none; cursor: pointer;
+}
+#view-control-mac .mx-card,
+#view-control-mac .mx-tile {
+  background: var(--color-tile-bg, color-mix(in srgb, var(--menu-fg) 9%, transparent));
+}
+#view-control-mac [data-mac].hidden { display: none !important; }
+
+/* Top strip (24px) */
+.mx-top { flex: none; height: 24px; display: flex; align-items: center; justify-content: space-between; padding: 0 2px; }
+.mx-time { display: flex; align-items: baseline; gap: 8px; }
+.mx-time b { font-size: 14px; font-weight: 700; letter-spacing: -0.02em; color: var(--menu-fg); font-variant-numeric: tabular-nums; }
+.mx-time span { font-size: 10.5px; font-weight: 500; color: var(--menu-fg-dim); }
+.mx-top-right { display: flex; align-items: center; gap: 6px; }
+.mx-weather {
+  display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 9px;
+  border-radius: 11px; font-size: 10.5px; font-weight: 600; color: var(--menu-fg);
+  background: color-mix(in srgb, var(--menu-fg) 9%, transparent);
+}
+.mx-battery {
+  display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 8px;
+  border-radius: 11px; font-size: 10px; font-weight: 700; color: var(--menu-fg);
+  background: color-mix(in srgb, var(--menu-fg) 9%, transparent);
+}
+.mx-battery #mac-bat-pct { font-variant-numeric: tabular-nums; }
+.mx-battery #mac-bat-ico { display: inline-flex; align-items: center; gap: 2px; }
+.mx-battery.charging { color: #30d158; }
+.mx-battery.low { color: #ff453a; }
+.mx-icon-btn {
+  width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center;
+  color: var(--menu-fg-dim) !important;
+  background: color-mix(in srgb, var(--menu-fg) 9%, transparent) !important;
+  transition: background 0.16s ease, color 0.16s ease;
+}
+.mx-icon-btn:hover { background: color-mix(in srgb, var(--menu-fg) 18%, transparent) !important; color: var(--menu-fg) !important; }
+
+/* Bento body (163px): 200 | gap 10 | 268 */
+.mx-body { flex: 1; min-height: 0; display: flex; gap: 10px; }
+.mx-left  { flex: none; width: 200px; display: flex; flex-direction: column; gap: 6px; }
+.mx-right { position: relative; flex: 1; min-width: 0; display: flex; flex-direction: column; height: 100%; }
+.mx-right-panel {
+  width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: space-between;
+  transition: opacity 0.16s ease, transform 0.18s ease;
+}
+.mx-right-panel.hidden { display: none !important; }
+
+/* In-place Sub-panel header & mount */
+.mx-sub-bar {
+  flex: none; height: 26px; display: flex; align-items: center; justify-content: space-between; padding: 0 2px 2px;
+  border-bottom: none !important;
+}
+.mx-sub-bar-left {
+  display: flex; align-items: center; gap: 6px; min-width: 0;
+}
+.mx-sub-actions {
+  display: flex; align-items: center; gap: 6px; margin-left: auto;
+}
+.mx-sub-actions .bt-header-right,
+.mx-sub-actions .panel-top-right,
+.mx-sub-actions .qs-header-right {
+  display: flex !important; align-items: center !important; gap: 6px !important; margin: 0 !important;
+}
+.mx-sub-actions button.icon-ghost-btn {
+  width: 22px !important; height: 22px !important; display: grid !important; place-items: center !important;
+  color: var(--menu-fg-dim) !important; background: color-mix(in srgb, var(--menu-fg) 8%, transparent) !important;
+  border-radius: 50% !important; border: none !important; padding: 0 !important; cursor: pointer;
+}
+.mx-sub-actions button.icon-ghost-btn:hover {
+  background: color-mix(in srgb, var(--menu-fg) 16%, transparent) !important;
+  color: var(--menu-fg) !important;
+}
+.mx-sub-actions .ios-switch {
+  transform: scale(0.78); transform-origin: right center; margin: 0 !important;
+}
+.mx-sub-actions .cal-nav-bar {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 3px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+.mx-sub-actions .cal-month-heading {
+  flex: none !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  color: var(--menu-fg) !important;
+  margin: 0 4px 0 0 !important;
+  white-space: nowrap !important;
+  order: 0 !important;
+}
+.mx-sub-actions .cal-month-heading .yr {
+  font-size: 10px !important;
+  font-weight: 500 !important;
+  opacity: 0.55 !important;
+  margin-left: 3px !important;
+}
+.mx-sub-actions .cal-nav-btn {
+  width: 18px !important;
+  height: 18px !important;
+  font-size: 13px !important;
+  line-height: 1 !important;
+  border-radius: 50% !important;
+  background: color-mix(in srgb, var(--menu-fg) 8%, transparent) !important;
+  color: var(--menu-fg) !important;
+  display: grid !important;
+  place-items: center !important;
+  padding: 0 !important;
+  cursor: pointer;
+  border: none !important;
+  order: 1 !important;
+}
+.mx-sub-actions #btn-cal-next {
+  order: 2 !important;
+}
+.mx-sub-actions .cal-nav-btn:hover {
+  background: color-mix(in srgb, var(--menu-fg) 18%, transparent) !important;
+}
+.mx-sub-actions .cal-today-btn {
+  font-size: 9.5px !important;
+  font-weight: 600 !important;
+  padding: 1px 6px !important;
+  height: 18px !important;
+  border-radius: 9px !important;
+  background: color-mix(in srgb, var(--mac-accent, #0a84ff) 18%, transparent) !important;
+  color: var(--mac-accent, #0a84ff) !important;
+  cursor: pointer;
+  margin-left: 2px !important;
+  border: none !important;
+  order: 3 !important;
+}
+.mx-sub-actions .cal-today-btn:hover {
+  background: var(--mac-accent, #0a84ff) !important;
+  color: #fff !important;
+}
+.mx-sub-actions .cal-today-btn.ghost {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+.mx-sub-actions .top-tool-btn {
+  font-size: 10px !important;
+  font-weight: 600 !important;
+  color: var(--menu-fg-dim) !important;
+  background: color-mix(in srgb, var(--menu-fg) 8%, transparent) !important;
+  border: none !important;
+  border-radius: 6px !important;
+  padding: 2px 7px !important;
+  height: 20px !important;
+  cursor: pointer;
+}
+.mx-sub-actions .top-tool-btn:hover {
+  background: color-mix(in srgb, var(--menu-fg) 16%, transparent) !important;
+  color: var(--menu-fg) !important;
+}
+.mx-sub-back-btn {
+  display: inline-flex; align-items: center; gap: 3px; font-size: 11px; font-weight: 600;
+  color: var(--mac-accent, #0a84ff) !important; padding: 2px 6px; border-radius: 6px;
+  transition: background 0.14s ease; cursor: pointer;
+}
+.mx-sub-back-btn:hover { background: color-mix(in srgb, var(--menu-fg) 10%, transparent); }
+.mx-sub-title { font-size: 11px; font-weight: 700; color: var(--menu-fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mx-sub-mount { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; display: flex; flex-direction: column; }
+
+/* In-place subview overrides inside Control Deck */
+.in-mac-sub {
+  display: flex !important; flex-direction: column !important; width: 100% !important; height: 100% !important;
+  background: transparent !important; border: none !important; border-radius: 0 !important;
+  box-shadow: none !important; padding: 0 !important;
+}
+.in-mac-sub .subview-header,
+.in-mac-sub .panel-top-bar {
+  display: none !important;
+}
+.in-mac-sub .smooth-scroll-list,
+.in-mac-sub .tray-files-grid,
+.in-mac-sub .notepad-body,
+.in-mac-sub .clipboard-body,
+.in-mac-sub .timer-box,
+.in-mac-sub .alarm-box,
+.in-mac-sub .drop-body {
+  max-height: 156px !important; flex: 1; min-height: 0; overflow-y: auto;
+}
+.in-mac-sub .cal-container {
+  max-height: 172px !important;
+  flex: 1;
+  min-height: 0;
+  padding: 0 !important;
+  overflow: hidden !important;
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: flex-start !important;
+  gap: 2px !important;
+}
+.in-mac-sub .cal-weekdays {
+  padding-bottom: 2px !important;
+  margin-bottom: 1px !important;
+  font-size: 8.5px !important;
+  border-bottom: 1px solid color-mix(in srgb, var(--menu-fg) 8%, transparent) !important;
+}
+.in-mac-sub .cal-days-grid {
+  grid-auto-rows: 20px !important;
+  gap: 1px !important;
+  font-size: 10px !important;
+}
+.in-mac-sub .cal-day {
+  width: 20px !important;
+  height: 20px !important;
+  font-size: 10px !important;
+}
+.in-mac-sub .cal-nav-bar {
+  display: none !important; /* when mounted in subpanel, nav bar is in mac-sub-actions */
+}
+.in-mac-sub #notepad-textarea { height: 116px !important; font-size: 11px !important; }
+.in-mac-sub .timer-digits { font-size: 32px !important; }
+
+.mx-left:not(:has(> :not(.hidden))) { display: none; }   /* media + stats both off */
+.mx-card { border-radius: 16px; }
+
+/* Media mini-card */
+.mx-media { flex: 1; min-height: 0; padding: 8px 10px; display: flex; flex-direction: column; justify-content: space-between; }
+.mx-media-top { display: flex; align-items: center; gap: 9px; min-width: 0; }
+.mx-art {
+  position: relative;
+  flex: none; width: 44px; height: 44px; border-radius: 10px; overflow: visible; display: grid; place-items: center;
+  background: color-mix(in srgb, var(--menu-fg) 14%, transparent); color: var(--menu-fg-dim);
+}
+.mx-art img { width: 100%; height: 100%; object-fit: cover; display: block; border-radius: 10px; }
+.mx-meta { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.mx-meta strong { font-size: 12px; font-weight: 600; letter-spacing: -0.02em; color: var(--menu-fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mx-meta small  { font-size: 10px; color: var(--menu-fg-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mx-seek-wrap {
+  position: relative;
+  height: 11px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}
+.mx-prog {
+  display: block;
+  width: 100%;
+  height: 3.5px;
+  border-radius: 999px;
+  overflow: visible;
+  background: color-mix(in srgb, var(--menu-fg) 16%, transparent);
+  transition: height 0.14s ease;
+}
+.mx-seek-wrap:hover .mx-prog { height: 5px; }
+.mx-prog u {
+  position: relative;
+  display: block;
+  height: 100%;
+  width: calc(var(--v, 0) * 1%);
+  border-radius: inherit;
+  background: var(--mac-accent);
+  text-decoration: none;
+  transition: width 0.2s ease;
+}
+.mx-seek-wrap:hover .mx-prog u::after {
+  content: "";
+  position: absolute;
+  right: -4px;
+  top: 50%;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+  transform: translateY(-50%);
+}
+#mac-seek-slider {
+  position: absolute;
+  inset: -3px 0;
+  width: 100%;
+  height: 17px;
+  opacity: 0;
+  cursor: pointer;
+  margin: 0;
+  z-index: 2;
+}
+.mx-transport { display: flex; align-items: center; justify-content: center; gap: 14px; height: 28px; }
+.mx-m-btn { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; color: var(--menu-fg) !important; transition: transform 0.12s ease, background 0.16s ease; }
+.mx-m-btn:hover { background: color-mix(in srgb, var(--menu-fg) 12%, transparent) !important; }
+.mx-m-btn:active { transform: scale(0.92); }
+.mx-m-btn.mx-play { background: var(--menu-fg) !important; color: var(--menu-bg, #000) !important; }
+
+/* Stats card (52px) with clean vertical divider and subtle meter bars */
+.mx-stats { flex: none; height: 52px; padding: 7px 10px; display: flex; align-items: stretch; gap: 0; box-sizing: border-box; }
+.mx-stat {
+  position: relative;
+  flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 4px;
+  color: var(--mac-accent, #0a84ff);
+}
+.mx-stat:not(:first-child):not(.hidden) {
+  padding-left: 10px;
+  margin-left: 10px;
+}
+.mx-stat:not(:first-child):not(.hidden)::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 4px;
+  bottom: 4px;
+  width: 1px;
+  background: color-mix(in srgb, var(--menu-fg) 16%, transparent);
+  border-radius: 1px;
+}
+.mx-stat.warn { color: #ff9f0a; }
+.mx-stat.crit { color: #ff453a; }
+
+/* Connected Bluetooth Device Status Card in Control Deck */
+.mx-stat-bt {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+.mx-stat-bt.hidden { display: none !important; }
+.mx-bt-ico {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(48, 209, 88, 0.16);
+  color: #30d158;
+}
+.mx-bt-ico svg {
+  width: 20px;
+  height: 20px;
+  overflow: visible;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.45));
+}
+.mx-bt-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+.mx-bt-name {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--menu-fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mx-bt-tag {
+  font-size: 8.5px;
+  font-weight: 500;
+  color: var(--menu-fg-dim);
+}
+.mx-bt-batt {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.mx-bt-pct {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--menu-fg);
+  font-variant-numeric: tabular-nums;
+}
+.mx-stat-bt .bt-ring {
+  flex: none;
+  display: block;
+}
+.mx-stat-bt .bt-ring-bg {
+  fill: none;
+  stroke: color-mix(in srgb, var(--menu-fg) 18%, transparent);
+  stroke-width: 2.4;
+}
+.mx-stat-bt .bt-ring-fg {
+  fill: none;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.35s ease, stroke 0.25s ease;
+}
+
+/* 2x2 toggles (36px tiles) */
+.mx-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.mx-tile {
+  position: relative;
+  height: 36px; padding: 0 6px 0 8px; border-radius: 18px; display: flex; align-items: center; gap: 7px;
+  text-align: left; min-width: 0; transition: background 0.16s ease, transform 0.12s ease;
+  cursor: pointer;
+}
+.mx-tile:hover  { background: color-mix(in srgb, var(--menu-fg) 14%, transparent) !important; }
+.mx-tile:active { transform: scale(0.97); }
+.mx-ico {
+  flex: none; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center;
+  background: color-mix(in srgb, var(--menu-fg) 20%, transparent); transition: background 0.18s ease;
+}
+.mx-ico svg { width: 13px; height: 13px; }
+.mx-tile.active .mx-ico { background: var(--mac-accent); color: var(--mac-accent-fg, #fff); }
+.mx-txt { min-width: 0; display: flex; flex-direction: column; line-height: 1.2; flex: 1; }
+.mx-txt b     { font-size: 10.5px; font-weight: 600; letter-spacing: -0.02em; color: var(--menu-fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mx-txt small { font-size: 9px; font-weight: 500; color: var(--menu-fg-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mx-tile.active .mx-txt small { color: var(--mac-accent-text, var(--mac-accent)); }
+.mx-tile-chev {
+  flex: none; width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center;
+  color: var(--menu-fg-dim); transition: background 0.14s ease, color 0.14s ease;
+}
+.mx-tile-chev:hover {
+  background: color-mix(in srgb, var(--menu-fg) 18%, transparent);
+  color: var(--menu-fg);
+}
+
+/* Pill sliders (22px) */
+.mx-sliders { display: flex; flex-direction: column; gap: 5px; }
+.mx-slider { position: relative; display: flex; align-items: center; }
+.mx-slider input[type="range"] {
+  -webkit-appearance: none; appearance: none; flex: 1; height: 22px; margin: 0; overflow: hidden;
+  border-radius: 11px; background: color-mix(in srgb, var(--menu-fg) 16%, transparent) !important; cursor: pointer;
+}
+.mx-slider input[type="range"]::-webkit-slider-runnable-track { height: 22px; background: transparent; }
+.mx-slider input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none; width: 0; height: 22px; background: transparent;
+  box-shadow: -600px 0 0 600px var(--mac-accent);
+}
+.mx-s-ico { position: absolute; left: 8px; top: 50%; transform: translateY(-50%); z-index: 2; pointer-events: none; color: #fff; mix-blend-mode: difference; }
+.mx-s-val { position: absolute; right: 10px; z-index: 2; pointer-events: none; font-size: 9.5px; font-weight: 600; color: #fff; mix-blend-mode: difference; font-variant-numeric: tabular-nums; }
+
+/* Quick action strip (24px) */
+.mx-quick { display: flex; align-items: center; justify-content: space-between; height: 24px; }
+.mx-q {
+  width: 48px; height: 24px; border-radius: 12px; display: grid; place-items: center;
+  color: var(--menu-fg-dim) !important;
+  background: color-mix(in srgb, var(--menu-fg) 9%, transparent) !important;
+  transition: background 0.16s ease, color 0.16s ease, transform 0.12s ease;
+}
+.mx-q:hover  { background: color-mix(in srgb, var(--menu-fg) 18%, transparent) !important; color: var(--menu-fg) !important; }
+.mx-q:active { transform: scale(0.94); }
+
+/* ============================================================
+   Album thumbnail corner source badge (Spotify / YouTube / Browser)
+   ============================================================ */
+.src-corner {
+  position: absolute;
+  right: -3px;
+  bottom: -2px;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: #27272d;
+  color: #fff;
+  box-shadow: 0 0 0 1.6px #121216, 0 2px 5px rgba(0, 0, 0, 0.45);
+  z-index: 3;
+  pointer-events: none;
+}
+.mx-art .src-corner {
+  box-shadow: 0 0 0 1.6px var(--menu-bg, #16161b), 0 1px 4px rgba(0, 0, 0, 0.35);
+}
+.src-corner .src-ico { display: grid; place-items: center; width: 100%; height: 100%; }
+.src-corner .src-ico svg { width: 11px; height: 11px; display: block; }
+.src-corner.src-spotify { background: #121212; }
+.src-corner.src-spotify .src-ico svg { width: 15px; height: 15px; }
+.src-corner.src-youtube {
+  width: 17px;
+  height: 12px;
+  border-radius: 4px;
+  background: #ff0033;
+  color: #ffffff;
+}
+.src-corner.src-youtube .src-ico svg { width: 12px; height: 12px; }
+.src-corner.src-youtube-music { background: #ff0033; color: #ffffff; }
+.src-corner.src-youtube-music .src-ico svg { width: 13px; height: 13px; }
+.src-corner.src-apple   { background: #fa243c; color: #ffffff; }
+.src-corner.src-vlc     { background: #ff6b00; color: #ffffff; }
+.src-corner.src-browser { background: #1d6ef2; color: #ffffff; }
+.src-corner.hidden { display: none !important; }
+
+/* ============================================================
+   Resting compact pill: native macOS SF-style icon + metric
+   ============================================================ */
+#c-clock { font-variant-numeric: tabular-nums; }
+#c-clock .c-stat-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4.5px;
+  height: 18px;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+#c-clock .c-stat-chip svg {
+  width: 12.5px;
+  height: 12.5px;
+  flex: none;
+  display: block;
+}
+#c-clock .c-stat-chip.is-weather svg { color: #fbbf24; }
+#c-clock .c-stat-chip.is-night   svg { color: #7dd3fc; }
+#c-clock .c-stat-chip.is-cpu     svg { color: #38bdf8; }
+#c-clock .c-stat-chip.is-ram     svg { color: #a78bfa; }
+#c-clock .c-stat-chip.is-bat     svg { color: #4ade80; }
+#c-clock .c-stat-chip.is-warn,
+#c-clock .c-stat-chip.is-warn svg { color: #ff9f0a; }
+#c-clock .c-stat-chip.is-crit,
+#c-clock .c-stat-chip.is-crit svg { color: #ff453a; }
+#c-clock .c-stat-chip > span {
+  display: inline-block;
+  text-align: left;
+  transform: translateY(0.2px);
+}
+
+/* ---- Round gauges (CPU / RAM / BAT) ---- */
+.mx-stats { height: 56px; padding: 6px 10px; }
+.mx-gauge { flex-direction: row; align-items: center; justify-content: flex-start; gap: 7px; }
+.mx-gauge .mx-g-ring { position: relative; flex: none; width: 40px; height: 40px; display: grid; place-items: center; }
+.mx-gauge .mx-g-ring svg { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(135deg); overflow: visible; }
+.mx-gauge circle { fill: none; stroke-width: 4.5; stroke-linecap: round; stroke-dasharray: 80.1 106.8; }
+.mx-gauge .mx-g-bg { stroke: color-mix(in srgb, var(--menu-fg) 14%, transparent); }
+.mx-gauge .mx-g-fg { stroke: currentColor; stroke-dasharray: 0 106.8; transition: stroke-dasharray 0.45s cubic-bezier(0.2, 0.8, 0.2, 1), stroke 0.25s ease; filter: drop-shadow(0 0 3px color-mix(in srgb, currentColor 45%, transparent)); }
+.mx-gauge .mx-g-val { position: relative; font-size: 10px; font-weight: 700; letter-spacing: -0.03em; color: var(--menu-fg); font-variant-numeric: tabular-nums; }
+.mx-gauge .mx-g-txt { min-width: 0; display: flex; flex-direction: column; line-height: 1.25; }
+.mx-gauge .mx-g-txt span { font-size: 9.5px; font-weight: 700; letter-spacing: 0.04em; color: var(--menu-fg); }
+.mx-gauge .mx-g-txt small { font-size: 8.5px; font-weight: 500; color: var(--menu-fg-dim); white-space: nowrap; }
+.mx-gauge .mx-g-txt small:empty { display: none; }
+.mx-gauge:not(:first-child):not(.hidden) { padding-left: 8px; margin-left: 6px; }
+
+/* Bluetooth tile: shows the connected device's icon (earbuds etc.) */
+.mx-ico.has-dev svg { width: 18px; height: 18px; overflow: visible; filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.45)); }
+
+
+/* ---- Quick action row: always fits the menu (max 7 tiles) ----
+   312px menu - 2px border - 28px padding = 282px. 7 x 36px + 6 x 4px = 276px. If the menu is ever narrower
+   (UI scale, translated labels ...) the circles shrink together instead of the last one being cut off. */
+.island .quick-icons-row { gap: 4px; flex-wrap: nowrap; justify-content: space-between; }
+.island.island.island:not([data-theme="matrix"]) .q-icon-btn {
+  flex: 0 1 36px; min-width: 0; width: auto; height: auto; aspect-ratio: 1 / 1;
+}
+
+/* BT card icon: a neutral device icon with subtle depth, without green or animation. */
+.mx-stat-bt .mx-bt-ico {
+  background: color-mix(in srgb, var(--menu-fg) 10%, transparent);
+  color: var(--menu-fg);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14), 0 2px 5px rgba(0, 0, 0, 0.28);
+}
+.mx-stat-bt .mx-bt-ico svg {
+  animation: none;
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.5));
+  transform: perspective(80px) rotateY(-16deg) rotateX(8deg);
+}
+
+/* Mac media card: notch-player-like album-coloured glow. */
+#mac-media { position: relative; overflow: hidden; isolation: isolate; }
+#mac-media .mx-media-top, #mac-media .mx-seek-wrap, #mac-media .mx-transport { position: relative; z-index: 1; }
+#mac-media .media-ambient-wave { opacity: 0.5; }
+#mac-media.no-ambient .media-ambient-wave { display: none; }
+
+/* Notch-opened media: no edge, blend into the player. */
+.island.state-media {
+  border: none !important;
+  background: #060608 !important;
+  box-shadow: none !important;
+}
+
+/* Music note: always visible on both players. */
+#mac-media::after, #view-media::after {
+  content: ""; position: absolute; right: -6px; bottom: -10px; width: 66px; height: 66px;
+  z-index: 0; pointer-events: none; opacity: 0.09; transform: rotate(14deg);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 18V5l12-2v13'/%3E%3Ccircle cx='6' cy='18' r='3'/%3E%3Ccircle cx='18' cy='16' r='3'/%3E%3C/svg%3E") center / contain no-repeat;
+          mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 18V5l12-2v13'/%3E%3Ccircle cx='6' cy='18' r='3'/%3E%3Ccircle cx='18' cy='16' r='3'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+#mac-media::after { background: var(--menu-fg); }
+#view-media::after { background: #fff; }
+
+/* Show the album-coloured glow only when media is available. */
+#mac-media .media-ambient-wave { transition: opacity 0.4s ease; }
+#mac-media:not(.has-media) .media-ambient-wave { opacity: 0; }
+
+/* Album-coloured ears follow the media panel and overlap its borderless edge. */
+.island.state-media .notch-ear.ear-left .ear-fill { fill: color-mix(in srgb, rgb(var(--amb, 70, 130, 180)) 24%, #060608) !important; }
+.island.state-media .notch-ear.ear-right .ear-fill { fill: color-mix(in srgb, rgb(var(--amb, 70, 130, 180)) 13%, #060608) !important; }
+.island.state-media .notch-ear.ear-left { left: calc(0px - var(--ear-size) + var(--ear-overlap, 0.5px)); }
+.island.state-media .notch-ear.ear-right { right: calc(0px - var(--ear-size) + var(--ear-overlap, 0.5px)); }
+
+/* Notch player glow: as subtle as the Mac card. */
+#view-media .media-ambient-wave { opacity: 0.38; }
+
+/* ==================== NOTCH MEDIA POPUP: follows Island Color like the Control Deck media card ==================== */
+/* Surface, text and ears all come from the menu colour (= Island Color). The album glow stays, but fades out towards the top edge
+   so the bezel ears (plain menu colour) meet the panel without a visible seam. */
+.island.state-media {
+  background: var(--menu-bg) !important;
+  color: var(--menu-fg) !important;
+}
+.island.state-media .media-ambient-card,
+#view-media.media-ambient-card {
+  background: transparent !important;
+  color: var(--menu-fg) !important;
+}
+#view-media .media-ambient-wave {
+  opacity: 0.14;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, #000 55%);
+          mask-image: linear-gradient(to bottom, transparent 0%, #000 55%);
+}
+#view-media .media-cover { background: color-mix(in srgb, var(--menu-fg) 12%, transparent); border-color: color-mix(in srgb, var(--menu-fg) 18%, transparent); }
+#view-media .media-meta strong { color: var(--menu-fg); text-shadow: none; }
+#view-media .media-meta small  { color: var(--menu-fg-dim); }
+#view-media .m-eq span { background: var(--menu-fg) !important; }
+#view-media .media-timeline { color: var(--menu-fg-dim); }
+#view-media .t-bar  { background: color-mix(in srgb, var(--menu-fg) 20%, transparent); }
+#view-media .t-fill { background: var(--menu-fg); }
+#view-media .m-btn  { color: var(--menu-fg); }
+#view-media .media-vol-row { color: var(--menu-fg-dim); }
+#view-media .media-vol-row input[type="range"] { accent-color: var(--menu-fg); }
+#view-media::after { background: var(--menu-fg); }
+#m-art-fallback { stroke: currentColor; }
+/* ears of the media popup = exactly the panel colour */
+.island.state-media .notch-ear.ear-left .ear-fill,
+.island.state-media .notch-ear.ear-right .ear-fill { fill: var(--menu-bg, var(--notch-bg)) !important; }
+
+/* The generic ".view.active > *" entrance ("rise") animated the glow layer's opacity 0 -> 1, so for a third of a second the album glow
+   was far stronger than its resting 0.32: the popup opened grey and then lightened (looked cut / not synced). The glow gets its own
+   entrance that ends exactly on its resting opacity. */
+@keyframes mediaWaveIn { from { opacity: 0; } to { opacity: 0.14; } }
+#view-media.view.active > .media-ambient-wave {
+  animation: mediaWaveIn 0.5s ease both;
+  animation-delay: 0s;
+}
+
+/* The thin light "line" that flashed when the island shrank back to the notch:
+   "border: none / 0" resets the border colour to currentColor (the light menu text colour), and the 0.22s border-color transition then
+   faded that colour out on the notch edge. Keep the border colour transparent in every popup state so there is nothing to fade. */
+.island.state-media,
+.island.island.island.island.island.island.island.state-compact:is(.bt-hud-active, .alarm-active, .transferring, .has-toast, .incoming-open, .biometric-active) {
+  border-color: transparent !important;
+}
+
+/* Keep-awake button in the Mac menu top bar: filled when ON */
+.mx-icon-btn.active { background: var(--menu-fg) !important; color: var(--menu-bg, #000) !important; }
+
+/* Status popups (Bluetooth / charger / timer / transfer / toast) are plain pills: no curved bezel ears on them */
+.island.state-compact:is(.bt-hud-active, .alarm-active, .transferring, .has-toast, .incoming-open, .hud-pre, .hud-back) .notch-ear,
+.island:has(.c-bt-hud:not(.hidden)) .notch-ear,
+.island:has(.c-alarm-hud:not(.hidden)) .notch-ear {
+  display: none !important;
+}
+
+/* Mac menu: mic tile (slash shows when muted) + tray icon badge in the top bar */
+.mx-mic-slash { display: none; }
+#mac-tile-mic.muted .mx-mic-slash { display: block; }
+#mac-tile-mic.muted .mx-txt small { color: #ff453a; }
+.mx-icon-btn { position: relative; }
+.mx-tray-badge {
+  position: absolute; top: -4px; right: -4px; min-width: 12px; height: 12px; padding: 0 3px; border-radius: 6px;
+  font-size: 8px; font-weight: 700; line-height: 12px; text-align: center;
+  background: var(--mac-accent, #0a84ff); color: var(--mac-accent-fg, #fff);
+}
+.mx-tray-badge.hidden { display: none !important; }
+
+/* ===== Mac menu: Tray + Inex Drop two-panel view (500 x 172) ===== */
+.island.state-tray-mac { width: 500px; height: 172px; }
+.island.state-tray-mac {
+  transition: width 0.55s var(--spring-menu), height 0.55s var(--spring-menu),
+              border-radius 0.4s var(--ease-close), opacity 0.22s ease,
+              border-color 0.22s ease, background 0.25s ease, top 0.4s var(--ease-close);
+  border-radius: 0 0 var(--radius-menu) var(--radius-menu) !important;
+  border: 1px solid var(--line) !important;
+  border-top: none !important;
+  box-shadow: none;
+}
+.island[data-menu="transparent"].state-tray-mac,
+.island[data-mode="ghost"].state-tray-mac {
+  background: rgba(6, 6, 9, 0.40) !important;
+  backdrop-filter: blur(24px) saturate(160%) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(160%) !important;
+  color: #f5f5f7 !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12) !important;
+}
+.island[data-menu="color"]:not([data-mode="ghost"]).state-tray-mac {
+  background: var(--menu-bg) !important;
+  color: var(--menu-fg) !important;
+  backdrop-filter: blur(28px) saturate(180%) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.10) !important;
+}
+#view-tray-mac.view.active {
+  display: flex !important; flex-direction: row; gap: 8px;
+  padding: 8px 10px 10px; box-sizing: border-box; overflow: hidden;
+  font-family: var(--font-main); color: inherit;
+}
+#view-tray-mac button { font-family: inherit; color: inherit; border: 0; background: none; cursor: pointer; }
+.mt-panel {
+  position: relative; min-width: 0; border-radius: 18px; box-sizing: border-box;
+  background: color-mix(in srgb, var(--menu-fg) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--menu-fg) 10%, transparent);
+  transition: background 0.16s ease, border-color 0.16s ease;
+}
+.mt-drop {
+  flex: 0 0 38%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+  cursor: pointer; color: var(--menu-fg);
+}
+.mt-drop b { font-size: 12px; font-weight: 600; letter-spacing: -0.01em; margin-top: 4px; }
+.mt-drop small { font-size: 10px; color: var(--menu-fg-dim); }
+.mt-drop:hover { background: color-mix(in srgb, var(--menu-fg) 14%, transparent); }
+.mt-tray { flex: 1; display: flex; flex-direction: column; color: var(--menu-fg); }
+.mt-empty {
+  flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+  font-size: 11.5px; font-weight: 600; color: var(--menu-fg-dim);
+}
+.mt-empty.hidden, .mt-filled.hidden { display: none !important; }
+.mt-filled { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 8px 10px 8px; gap: 6px; }
+.mt-head { flex: none; display: flex; align-items: center; justify-content: space-between; font-size: 11px; font-weight: 600; color: var(--menu-fg-dim); }
+.mt-files { flex: 1; min-height: 0; display: flex; gap: 8px; overflow-x: auto; overflow-y: hidden; align-items: stretch; scrollbar-width: none; }
+.mt-files::-webkit-scrollbar { display: none; }
+.mt-file {
+  position: relative; flex: none; width: 74px; border-radius: 12px; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 6px; padding: 6px 4px; box-sizing: border-box;
+  background: color-mix(in srgb, var(--menu-fg) 10%, transparent); cursor: grab; color: var(--menu-fg);
+}
+.mt-file:hover { background: color-mix(in srgb, var(--menu-fg) 16%, transparent); }
+.mt-fname { width: 100%; font-size: 9.5px; font-weight: 500; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mt-del {
+  position: absolute; top: 3px; right: 3px; width: 15px; height: 15px; border-radius: 50%; display: none;
+  place-items: center; font-size: 11px; line-height: 1; background: color-mix(in srgb, var(--menu-fg) 22%, transparent) !important;
+}
+.mt-file:hover .mt-del { display: grid; }
+/* while dragging a file over the island: calm, solid Mac-style cards (no animation), hovered one gets brighter */
+#view-tray-mac.dragging .mt-panel { border-color: color-mix(in srgb, var(--menu-fg) 16%, transparent); }
+#view-tray-mac .mt-panel.over {
+  background: color-mix(in srgb, var(--menu-fg) 20%, transparent);
+  border-color: color-mix(in srgb, var(--menu-fg) 38%, transparent);
+}
+
+
+/* ==================== CONTROL DECK (Mac menu) · tray pane, Inex Drop rail, P2P bar ==================== */
+/* Tray pane: fills the whole body, the top strip stays. No animation. */
+#view-control-mac.tray-open > .mx-body { visibility: hidden; flex: 0 0 0; height: 0; min-height: 0; margin-bottom: -6px; overflow: hidden; }
+#view-control-mac #view-tray-mac.in-mac-tray.view.active {
+  flex: 1; min-height: 0; width: 100%; height: auto; padding: 0; gap: 10px; animation: none !important;
+}
+#view-control-mac #view-tray-mac.in-mac-tray > * { animation: none !important; }
+#mac-tray-btn.on { background: color-mix(in srgb, var(--menu-fg) 22%, transparent) !important; color: var(--menu-fg) !important; }
+
+/* Tray cards: Mac look = hairline border, soft top highlight, drop well with a dashed border */
+.mt-panel {
+  border-radius: 16px;
+  background: var(--color-tile-bg, color-mix(in srgb, var(--menu-fg) 9%, transparent));
+  border: 1px solid color-mix(in srgb, var(--menu-fg) 13%, transparent);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--menu-fg) 8%, transparent);
+}
+.mt-empty { margin: 7px; border-radius: 11px; border: 1.5px dashed color-mix(in srgb, var(--menu-fg) 22%, transparent); }
+.mt-file { border: 1px solid color-mix(in srgb, var(--menu-fg) 12%, transparent); box-sizing: border-box; }
+
+/* Inex Drop side slider: smaller (Mac menu only) */
+.island.state-control-mac .drop-rail { width: 26px; padding: 2px; gap: 3px; border-radius: 13px; top: calc(50% - 25px); }
+.island.state-control-mac .drop-rail-ind { left: 2px; top: 2px; width: 22px; height: 22px; transform: translateY(calc(var(--i) * 25px)); }
+.island.state-control-mac .rail-btn { width: 22px; height: 22px; }
+.island.state-control-mac .rail-btn svg { width: 12px; height: 12px; }
+
+/* P2P: options live in the Back line; the body only keeps the join row + peers */
+.mx-p2p-actions { display: flex; align-items: center; gap: 5px; min-width: 0; }
+.mx-p2p-actions .gen-code-btn { height: 22px; padding: 0 10px; border-radius: 11px; font-size: 10px; }
+.mx-p2p-actions .code-badge { flex: 0 1 auto; max-width: 118px; padding: 3px 7px; font-size: 10px; letter-spacing: 0.5px; border-radius: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mx-p2p-actions .p2p-exit-btn { height: 20px; padding: 0 7px; }
+.mx-p2p-actions .p2p-expiry-badge { font-size: 10px; padding: 0; }
+.mx-p2p-actions .status-tag { flex: none; max-width: 92px; padding: 2px 7px; font-size: 9px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.island.state-control-mac #view-p2p .p2p-body { flex: 1; min-height: 0; margin: 0; padding: 2px 36px 0 2px; gap: 6px; }
+.island.state-control-mac #view-p2p .p2p-top-actions { justify-content: stretch; }
+
+/* Mac menu: lay the content out at its FINAL width from the first frame of the opening, centred, and let the
+   island simply reveal it. Before, the content was 100% of the still-growing island, so the clock wrapped onto
+   two lines ("07:17 / am", "Sat, / 14 / Nov") and the tiles were squeezed until the island reached full width.
+   478px = 500px island - 2px border - 2 x 10px padding. No animation added. */
+#view-control-mac > .mx-top,
+#view-control-mac > .mx-body,
+#view-control-mac #view-tray-mac.in-mac-tray.view.active {
+  width: 478px; min-width: 478px; max-width: none; margin-left: calc(50% - 239px);
+}
+.mx-time, .mx-time b, .mx-time span, .mx-weather { white-space: nowrap; }
+
+/* ==================== NEXUS VOICE glyphs ==================== */
+/* The island itself is the Face ID / unlock card (.biometric-active, 92 x 92); only the glyph inside differs. */
+.nx-wave { display: flex; align-items: center; justify-content: center; gap: 3px; height: 38px; }
+.nx-wave i {
+  display: block; width: 3.5px; height: 34px; border-radius: 2px; flex: 0 0 3.5px;
+  background: linear-gradient(180deg, #8ff3ff 0%, #30d158 100%);
+  box-shadow: 0 0 7px rgba(90, 220, 230, 0.35);
+  transform-origin: center;
+  animation: nxBar var(--t, 1s) ease-in-out var(--dl, 0s) infinite alternate;
+}
+.nx-wave i:nth-child(1) { --h: 0.38; --t: 0.95s; --dl: -0.30s; }
+.nx-wave i:nth-child(2) { --h: 0.64; --t: 0.80s; --dl: -0.55s; }
+.nx-wave i:nth-child(3) { --h: 0.86; --t: 1.05s; --dl: -0.10s; }
+.nx-wave i:nth-child(4) { --h: 1.00; --t: 0.90s; --dl: -0.70s; }
+.nx-wave i:nth-child(5) { --h: 0.82; --t: 1.10s; --dl: -0.40s; }
+.nx-wave i:nth-child(6) { --h: 0.60; --t: 0.85s; --dl: -0.20s; }
+.nx-wave i:nth-child(7) { --h: 0.36; --t: 1.00s; --dl: -0.60s; }
+@keyframes nxBar { 0% { transform: scaleY(0.16); } 100% { transform: scaleY(var(--h, 1)); } }
+
+.nx-aurora { position: relative; width: 38px; height: 38px; animation: nxPop 0.55s cubic-bezier(0.34, 1.7, 0.64, 1) both; }
+.nx-aurora b { position: absolute; border-radius: 50%; }
+.nx-aurora b:nth-child(1) { inset: 0; opacity: 0.95; filter: blur(5px); background: conic-gradient(from 0deg, #5ac8fa, #30d158, #bf5af2, #5ac8fa); animation: nxSpin 2.2s linear infinite; }
+.nx-aurora b:nth-child(2) { inset: 5px; filter: blur(1.5px); mix-blend-mode: screen; background: conic-gradient(from 180deg, rgba(255,255,255,0), rgba(255,255,255,0.85), rgba(255,255,255,0) 60%); animation: nxSpin 1.4s linear infinite reverse; }
+.nx-aurora b:nth-child(3) { inset: 12px; background: radial-gradient(circle, #fff 0%, rgba(255,255,255,0) 70%); animation: nxPulse 1.3s ease-in-out infinite; }
+@keyframes nxSpin { to { transform: rotate(360deg); } }
+@keyframes nxPulse { 0%, 100% { transform: scale(0.7); opacity: 0.55; } 50% { transform: scale(1.15); opacity: 1; } }
+@keyframes nxPop { 0% { transform: scale(0.55); opacity: 0; filter: blur(4px); } 100% { transform: scale(1); opacity: 1; filter: blur(0); } }
+.nx-wave { animation: nxPop 0.5s cubic-bezier(0.34, 1.7, 0.64, 1) both; }

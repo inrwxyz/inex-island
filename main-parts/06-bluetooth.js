@@ -52,7 +52,7 @@ async function loadBtList(soft) {
   }
   const devices = await invokeTauri('get_bt_devices');
   btn.classList.remove('spin');
-  if (appState.currentView !== 'view-bt' || appState.btBusy) return;
+  if (!isBtViewOpen() || appState.btBusy) return;
   btList.innerHTML = '';
   const subs = [];
   if (!devices || devices.length === 0) {
@@ -109,7 +109,7 @@ async function loadBtList(soft) {
             errEl.textContent = 'Could not ' + (d.connected ? 'disconnect' : 'connect');
           } else {
             selectedBtName = null;
-            setTimeout(() => { if (appState.currentView === 'view-bt') loadBtList(true); }, 500);
+            setTimeout(() => { if (isBtViewOpen()) loadBtList(true); }, 500);
           }
         });
 
@@ -167,7 +167,7 @@ async function loadBtList(soft) {
 
 async function renderBtNearby() {
   const box = document.getElementById('bt-nearby');
-  if (!box || appState.currentView !== 'view-bt' || appState.btBusy || appState.btPairing) return;
+  if (!box || !isBtViewOpen() || appState.btBusy || appState.btPairing) return;
   const list = (await invokeTauri('get_bt_nearby')) || [];
   if (!box.isConnected || appState.btBusy || appState.btPairing) return;
   box.innerHTML = '';
@@ -217,7 +217,7 @@ async function startBtPair(n, row, sub) {
   appState.btPairing = false;
   appState.btBusy = false;
   appState.keepOpen = false;
-  if (appState.currentView !== 'view-bt') return;
+  if (!isBtViewOpen()) return;
   await loadBtList(true);
   if (r !== 'ok') showBtNote(BT_PAIR_ERR[r] || 'Could not pair, try again');
 }
@@ -225,7 +225,7 @@ async function startBtPair(n, row, sub) {
 // Windows asks a question while pairing: confirm a number / show a number / type a PIN
 function showBtPrompt(p) {
   if (!p) return;
-  if (appState.currentView !== 'view-bt') {
+  if (!isBtViewOpen()) {
     // the user left the list: do not leave Windows waiting
     if (p.kind !== 'display_pin') invokeTauri('bt_pair_answer', { accept: false });
     return;
@@ -327,54 +327,50 @@ const BATT_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" str
 
 function hudIsFloating() { return !!(SET.notch && SET.notch.style === 'floating'); }
 function hudCanShow() { return appState.currentView === 'view-compact'; }   // never fight an open menu
-// The island is zoomed by Settings > UI Scale, so the window has to grow with it, plus room for the spring overshoot.
-// Too small a window cuts the bottom of the pill off (the text line under the name vanishes).
 function hudUiScale() { return Math.max(0.8, ((SET.appearance && SET.appearance.scale) || 100) / 100); }
-function hudWindowSize() {
-  // Keep OS window width invariant (ISLAND_WIN_W) so HUD open/close is height-only and never jumps sideways;
-  // invokeTauri() already applies SET.appearance.scale to both width and height.
+function hudIslandSize() {
+  // Nominal size of the HUD / popup pill; reportIslandSize() applies SET.appearance.scale to it.
   return { width: ISLAND_WIN_W, height: hudIsFloating() ? 64 : 54 };
 }
-// Transfer / toast / lock-prompt popups use the SAME window as the Bluetooth HUD.
-// (Before, only the CSS size matched: the OS window stayed 265x36, so these pills were clipped and looked smaller.)
+// Transfer / toast / lock-prompt popups use the SAME island size as the Bluetooth HUD.
 function popupIsBusy() { return !!(appState.transferring || appState.prompting || appState.lockerPrompting || appState.toast); }
 
-// Window for the compact view: the HUD-size window while a status popup (transfer / toast / prompt) is open,
-// the small notch window otherwise. Used when the menu closes or Settings change, so those never shrink the window
-// under an open popup (that clipped the transfer pill until another status resized it again).
-function compactWindowSize(win) {
+// Island size for the compact view: the HUD size while a status popup (transfer / toast / prompt) is open,
+// the small notch size otherwise. Used when the menu closes or Settings change, so the clickable area never
+// shrinks under an open popup.
+function compactIslandSize(win) {
   if (popupIsBusy() && !(island.classList.contains('alarm-active') || island.classList.contains('bt-hud-active')
       || island.classList.contains('biometric-active') || island.classList.contains('bio-hud'))) {
-    popupWinOn = true;
-    return hudWindowSize();
+    popupSizeOn = true;
+    return hudIslandSize();
   }
   return win;
 }
 
-function hudRestoreWindow() {
-  if (!hudCanShow() || appState.alarmActive) return;   // the timer-end card keeps its own window size
-  if (popupIsBusy()) { tryInvoke('resize_island', hudWindowSize()); return; }   // a popup is still open: keep the HUD-size window
-  tryInvoke('resize_island', { width: ISLAND_WIN_W, height: hudIsFloating() ? 48 : 36 });
+function hudRestoreSize() {
+  if (!hudCanShow() || appState.alarmActive) return;   // the timer-end card keeps its own size
+  if (popupIsBusy()) { reportIslandSize(hudIslandSize()); return; }   // a popup is still open: keep the HUD size
+  reportIslandSize({ width: ISLAND_WIN_W, height: hudIsFloating() ? 48 : 36 });
 }
 
-let popupWinOn = false, popupWinT = null;
-function syncPopupWindow(busy) {
+let popupSizeOn = false, popupSizeT = null;
+function syncPopupSize(busy) {
   if (appState.currentView !== 'view-compact') return;
   if (appState.alarmActive || island.classList.contains('bt-hud-active') || island.classList.contains('hud-pre')
-      || island.classList.contains('biometric-active') || island.classList.contains('bio-hud')) return;   // those own the window
-  clearTimeout(popupWinT);
+      || island.classList.contains('biometric-active') || island.classList.contains('bio-hud')) return;   // those own the island size
+  clearTimeout(popupSizeT);
   if (busy) {
-    popupWinOn = true;
-    tryInvoke('resize_island', hudWindowSize());
-  } else if (popupWinOn) {
-    // let the pill finish shrinking before the window gets small again
-    popupWinT = setTimeout(() => {
-      popupWinOn = false;
+    popupSizeOn = true;
+    reportIslandSize(hudIslandSize());
+  } else if (popupSizeOn) {
+    // let the pill finish shrinking before the clickable area gets small again
+    popupSizeT = setTimeout(() => {
+      popupSizeOn = false;
       // a biometric morph / device HUD / alarm may have started during the 650 ms wait (e.g. the locker prompt closes
-      // and the unlock morph begins right away): they own the window now, shrinking it here clipped the animation
+      // and the unlock morph begins right away): they own the size now, shrinking it here would cut the animation's clickable area
       if (island.classList.contains('bio-hud') || island.classList.contains('biometric-active') || island.classList.contains('hud-pre')
           || island.classList.contains('bt-hud-active') || island.classList.contains('alarm-active') || appState.alarmActive) return;
-      if (!popupIsBusy()) hudRestoreWindow();
+      if (!popupIsBusy()) hudRestoreSize();
     }, 650);
   }
 }
@@ -449,18 +445,18 @@ function showDeviceHud(o) {
     requestAnimationFrame(tick);
   }
 
-  const win = hudWindowSize();
+  const win = hudIslandSize();
   if (typeof cancelCloseEase === 'function') cancelCloseEase();
   if (alreadyOpen) {
     // the pill is already out (e.g. next file request right after "saved"): keep it open, only swap the content
-    tryInvoke('resize_island', win);
+    reportIslandSize(win);
     hud.classList.add('hidden');
     void hud.offsetWidth;              // restarts the content animation
     hud.classList.remove('hidden');
   } else {
     hud.classList.remove('hidden');
     // 1) window big enough, 2) old content blurs away, 3) island springs open
-    tryInvoke('resize_island', win);   // wider/taller than the HUD so the spring overshoot is never clipped
+    reportIslandSize(win);   // wider/taller than the HUD so the spring overshoot is never clipped
     island.classList.add('hud-pre');
     btHudStartT = setTimeout(() => {
       island.classList.remove('hud-pre');
@@ -480,7 +476,7 @@ function hideDeviceHud(instant) {
   const finish = () => {
     hud.classList.add('hidden');
     island.classList.remove('bt-hud-active', 'hud-out', 'hud-back', 'hud-pre');
-    hudRestoreWindow();
+    hudRestoreSize();
     renderCenter(); updateClocks(); refreshMedia();
   };
   if (instant || hud.classList.contains('hidden')) {
@@ -494,13 +490,14 @@ function hideDeviceHud(instant) {
     btHudEndT = setTimeout(() => {
       hud.classList.add('hidden');
       island.classList.remove('hud-back');
-      hudRestoreWindow();
+      hudRestoreSize();
       renderCenter(); updateClocks(); refreshMedia();
     }, 600);
   }, 170);
 }
 
 function showBtConnectHud(name, kind, battPct) {
+  playStatusSound('bluetooth', 'bluetooth');
   const isBuds = kind === 'headphones' && /airpod|buds|earbud|earphone|airdope|tws|pods|wf-/i.test(name || '');
   showDeviceHud({
     iconHTML: isBuds ? BUDS_SVG : (DEV_ICONS[kind] || DEV_ICONS.bt),
@@ -538,7 +535,7 @@ onTauriEvent('bluetooth-changed', () => {
   btEvT = setTimeout(() => {
     refreshBtCaption();
     checkNewBtConnections();
-    if (appState.currentView === 'view-bt') loadBtList(true);
+    if (isBtViewOpen()) loadBtList(true);
   }, 400);
 });
 onTauriEvent('bluetooth-nearby', () => { clearTimeout(btNearT); btNearT = setTimeout(renderBtNearby, 500); });
