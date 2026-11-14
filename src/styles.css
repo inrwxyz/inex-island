@@ -1497,7 +1497,7 @@ body {
 #btn-cal-next { order: 2; }
 .cal-today-btn { order: 3; }
 /* calendar needs 6 week rows: a little taller than the other sub menus */
-.island.state-sub:has(#view-calendar.active) { height: 246px; }
+.island.state-sub.is-cal { height: 246px; }
 
 /* Notepad Styles */
 .notepad-body {
@@ -2938,11 +2938,11 @@ body {
    (before, the island stayed 204px and the bottom of the view was cut off). */
 /* Inex Drop uses the normal sub-menu size (same as P2P): .island.state-sub = 204px */
 
-.drop-body:has(#drop-state-active:not(.hidden)) {
+.drop-body.has-active {
   justify-content: flex-start; align-items: stretch;
   flex: 1; min-height: 0; overflow: hidden; padding: 0 12px 10px;
 }
-.drop-body:has(#drop-state-active:not(.hidden)) > .drop-state-box { flex: 1; min-height: 0; align-items: stretch; }
+.drop-body.has-active > .drop-state-box { flex: 1; min-height: 0; align-items: stretch; }
 
 .qs-active { display: flex; flex-direction: column; gap: 6px; text-align: left; }
 .qs-active.hidden { display: none !important; }
@@ -3391,7 +3391,6 @@ body {
 .in-mac-sub #notepad-textarea { height: 116px !important; font-size: 11px !important; }
 .in-mac-sub .timer-digits { font-size: 32px !important; }
 
-.mx-left:not(:has(> :not(.hidden))) { display: none; }   /* media + stats both off */
 .mx-card { border-radius: 16px; }
 
 /* Media mini-card */
@@ -3828,9 +3827,7 @@ body {
 .mx-icon-btn.active { background: var(--menu-fg) !important; color: var(--menu-bg, #000) !important; }
 
 /* Status popups (Bluetooth / charger / timer / transfer / toast) are plain pills: no curved bezel ears on them */
-.island.state-compact:is(.bt-hud-active, .alarm-active, .transferring, .has-toast, .incoming-open, .hud-pre, .hud-back) .notch-ear,
-.island:has(.c-bt-hud:not(.hidden)) .notch-ear,
-.island:has(.c-alarm-hud:not(.hidden)) .notch-ear {
+.island.state-compact:is(.bt-hud-active, .alarm-active, .transferring, .has-toast, .incoming-open, .hud-pre, .hud-back) .notch-ear {
   display: none !important;
 }
 
@@ -3998,11 +3995,12 @@ body {
 
 /* ==================== MAC MENU: Inex Drop incoming offer (Accept / Decline) ==================== */
 /* The offer card has to fit the panel with no scrollbar: compact, nothing clipped, centred between the rail gap. */
-.in-mac-sub .drop-body:has(#drop-state-prompt:not(.hidden)),
-.mx-sub-mount:has(#drop-state-prompt:not(.hidden)) {
+.in-mac-sub .drop-body.has-prompt,
+.mx-sub-mount.has-prompt {
   overflow: hidden !important;
 }
-.island.has-rail #view-inexdrop.in-mac-sub .drop-body:has(#drop-state-prompt:not(.hidden)) {
+.island.has-rail #view-inexdrop.in-mac-sub.has-prompt .drop-body,
+.island.has-rail #view-inexdrop.in-mac-sub .drop-body.has-prompt {
   max-height: none !important; min-height: 0; padding: 0 40px 4px; justify-content: center;
 }
 .in-mac-sub #drop-state-prompt .drop-prompt-card {

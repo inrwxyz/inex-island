@@ -243,6 +243,11 @@ function applyMacMenuConfig() {
   if (topBat && appState.stats) {
     topBat.classList.toggle('hidden', !(appState.stats.battery_pct >= 0 && cfg.showBattery !== false));
   }
+  const mxLeft = document.querySelector('#view-control-mac .mx-left');
+  if (mxLeft) {
+    const hasVisibleChild = [...mxLeft.children].some((c) => !c.classList.contains('hidden'));
+    mxLeft.classList.toggle('hidden', !hasVisibleChild);
+  }
 }
 
 function openControlMenu() {

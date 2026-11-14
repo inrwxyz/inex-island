@@ -23,16 +23,19 @@ function eqKick() {
 // Tauri event pushed by Rust WASAPI Loopback FFT worker (~32ms)
 onTauriEvent('audio-visualization', (event) => {
   if (!SET.notch.eqSync || !appState.mediaPlaying) return;
+  const view = appState.currentView;
+  if (view !== 'view-compact' && view !== 'view-media') return;
+
   const freqs = (event.payload && event.payload.frequencies) || [];
   if (freqs.length >= 5) {
     lastFrequencies = freqs;
     const avg = freqs.reduce((a, b) => a + b, 0) / freqs.length;
     if (avg > 0.20) {
       eqQuietCount = 0;
-      eqCompact.classList.remove('quiet');
+      if (eqCompact.classList.contains('quiet')) eqCompact.classList.remove('quiet');
     } else {
       eqQuietCount++;
-      if (eqQuietCount > 50) eqCompact.classList.add('quiet');
+      if (eqQuietCount > 50 && !eqCompact.classList.contains('quiet')) eqCompact.classList.add('quiet');
     }
     eqKick();
   }
@@ -75,6 +78,8 @@ function eqDraw() {
   const isPlaying = appState.mediaPlaying;
   const now = performance.now();
   const view = appState.currentView;
+
+  if (view !== 'view-compact' && view !== 'view-media') return;
 
   let moving = false;
   if (view === 'view-compact') moving = eqStep(cEqBars, currentHeightsC, 10, EQ_H_COMPACT, isPlaying, sens, now) || moving;

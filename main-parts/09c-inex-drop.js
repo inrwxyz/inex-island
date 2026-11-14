@@ -89,6 +89,12 @@ function clearPrompt() {
   currentOffer = null;
   clearTimeout(offerExpireTimer);
   closePromptHud(true);
+  const dropBody = document.querySelector('#view-inexdrop .drop-body');
+  const subMount = document.querySelector('.mx-sub-mount');
+  const dropView = document.getElementById('view-inexdrop');
+  if (dropBody) dropBody.classList.remove('has-prompt');
+  if (subMount) subMount.classList.remove('has-prompt');
+  if (dropView) dropView.classList.remove('has-prompt');
   if (typeof updateDropTile === 'function') updateDropTile();
 }
 
@@ -146,8 +152,17 @@ async function refreshDropUI() {
   const boxIdle = document.getElementById('drop-state-idle');
   const boxActive = document.getElementById('drop-state-active');
   const boxPrompt = document.getElementById('drop-state-prompt');
+  const dropBody = document.querySelector('#view-inexdrop .drop-body');
+  const subMount = document.querySelector('.mx-sub-mount');
+  const dropView = document.getElementById('view-inexdrop');
+
+  const hasPrompt = !!currentOffer;
+  if (dropBody) dropBody.classList.toggle('has-prompt', hasPrompt);
+  if (subMount) subMount.classList.toggle('has-prompt', hasPrompt);
+  if (dropView) dropView.classList.toggle('has-prompt', hasPrompt);
 
   if (currentOffer) {
+    if (dropBody) dropBody.classList.remove('has-active');
     if (pill) { pill.textContent = 'Incoming...'; pill.className = 'status-tag warn'; }
     if (boxIdle) boxIdle.classList.add('hidden');
     if (boxActive) boxActive.classList.add('hidden');
@@ -177,11 +192,14 @@ async function refreshDropUI() {
   if (boxPrompt) boxPrompt.classList.add('hidden');
 
   if (!dropActive) {
+    if (dropBody) dropBody.classList.remove('has-active');
     if (pill) { pill.textContent = 'Off'; pill.className = 'status-tag'; }
     if (boxIdle) boxIdle.classList.remove('hidden');
     if (boxActive) boxActive.classList.add('hidden');
     return;
   }
+
+  if (dropBody) dropBody.classList.add('has-active');
 
   // Active
   if (pill) {
