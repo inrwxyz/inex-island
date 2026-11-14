@@ -53,13 +53,17 @@ function updateDropTile() {
     if (macSub) macSub.textContent = p2pText;
     if (macTitle) macTitle.textContent = 'P2P Link';
   } else {
-    const qsText = inTransfer ? 'Transferring' : (dropActive ? 'Ready' : 'Off');
-    tile.classList.toggle('active', dropActive);
+    const qsText = inTransfer ? 'Transferring' : (currentOffer ? 'Incoming...' : (dropActive ? 'Ready' : 'Off'));
+    tile.classList.toggle('active', dropActive || !!currentOffer);
+    tile.classList.toggle('offer', !!currentOffer);
     if (sub) sub.textContent = qsText;
-    if (cap) cap.textContent = '';
+    if (cap) cap.textContent = currentOffer ? 'Tap to accept' : '';
     if (title) title.textContent = 'Inex Drop';
-    tile.title = 'Inex Drop · Quick Share (click to turn on / off)';
-    if (macTile) macTile.classList.toggle('active', dropActive);
+    tile.title = currentOffer ? 'File incoming · Click to accept' : 'Inex Drop · Quick Share (click to turn on / off)';
+    if (macTile) {
+      macTile.classList.toggle('active', dropActive || !!currentOffer);
+      macTile.classList.toggle('offer', !!currentOffer);
+    }
     if (macSub) macSub.textContent = qsText;
     if (macTitle) macTitle.textContent = 'Inex Drop';
   }

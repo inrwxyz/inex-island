@@ -1262,6 +1262,14 @@ if (compactBarEl) {
       if (typeof dismissTimerAlarm === 'function') dismissTimerAlarm();
       return;
     }
+    if (typeof currentOffer !== 'undefined' && currentOffer) {
+      if (SET.appearance && SET.appearance.menuLayout === 'mac') {
+        openMacDrop('qs');
+      } else {
+        openQsView();
+      }
+      return;
+    }
     openControlMenu();
   });
 }
@@ -1269,6 +1277,14 @@ document.getElementById('c-center-trigger')?.addEventListener('click', (e) => {
   if (e.target.closest('#c-incoming-alert')) return;
   if (island.classList.contains('alarm-active')) {
     if (typeof dismissTimerAlarm === 'function') dismissTimerAlarm();
+    return;
+  }
+  if (typeof currentOffer !== 'undefined' && currentOffer) {
+    if (SET.appearance && SET.appearance.menuLayout === 'mac') {
+      openMacDrop('qs');
+    } else {
+      openQsView();
+    }
     return;
   }
   openControlMenu();
@@ -2557,6 +2573,7 @@ function openMacSub(viewId, title, from) {
   if (viewId === 'view-notepad' && typeof focusNotepad === 'function') focusNotepad();
   if (viewId === 'view-clipboard' && typeof openClipboardView === 'function') openClipboardView();
   if (viewId === 'view-alarm' && typeof openAlarmView === 'function') openAlarmView();
+  if (viewId === 'view-inexdrop' && typeof refreshDropUI === 'function') refreshDropUI();
   if (typeof syncDropRail === 'function') syncDropRail(viewId);   // Quick Share <-> P2P side rail (only for those two views)
 }
 
@@ -2634,10 +2651,14 @@ document.getElementById('mac-tile-bt')?.addEventListener('contextmenu', (e) => {
   openMacSub('view-bt', 'Bluetooth');
 });
 
+// Same as the classic tile: Quick Share selected = left click anywhere on the tile turns it on / off.
+// Only the chevron, an incoming offer / running transfer, or P2P mode (no on/off) goes inside. Right click always goes inside.
 document.getElementById('mac-tile-drop')?.addEventListener('click', (e) => {
-  if (e.target.closest('.mx-tile-chev')) openMacDrop();
-  else if (getDropMode() === 'p2p') openMacDrop('p2p');
-  else toggleInexDrop();
+  if (currentOffer || inTransfer || e.target.closest('.mx-tile-chev')) {
+    openMacDrop();
+  } else {
+    dropTileClick();
+  }
 });
 document.getElementById('mac-tile-drop')?.addEventListener('contextmenu', (e) => {
   e.preventDefault();
@@ -3885,6 +3906,7 @@ function clearPrompt() {
   currentOffer = null;
   clearTimeout(offerExpireTimer);
   closePromptHud(true);
+  if (typeof updateDropTile === 'function') updateDropTile();
 }
 
 // ONE menu size for Quick Share and P2P (the P2P panel size)
@@ -3947,6 +3969,26 @@ async function refreshDropUI() {
     if (boxIdle) boxIdle.classList.add('hidden');
     if (boxActive) boxActive.classList.add('hidden');
     if (boxPrompt) boxPrompt.classList.remove('hidden');
+
+    const devEl = document.getElementById('prompt-sender-name');
+    const fileEl = document.getElementById('prompt-file-name');
+    const sizeEl = document.getElementById('prompt-file-size');
+    const iconEl = document.getElementById('prompt-file-icon');
+    const pinEl = document.getElementById('prompt-pin');
+
+    const firstFile = (currentOffer.files && currentOffer.files[0]) || {};
+    const fName = firstFile.name || 'File';
+    const displayTitle = (currentOffer.count || 1) > 1
+      ? `${currentOffer.count} files (incl. ${fName})`
+      : fName;
+
+    if (devEl) devEl.textContent = currentOffer.device || 'Android Device';
+    if (fileEl) fileEl.textContent = displayTitle;
+    if (sizeEl) sizeEl.textContent = fmtBytes(currentOffer.total || firstFile.size);
+    if (iconEl) iconEl.innerHTML = getBatchIcon(currentOffer.files ? currentOffer.files.map(f => f.name) : [fName]);
+    if (pinEl) pinEl.textContent = currentOffer.pin || '----';
+
+    if (typeof updateDropTile === 'function') updateDropTile();
     return;
   }
   if (boxPrompt) boxPrompt.classList.add('hidden');
@@ -4239,9 +4281,15 @@ function activateOfferPrompt(offer) {
   if (iconEl) iconEl.innerHTML = getBatchIcon(offer.files ? offer.files.map(f => f.name) : [fName]);
   if (pinEl) pinEl.textContent = offer.pin || '----';
 
-  if (appState.currentView === 'view-inexdrop') {
-    refreshDropUI();
-  } else {
+  // Always refresh the Drop UI so #drop-state-prompt is unhidden and ready in DOM
+  refreshDropUI();
+
+  // If user is NOT currently inside Inex Drop (neither classic view nor Mac subview),
+  // show the island notch prompt HUD
+  const isViewingDrop = (appState.currentView === 'view-inexdrop') ||
+    (appState.currentView === 'view-control-mac' && typeof currentMacSubTarget !== 'undefined' && currentMacSubTarget && currentMacSubTarget.id === 'view-inexdrop');
+
+  if (!isViewingDrop) {
     showPromptHud({
       name: displayTitle,
       size: offer.total || firstFile.size,
@@ -4536,7 +4584,7 @@ function initInexDrop() {
   const tileDrop = document.getElementById('tile-drop');
   if (tileDrop) {
     tileDrop.addEventListener('click', (e) => {
-      if (e.target.closest('.chev')) return openDropView();
+      if (currentOffer || inTransfer || e.target.closest('.chev') || e.target.closest('.label') || e.target.closest('.sub')) return openDropView();
       dropTileClick();
     });
     tileDrop.addEventListener('contextmenu', (e) => {
@@ -4739,13 +4787,17 @@ function updateDropTile() {
     if (macSub) macSub.textContent = p2pText;
     if (macTitle) macTitle.textContent = 'P2P Link';
   } else {
-    const qsText = inTransfer ? 'Transferring' : (dropActive ? 'Ready' : 'Off');
-    tile.classList.toggle('active', dropActive);
+    const qsText = inTransfer ? 'Transferring' : (currentOffer ? 'Incoming...' : (dropActive ? 'Ready' : 'Off'));
+    tile.classList.toggle('active', dropActive || !!currentOffer);
+    tile.classList.toggle('offer', !!currentOffer);
     if (sub) sub.textContent = qsText;
-    if (cap) cap.textContent = '';
+    if (cap) cap.textContent = currentOffer ? 'Tap to accept' : '';
     if (title) title.textContent = 'Inex Drop';
-    tile.title = 'Inex Drop · Quick Share (click to turn on / off)';
-    if (macTile) macTile.classList.toggle('active', dropActive);
+    tile.title = currentOffer ? 'File incoming · Click to accept' : 'Inex Drop · Quick Share (click to turn on / off)';
+    if (macTile) {
+      macTile.classList.toggle('active', dropActive || !!currentOffer);
+      macTile.classList.toggle('offer', !!currentOffer);
+    }
     if (macSub) macSub.textContent = qsText;
     if (macTitle) macTitle.textContent = 'Inex Drop';
   }
@@ -7811,3 +7863,11 @@ onTauriEvent('system-resumed', () => {
   window.addEventListener('resize', snap);
   snap();
 })();
+
+// Block the WebView2 default right-click menu (Back / Refresh / Save as / Print / More tools).
+// Our own handlers (tiles, rows...) still run; text fields keep the normal Cut / Copy / Paste menu.
+document.addEventListener('contextmenu', (e) => {
+  const t = e.target;
+  if (t && t.closest && t.closest('input:not([type="range"]):not([type="checkbox"]), textarea, [contenteditable="true"]')) return;
+  e.preventDefault();
+});

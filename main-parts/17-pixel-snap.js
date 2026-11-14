@@ -16,3 +16,11 @@
   window.addEventListener('resize', snap);
   snap();
 })();
+
+// Block the WebView2 default right-click menu (Back / Refresh / Save as / Print / More tools).
+// Our own handlers (tiles, rows...) still run; text fields keep the normal Cut / Copy / Paste menu.
+document.addEventListener('contextmenu', (e) => {
+  const t = e.target;
+  if (t && t.closest && t.closest('input:not([type="range"]):not([type="checkbox"]), textarea, [contenteditable="true"]')) return;
+  e.preventDefault();
+});

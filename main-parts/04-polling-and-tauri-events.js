@@ -333,6 +333,14 @@ if (compactBarEl) {
       if (typeof dismissTimerAlarm === 'function') dismissTimerAlarm();
       return;
     }
+    if (typeof currentOffer !== 'undefined' && currentOffer) {
+      if (SET.appearance && SET.appearance.menuLayout === 'mac') {
+        openMacDrop('qs');
+      } else {
+        openQsView();
+      }
+      return;
+    }
     openControlMenu();
   });
 }
@@ -340,6 +348,14 @@ document.getElementById('c-center-trigger')?.addEventListener('click', (e) => {
   if (e.target.closest('#c-incoming-alert')) return;
   if (island.classList.contains('alarm-active')) {
     if (typeof dismissTimerAlarm === 'function') dismissTimerAlarm();
+    return;
+  }
+  if (typeof currentOffer !== 'undefined' && currentOffer) {
+    if (SET.appearance && SET.appearance.menuLayout === 'mac') {
+      openMacDrop('qs');
+    } else {
+      openQsView();
+    }
     return;
   }
   openControlMenu();

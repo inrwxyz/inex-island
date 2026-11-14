@@ -89,6 +89,7 @@ function clearPrompt() {
   currentOffer = null;
   clearTimeout(offerExpireTimer);
   closePromptHud(true);
+  if (typeof updateDropTile === 'function') updateDropTile();
 }
 
 // ONE menu size for Quick Share and P2P (the P2P panel size)
@@ -151,6 +152,26 @@ async function refreshDropUI() {
     if (boxIdle) boxIdle.classList.add('hidden');
     if (boxActive) boxActive.classList.add('hidden');
     if (boxPrompt) boxPrompt.classList.remove('hidden');
+
+    const devEl = document.getElementById('prompt-sender-name');
+    const fileEl = document.getElementById('prompt-file-name');
+    const sizeEl = document.getElementById('prompt-file-size');
+    const iconEl = document.getElementById('prompt-file-icon');
+    const pinEl = document.getElementById('prompt-pin');
+
+    const firstFile = (currentOffer.files && currentOffer.files[0]) || {};
+    const fName = firstFile.name || 'File';
+    const displayTitle = (currentOffer.count || 1) > 1
+      ? `${currentOffer.count} files (incl. ${fName})`
+      : fName;
+
+    if (devEl) devEl.textContent = currentOffer.device || 'Android Device';
+    if (fileEl) fileEl.textContent = displayTitle;
+    if (sizeEl) sizeEl.textContent = fmtBytes(currentOffer.total || firstFile.size);
+    if (iconEl) iconEl.innerHTML = getBatchIcon(currentOffer.files ? currentOffer.files.map(f => f.name) : [fName]);
+    if (pinEl) pinEl.textContent = currentOffer.pin || '----';
+
+    if (typeof updateDropTile === 'function') updateDropTile();
     return;
   }
   if (boxPrompt) boxPrompt.classList.add('hidden');
@@ -443,9 +464,15 @@ function activateOfferPrompt(offer) {
   if (iconEl) iconEl.innerHTML = getBatchIcon(offer.files ? offer.files.map(f => f.name) : [fName]);
   if (pinEl) pinEl.textContent = offer.pin || '----';
 
-  if (appState.currentView === 'view-inexdrop') {
-    refreshDropUI();
-  } else {
+  // Always refresh the Drop UI so #drop-state-prompt is unhidden and ready in DOM
+  refreshDropUI();
+
+  // If user is NOT currently inside Inex Drop (neither classic view nor Mac subview),
+  // show the island notch prompt HUD
+  const isViewingDrop = (appState.currentView === 'view-inexdrop') ||
+    (appState.currentView === 'view-control-mac' && typeof currentMacSubTarget !== 'undefined' && currentMacSubTarget && currentMacSubTarget.id === 'view-inexdrop');
+
+  if (!isViewingDrop) {
     showPromptHud({
       name: displayTitle,
       size: offer.total || firstFile.size,
@@ -740,7 +767,7 @@ function initInexDrop() {
   const tileDrop = document.getElementById('tile-drop');
   if (tileDrop) {
     tileDrop.addEventListener('click', (e) => {
-      if (e.target.closest('.chev')) return openDropView();
+      if (currentOffer || inTransfer || e.target.closest('.chev') || e.target.closest('.label') || e.target.closest('.sub')) return openDropView();
       dropTileClick();
     });
     tileDrop.addEventListener('contextmenu', (e) => {

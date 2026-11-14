@@ -313,6 +313,7 @@ function openMacSub(viewId, title, from) {
   if (viewId === 'view-notepad' && typeof focusNotepad === 'function') focusNotepad();
   if (viewId === 'view-clipboard' && typeof openClipboardView === 'function') openClipboardView();
   if (viewId === 'view-alarm' && typeof openAlarmView === 'function') openAlarmView();
+  if (viewId === 'view-inexdrop' && typeof refreshDropUI === 'function') refreshDropUI();
   if (typeof syncDropRail === 'function') syncDropRail(viewId);   // Quick Share <-> P2P side rail (only for those two views)
 }
 
@@ -390,10 +391,14 @@ document.getElementById('mac-tile-bt')?.addEventListener('contextmenu', (e) => {
   openMacSub('view-bt', 'Bluetooth');
 });
 
+// Same as the classic tile: Quick Share selected = left click anywhere on the tile turns it on / off.
+// Only the chevron, an incoming offer / running transfer, or P2P mode (no on/off) goes inside. Right click always goes inside.
 document.getElementById('mac-tile-drop')?.addEventListener('click', (e) => {
-  if (e.target.closest('.mx-tile-chev')) openMacDrop();
-  else if (getDropMode() === 'p2p') openMacDrop('p2p');
-  else toggleInexDrop();
+  if (currentOffer || inTransfer || e.target.closest('.mx-tile-chev')) {
+    openMacDrop();
+  } else {
+    dropTileClick();
+  }
 });
 document.getElementById('mac-tile-drop')?.addEventListener('contextmenu', (e) => {
   e.preventDefault();
