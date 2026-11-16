@@ -8,7 +8,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&family=Lexend:wght@400;500;600;700&family=Montserrat:wght@400;500;600;700&family=Outfit:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700&family=Poppins:wght@400;500;600;700&family=Raleway:wght@400;500;600;700&family=Doto:wght@400;800&family=Space+Mono:wght@400;700&family=Space+Grotesk:wght@500;600;700&family=Syne:wght@500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=0.3.5" />
+  <link rel="stylesheet" href="styles.css?v=0.4.5" />
+  <link rel="stylesheet" href="pet.css?v=0.4.5" />
 </head>
 <body>
   <div id="island" class="island state-compact intro-pre" data-mode="smart" data-menu="transparent">
@@ -528,14 +529,14 @@
 
       <div class="p2p-body" id="p2p-body">
         <div class="p2p-top-actions">
-          <button id="btn-gen-code" class="gen-code-btn">Generate</button>
-          <div id="code-display-box" class="code-badge hidden" title="Click to copy">
-            <span id="my-p2p-code">------</span>
-          </div>
-
-          <div class="join-box" id="p2p-join-box">
-            <input type="text" id="input-peer-code" placeholder="Paste or drop code" autocomplete="off" spellcheck="false" />
-            <button id="btn-join-code" class="pair-btn">Join</button>
+          <div id="code-display-box" class="qr-slot" tabindex="0" title="Click the QR to copy it. Paste (Ctrl+V) or drop your friend’s QR here.">
+            <canvas id="p2p-qr-canvas" class="qr-canvas hidden"></canvas>
+            <div id="p2p-slot-idle" class="qr-slot-idle">
+              <button id="btn-gen-code" class="gen-code-btn">Generate</button>
+              <span class="qr-slot-hint">or paste / drop<br>friend’s QR</span>
+            </div>
+            <div class="qr-scan-line"></div>
+            <div id="p2p-qr-toast" class="qr-slot-toast">Copied ✓</div>
           </div>
         </div>
 
@@ -551,6 +552,11 @@
         <button class="back-btn icon-back" data-back="view-control" title="Back"><svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg><svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v10M8 8l4-4 4 4M4 14v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg></button>
         <span id="drop-status-pill" class="status-tag">Off</span>
         <div class="qs-header-right" style="display:flex;align-items:center;gap:8px;">
+          <!-- "Nearby devices" lives in the Back line, so the device list below gets the whole body -->
+          <div id="qs-scan-hint" class="qs-scan-hint idle">
+            <span class="radar"></span>
+            <span id="qs-scan-text">Pick files to find nearby devices</span>
+          </div>
           <label class="ios-switch" title="Toggle Inex Drop">
             <input type="checkbox" id="qs-master-toggle" />
             <span class="slider"></span>
@@ -601,10 +607,6 @@
             </div>
             <div id="qs-selected-list" class="qs-sel-list hidden"></div>
 
-            <div id="qs-scan-hint" class="qs-scan-hint">
-              <span class="radar"></span>
-              <span id="qs-scan-text">Pick files to find nearby devices</span>
-            </div>
             <div id="qs-devices-list" class="qs-devices-list smooth-scroll-list"></div>
           </div>
 

@@ -65,12 +65,15 @@ const ICON = {
 
 // ---------- settings schema ----------
 const WIDGET_OPTS = [['none', 'None'], ['weather', 'Weather'], ['ram', 'RAM'], ['cpu', 'CPU'], ['gpu', 'GPU'], ['battery', 'Battery'], ['disk', 'Disk'], ['net', 'Net Speed']];
-const COMPACT_CONTENT_OPTS = [
+const PET_ON = (s) => !!s.companion.enabled;
+// Companion Pet only shows up here once Enable Companion is on (Settings > Notch > Companion Pet)
+const COMPACT_CONTENT_OPTS = (s) => [
   ['clock', 'Time (Default)'],
   ['weather', 'Weather'],
   ['cpu', 'CPU %'],
   ['ram', 'RAM %'],
   ['battery', 'Battery %'],
+  ...(s.companion && s.companion.enabled ? [['pet', 'Companion Pet']] : []),
   ['cycle', 'Auto Cycle']
 ];
 const FONT_OPTS = [
@@ -127,6 +130,29 @@ const PAGES = [
         { path: 'weather.unit', type: 'seg', icon: 'sun', t: 'Unit', d: 'Celsius or Fahrenheit', options: [['C', '°C'], ['F', '°F']], showIf: weatherShown },
         { path: 'weather.city', type: 'text', icon: 'pin', t: 'City', d: 'Leave empty for automatic location. Press Enter to apply', placeholder: 'e.g. Dhaka', showIf: weatherShown },
         { path: 'overlays.privacyDot', type: 'toggle', icon: 'mic', t: 'Mic Indicator', d: 'Small dot beside the clock while an app uses your microphone' }
+      ] },
+      { id: 'notch-pet', title: 'Companion Pet', defaultOpen: false, rows: [
+        { path: 'companion.enabled', type: 'toggle', icon: 'spark', t: 'Enable Companion', d: 'The eyes peek out now and then, react, and the time comes back. Also adds Companion Pet to Resting Pill Display',
+          onChange: (v) => { if (!v && S.notch && S.notch.compactContent === 'pet') { set('notch.compactContent', 'clock'); save(S); } } },
+        { type: 'action', icon: 'spark', t: 'Play Full Animation Tour', d: 'Plays Pet Peek, Poke, Water, Eye Rest & Stretch back-to-back', run: () => invoke('trigger_companion_demo', { kind: 'tour' }), showIf: PET_ON },
+        { type: 'action', icon: 'spark', t: 'Preview Pet Peek', d: 'Surprise peek with mouse-tracking eyes and a small reaction', run: () => invoke('trigger_companion_demo', { kind: 'peek' }), showIf: PET_ON },
+        { path: 'companion.skin', type: 'skinpick', icon: 'spark', t: 'Eye Style', d: 'Click a style to pick it: cyber eyes, round, slit, visor, 8-bit cat or dots', options: [['eyes', 'Cyber Eyes (Original)'], ['orbs', 'Round Eyes'], ['slits', 'Slit Eyes'], ['visor', 'Visor'], ['cat', '8-Bit Cat'], ['dots', 'Dots']], showIf: PET_ON },
+        { path: 'companion.monogram', type: 'toggle', icon: 'spark', t: 'Monogram Instead of Dots', d: 'Breathing ring with an I', showIf: (s) => PET_ON(s) && s.companion.skin === 'dots' },
+        { path: 'companion.tracking', type: 'toggle', icon: 'monitor', t: 'Follow the Mouse', d: 'Eyes follow the cursor across the whole screen', showIf: PET_ON },
+        { path: 'companion.peekMinMin', type: 'range', icon: 'clock', t: 'Peek No Sooner Than', d: 'Shortest wait between surprise visits', min: 5, max: 120, step: 5, unit: ' min', showIf: (s) => s.companion.enabled && s.notch.compactContent !== 'pet' },
+        { path: 'companion.peekMaxMin', type: 'range', icon: 'clock', t: 'Peek No Later Than', d: 'Longest wait between surprise visits', min: 10, max: 180, step: 5, unit: ' min', showIf: (s) => s.companion.enabled && s.notch.compactContent !== 'pet' }
+      ] },
+      { id: 'notch-wellness', title: 'Health Reminders', defaultOpen: false, rows: [
+        { path: 'wellness.enabled', type: 'toggle', icon: 'bell', t: 'Enable Reminders', d: 'Silent 5 second notch popups, counted only while you are at the PC' },
+        { type: 'action', icon: 'bell', t: 'Preview Water Alert', d: 'Test fluid water reminder HUD', run: () => invoke('trigger_companion_demo', { kind: 'water' }), showIf: (s) => s.wellness.enabled },
+        { type: 'action', icon: 'bell', t: 'Preview Eye Rest Alert', d: 'Test 20-20-20 eye rest HUD', run: () => invoke('trigger_companion_demo', { kind: 'eye' }), showIf: (s) => s.wellness.enabled },
+        { type: 'action', icon: 'bell', t: 'Preview Stretch Alert', d: 'Test posture and stretch alert HUD', run: () => invoke('trigger_companion_demo', { kind: 'stretch' }), showIf: (s) => s.wellness.enabled },
+        { path: 'wellness.water', type: 'toggle', icon: 'bell', t: 'Drink Water', d: 'Time for a sip', showIf: (s) => s.wellness.enabled },
+        { path: 'wellness.waterEvery', type: 'minutes', icon: 'clock', t: 'Water Every', d: 'Minutes of active time between reminders. Use − / + or type your own', min: 1, max: 999, step: 5, showIf: (s) => s.wellness.enabled && s.wellness.water },
+        { path: 'wellness.eye', type: 'toggle', icon: 'bell', t: 'Eye Rest (20-20-20)', d: 'After long screen time without a break', showIf: (s) => s.wellness.enabled },
+        { path: 'wellness.eyeEvery', type: 'minutes', icon: 'clock', t: 'Eye Rest Every', d: 'Minutes of continuous screen time. Use − / + or type your own', min: 1, max: 999, step: 5, showIf: (s) => s.wellness.enabled && s.wellness.eye },
+        { path: 'wellness.stretch', type: 'toggle', icon: 'bell', t: 'Stretch & Posture', d: 'Stand up and stretch', showIf: (s) => s.wellness.enabled },
+        { path: 'wellness.stretchEvery', type: 'minutes', icon: 'clock', t: 'Stretch Every', d: 'Minutes of continuous screen time. Use − / + or type your own', min: 1, max: 999, step: 5, showIf: (s) => s.wellness.enabled && s.wellness.stretch }
       ] }
     ]
   },
@@ -151,7 +177,7 @@ const PAGES = [
         { path: 'macMenu.showBattery', type: 'toggle', icon: 'battery', t: 'Laptop Battery in Header', d: 'Display battery percentage and charging indicator in the top right' },
         { path: 'macMenu.showWeather', type: 'toggle', icon: 'cloud', t: 'Weather Widget', d: 'Live temperature card in the expanded Control Deck' },
         { path: 'macMenu.showStats', type: 'toggle', icon: 'monitor', t: 'System Stats Card', d: 'Compact live performance meters inside the Control Deck' },
-        { path: 'macMenu.statsMode', type: 'seg', icon: 'monitor', t: 'Stat Card Mode', d: 'What to display in the mini status card', options: [['sys', 'CPU & RAM'], ['bt', 'Bluetooth Device'], ['battery', 'Laptop Battery'], ['disk', 'Disk']], showIf: (s) => s.macMenu.showStats !== false },
+        { path: 'macMenu.statsMode', type: 'select', icon: 'monitor', t: 'Stat Card Mode', d: 'What to display in the mini status card', options: [['sys', 'CPU & RAM'], ['bt', 'Bluetooth Device'], ['battery', 'Laptop Battery'], ['disk', 'Disk']], showIf: (s) => s.macMenu.showStats !== false },
         { path: 'macMenu.showMedia', type: 'toggle', icon: 'music', t: 'Media Quick Card', d: 'Music card in the Control Deck, shown whether or not music is playing' },
         { path: 'macMenu.showSliders', type: 'toggle', icon: 'sound', t: 'Volume & Brightness Sliders', d: 'Keep quick sliders accessible inside the Control Deck' }
       ] },
@@ -245,6 +271,7 @@ const SECTION_ICON = {
   'menu-appearance': 'palette', 'menu-slots': 'widgets', 'menu-mac-widgets': 'layers', 'menu-motion': 'spark', 'menu-quick-actions': 'widgets',
   'sounds-events': 'sound', 'sounds-timer': 'bell',
   'connect-devices': 'bt',
+  'notch-pet': 'spark', 'notch-wellness': 'bell',
   'sys-startup': 'power', 'sys-alerts': 'bell', 'sys-backup': 'download', 'sys-maint': 'gear',
   'about-links': 'info'
 };
@@ -292,6 +319,8 @@ function toast(msg) {
   t.textContent = msg; t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 1800);
 }
 let isSelfSaving = false;
+let tilesEditOpen = false;   // Quick Action Bar editor
+let skinPickOpen = false;    // Eye Style picker
 let isDragging = false;
 let saveDebounce = null;
 
@@ -340,6 +369,49 @@ function previewSound(kind) {
 }
 
 // ---------- row renderers ----------
+const optsOf = (row) => (typeof row.options === 'function' ? row.options(S) : row.options);
+// Flat 2D previews of the companion eye styles (same shapes / colours as the real ones in main-parts/18-pet-and-wellness.js)
+function skinPreviewSVG(kind) {
+  const E = {
+    eyes:  { glow: 'rgba(47,247,212,.16)',  body: '#06201c', stroke: '#2ff7d4', pupil: '#8dfff0' },
+    orbs:  { glow: 'rgba(220,235,255,.14)', body: '#f3f7ff', stroke: 'none',    pupil: '#11141d' },
+    slits: { glow: 'rgba(255,176,60,.18)',  body: '#2a1604', stroke: '#ffb03c', pupil: '#ffd27a' },
+    visor: { glow: 'rgba(255,95,210,.18)',  body: '#260a22', stroke: '#ff5fd2', pupil: '#ffc2ee' }
+  };
+  if (E[kind]) {
+    const c = E[kind];
+    const eye = (cx) => {
+      let body, pupil;
+      if (kind === 'orbs') {
+        body = `<circle cx="${cx}" cy="10" r="7.4"/>`;
+        pupil = `<circle cx="${cx}" cy="10.2" r="3.3" fill="${c.pupil}"/><circle cx="${cx + 1.2}" cy="8.8" r="1" fill="#fff"/>`;
+      } else if (kind === 'slits') {
+        body = `<ellipse cx="${cx}" cy="10" rx="6.6" ry="7.6"/>`;
+        pupil = `<rect x="${cx - 1.2}" y="4.8" width="2.4" height="10.4" rx="1.2" fill="${c.pupil}"/>`;
+      } else if (kind === 'visor') {
+        body = `<rect x="${cx - 7.5}" y="6" width="15" height="8" rx="4"/>`;
+        pupil = `<rect x="${cx - 2.6}" y="8" width="5.2" height="4" rx="2" fill="${c.pupil}"/>`;
+      } else {
+        body = `<rect x="${cx - 6}" y="2.5" width="12" height="15" rx="6"/>`;
+        pupil = `<rect x="${cx - 2.4}" y="6.5" width="4.8" height="7" rx="2.4" fill="${c.pupil}"/>`;
+      }
+      return `<ellipse cx="${cx}" cy="10" rx="9" ry="9.5" fill="${c.glow}"/>` +
+        `<g fill="${c.body}" stroke="${c.stroke}" stroke-width="1.3">${body}</g>${pupil}`;
+    };
+    return `<svg viewBox="0 0 40 20" aria-hidden="true">${eye(11)}${eye(29)}</svg>`;
+  }
+  if (kind === 'cat') {
+    const head = ['..##........##..', '..###......###..', '..############..', '.##############.', '.##############.', '.##############.', '.##############.', '.##############.', '..############..', '...##########...'];
+    let px = '';
+    head.forEach((row, y) => { for (let x = 0; x < row.length; x++) if (row[x] === '#') px += `<rect x="${x}" y="${y}" width="1.02" height="1.02"/>`; });
+    const eyeBox = (x) => `<rect x="${x}" y="6" width="3" height="2" fill="#fff"/><rect x="${x + 1}" y="6" width="1" height="1" fill="#1a1020"/>`;
+    return `<svg viewBox="0 0 16 10" shape-rendering="crispEdges" aria-hidden="true"><g fill="#f5b25a">${px}</g>` +
+      `<g fill="#ff8fa3"><rect x="3" y="1" width="1" height="1"/><rect x="12" y="1" width="1" height="1"/><rect x="7" y="8" width="2" height="1"/></g>` +
+      `${eyeBox(3)}${eyeBox(10)}<g fill="#1a1020"><rect x="6" y="9" width="1" height="1"/><rect x="9" y="9" width="1" height="1"/></g></svg>`;
+  }
+  return `<svg viewBox="0 0 30 12" aria-hidden="true"><g fill="#e8e8ee"><circle cx="6" cy="6" r="2.3"/><circle cx="15" cy="6" r="2.3"/><circle cx="24" cy="6" r="2.3"/></g></svg>`;
+}
+
 function control(row) {
   const v = row.path ? get(row.path) : null;
   const wrap = el('div', 'ctl');
@@ -364,6 +436,32 @@ function control(row) {
       if (next && row.preview) previewSound(row.preview);
     });
     wrap.append(b);
+  } else if (row.type === 'minutes') {
+    const box = el('div', 'range stepper mins');
+    let cur = Math.round(+v) || row.min;
+    const inp = el('input', 'mins-in'); inp.type = 'text'; inp.inputMode = 'numeric'; inp.value = String(cur);
+    inp.title = 'Type your own minutes';
+    const unit = el('span', 'mins-unit', 'min');
+    const minus = el('button', 'step-btn', '\u2212'); minus.type = 'button'; minus.title = 'Less';
+    const plus = el('button', 'step-btn', '+'); plus.type = 'button'; plus.title = 'More';
+    const clampN = (n) => Math.min(row.max, Math.max(row.min, Math.round(n)));
+    const sync = () => { inp.value = String(cur); minus.disabled = cur <= row.min; plus.disabled = cur >= row.max; };
+    let t = null;
+    const apply = (n, delay) => {
+      const nv = clampN(n);
+      cur = nv; sync();
+      if (nv === +get(row.path)) return;
+      clearTimeout(t);
+      t = setTimeout(() => commit(row.path, nv, row.onChange), delay);
+    };
+    minus.addEventListener('click', () => apply(cur - row.step, 140));
+    plus.addEventListener('click', () => apply(cur + row.step, 140));
+    inp.addEventListener('input', () => { inp.value = inp.value.replace(/[^0-9]/g, '').slice(0, 3); });
+    inp.addEventListener('change', () => apply(inp.value === '' ? cur : +inp.value, 0));
+    inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); inp.blur(); } });
+    inp.addEventListener('focus', () => inp.select());
+    sync();
+    box.append(minus, inp, unit, plus); wrap.append(box);
   } else if (row.type === 'range' && row.stepper) {
     // − / + buttons (no dragging): every click moves one step, quick clicks are merged into ONE change,
     // so the island window is resized once instead of many times (no shaking).
@@ -402,19 +500,31 @@ function control(row) {
     box.append(inp, out); wrap.append(box);
   } else if (row.type === 'seg') {
     const seg = el('div', 'seg');
-    row.options.forEach(([val, label]) => {
+    optsOf(row).forEach(([val, label]) => {
       const b = el('button', val === v ? 'on' : '', label);
       b.addEventListener('click', () => change(val));
       seg.append(b);
     });
     wrap.append(seg);
+  } else if (row.type === 'skinpick') {
+    // visual picker: every eye style drawn flat (2D) on its own tile, click one to select it
+    const grid = el('div', 'skin-grid');
+    optsOf(row).forEach(([val, label]) => {
+      const tile = el('button', 'skin-tile' + (val === v ? ' on' : ''));
+      tile.type = 'button'; tile.title = label;
+      tile.innerHTML = `<span class="skin-art">${skinPreviewSVG(val)}</span><span class="skin-name">${label}</span>`;
+      tile.addEventListener('click', () => { if (val !== v) change(val, true); });
+      grid.append(tile);
+    });
+    wrap.append(grid);
   } else if (row.type === 'select') {
     const customSel = el('div', 'c-sel');
-    const curOpt = row.options.find(([val]) => val === v) || row.options[0];
+    const selOpts = optsOf(row);
+    const curOpt = selOpts.find(([val]) => val === v) || selOpts[0];
     const trigger = el('button', 'c-sel-trigger', `<span>${curOpt ? curOpt[1] : ''}</span><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>`);
     trigger.type = 'button';
     const menu = el('div', 'c-sel-menu hidden');
-    row.options.forEach(([val, label]) => {
+    selOpts.forEach(([val, label]) => {
       const item = el('button', 'c-sel-item' + (val === v ? ' active' : ''), label);
       item.type = 'button';
       item.addEventListener('click', (e) => {
@@ -477,7 +587,7 @@ function control(row) {
 
 function renderRow(row) {
   const isDisabled = row.disabledIf && row.disabledIf(S);
-  const r = el('div', 'row' + (row.danger ? ' danger' : '') + (row.type === 'action' ? ' click' : '') + (isDisabled ? ' is-off' : ''));
+  const r = el('div', 'row' + (row.danger ? ' danger' : '') + (row.type === 'action' ? ' click' : '') + (row.type === 'skinpick' && skinPickOpen ? ' wide' : '') + (isDisabled ? ' is-off' : ''));
   if (row.actionId) r.dataset.action = row.actionId;
   r.append(el('div', 'ico-box', ICON[row.icon] || ''));
   const title = typeof row.t === 'function' ? row.t() : row.t;
@@ -485,6 +595,16 @@ function renderRow(row) {
   const txt = el('div', 'txt'); txt.append(el('div', 't', title), el('div', 'd', desc)); r.append(txt);
   if (row.type === 'action') {
     r.addEventListener('click', row.run);
+  } else if (row.type === 'skinpick') {
+    const cur = optsOf(row).find(([val]) => val === get(row.path)) || optsOf(row)[0];
+    const head = el('div', 'ctl skin-head');
+    head.innerHTML = `<span class="skin-art mini">${skinPreviewSVG(cur[0])}</span>`;
+    const btn = el('button', 'btn btn-outline', skinPickOpen ? 'Done' : 'Choose');
+    btn.type = 'button';
+    btn.addEventListener('click', (e) => { e.stopPropagation(); skinPickOpen = !skinPickOpen; renderPage(); });
+    head.append(btn);
+    r.append(head);
+    if (skinPickOpen) r.append(control(row));
   } else {
     r.append(control(row));
   }
@@ -581,7 +701,7 @@ function renderSettingsThemeHero(main) {
 
 // ---------- pages & version ----------
 let current = 'notch';
-let currentAppVer = '0.4.1';
+let currentAppVer = '0.4.5';
 function updateVerLabels() {
   const bv = document.getElementById('brand-ver');
   if (bv) bv.textContent = `v${currentAppVer}`;
@@ -688,6 +808,20 @@ function renderQuickActionTilesGroup(main) {
 
   const grp = el('section', 'sec');
   grp.append(sectionHead('menu-quick-actions', 'Quick Action Bar', `${addedIds.length} / 7`));
+
+  const sum = el('div', 'sec-body');
+  const sumRow = el('div', 'row');
+  sumRow.append(el('div', 'ico-box', ICON.widgets));
+  const sumTxt = el('div', 'txt');
+  sumTxt.append(el('div', 't', 'Quick Action Tiles'), el('div', 'd', `${addedIds.length} / 7 tiles active. Tap Edit to add or remove`));
+  sumRow.append(sumTxt);
+  const sumCtl = el('div', 'ctl');
+  const editBtn = el('button', 'btn btn-outline', tilesEditOpen ? 'Done' : 'Edit');
+  editBtn.type = 'button';
+  editBtn.addEventListener('click', () => { tilesEditOpen = !tilesEditOpen; renderPage(); });
+  sumCtl.append(editBtn); sumRow.append(sumCtl); sum.append(sumRow);
+  grp.append(sum);
+  if (!tilesEditOpen) { main.append(grp); return; }
 
   const mgr = el('div', 'tile-manager');
   const grp1 = el('div', 'tile-group-header');
@@ -876,10 +1010,6 @@ function importSettings() {
 }
 
 // ---------- window ----------
-function resetSettingsState() {
-  renderPage(false);
-}
-
 document.getElementById('btn-close')?.addEventListener('click', () => {
   invoke('close_settings');
 });

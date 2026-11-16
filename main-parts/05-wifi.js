@@ -13,6 +13,25 @@ function rowAction(connected) {
 
 let selectedWifiSsid = null;
 let wifiBusySsid = null;
+let wifiBusyWant = '';   // 'on' | 'off' while a connect / disconnect is running
+let wifiScanning = false, wifiScanT = null;
+
+// Refresh button: ask Windows for a fresh radio scan right now. The spinner runs until Windows reports the
+// scan (wifi-changed) or 4 s passed; nothing polls.
+function endWifiScan() {
+  wifiScanning = false;
+  clearTimeout(wifiScanT);
+  document.getElementById('btn-refresh-wifi')?.classList.remove('spin');
+}
+function startWifiScan() {
+  if (!appState.wifiRadio) return loadWifiList();
+  wifiScanning = true;
+  document.getElementById('btn-refresh-wifi')?.classList.add('spin');
+  clearTimeout(wifiScanT);
+  wifiScanT = setTimeout(() => { endWifiScan(); if (isWifiViewOpen()) loadWifiList(true); }, 4000);
+  invokeTauri('wifi_rescan').catch(() => {});
+  loadWifiList(true);
+}
 
 async function loadWifiList(soft) {
   const netList = document.getElementById('wifi-network-list');
@@ -25,12 +44,16 @@ async function loadWifiList(soft) {
   btn.classList.add('spin');
   if (!soft) netList.innerHTML = `<div class="empty-hint">Scanning…</div>`;
   const res = await invokeTauri('get_wifi_networks');
-  btn.classList.remove('spin');
+  if (!wifiScanning) btn.classList.remove('spin');
   if (!isWifiViewOpen() || appState.keepOpen) return;
   const networks = res && Array.isArray(res.networks) ? res.networks : [];
   const scanError = res && res.error ? res.error : '';
   const wn = appState.stats && appState.stats.wifi_name;
   const current = wn && wn !== 'Not connected' ? wn : '';
+  // the state we waited for is already true: release the busy button now (do not wait for the native call to return)
+  if (wifiBusySsid && ((wifiBusyWant === 'on' && current === wifiBusySsid) || (wifiBusyWant === 'off' && current !== wifiBusySsid))) {
+    wifiBusySsid = null; selectedWifiSsid = null;
+  }
   const list = networks.map((n) => ({ ...n }));
   const sigPct = (appState.stats && appState.stats.wifi_signal) || 0;
   const sigBars = sigPct >= 75 ? 4 : sigPct >= 50 ? 3 : sigPct >= 25 ? 2 : 1;
@@ -82,16 +105,26 @@ async function loadWifiList(soft) {
         const disBtn = document.createElement('button');
         disBtn.className = 'drawer-btn ghost';
         disBtn.textContent = 'Disconnect';
+        if (isBusy && wifiBusyWant === 'off') { disBtn.disabled = true; disBtn.textContent = 'Disconnecting…'; }
         disBtn.addEventListener('click', async (e) => {
           e.stopPropagation();
           disBtn.disabled = true;
-          wifiBusySsid = n.ssid;
-          await invokeTauri('disconnect_wifi');
-          if (appState.stats) appState.stats.wifi_name = 'Not connected';
-          document.getElementById('wifi-cap').textContent = '';
-          selectedWifiSsid = null;
+          disBtn.textContent = 'Disconnecting…';
+          errEl.textContent = '';
+          wifiBusySsid = n.ssid; wifiBusyWant = 'off';
+          let done = false;
+          try { done = (await invokeTauri('disconnect_wifi')) === true; } catch (_) { done = false; }
+          if (wifiBusySsid !== n.ssid) return;   // the list already showed "offline" and released the button
           wifiBusySsid = null;
-          loadWifiList(true);
+          if (!done) {
+            // Windows did not let go: say so instead of pretending, and let the user try again
+            disBtn.disabled = false;
+            disBtn.textContent = 'Disconnect';
+            errEl.textContent = 'Could not disconnect';
+            return;
+          }
+          selectedWifiSsid = null;
+          await refreshWifiNow();   // the real state from Windows, not a guess
         });
         btnRow.appendChild(disBtn);
 
@@ -108,19 +141,22 @@ async function loadWifiList(soft) {
           });
           btnRow.appendChild(fBtn);
         }
-        drawer.appendChild(btnRow);
+        drawer.append(btnRow, errEl);
       } else if (n.saved) {
         const btnRow = document.createElement('div');
         btnRow.className = 'drawer-row';
         const connBtn = document.createElement('button');
         connBtn.className = 'drawer-btn';
         connBtn.textContent = 'Connect';
+        if (isBusy && wifiBusyWant === 'on') { connBtn.disabled = true; connBtn.textContent = 'Connecting…'; }
         connBtn.addEventListener('click', async (e) => {
           e.stopPropagation();
           connBtn.disabled = true;
-          wifiBusySsid = n.ssid;
+          wifiBusySsid = n.ssid; wifiBusyWant = 'on';
           connBtn.textContent = 'Connecting…';
-          const ok = await invokeTauri('connect_wifi_network', { ssid: n.ssid });
+          let ok = false;
+          try { ok = await invokeTauri('connect_wifi_network', { ssid: n.ssid }); } catch (_) { ok = false; }
+          if (wifiBusySsid !== n.ssid) return;   // the list already showed "connected" and released the button
           wifiBusySsid = null;
           if (ok === false) {
             n.saved = false;
@@ -128,7 +164,7 @@ async function loadWifiList(soft) {
             return;
           }
           selectedWifiSsid = null;
-          setTimeout(() => loadWifiList(true), 2500);
+          refreshWifiNow();   // real state right now (no 2.5 s guess)
         });
         const fBtn = document.createElement('button');
         fBtn.className = 'drawer-btn ghost';
@@ -151,12 +187,13 @@ async function loadWifiList(soft) {
         connBtn.addEventListener('click', async (e) => {
           e.stopPropagation();
           connBtn.disabled = true;
-          wifiBusySsid = n.ssid;
+          wifiBusySsid = n.ssid; wifiBusyWant = 'on';
           connBtn.textContent = 'Connecting…';
-          await invokeTauri('wifi_join', { ssid: n.ssid, password: '', security: 'open', hidden: false });
+          try { await invokeTauri('wifi_join', { ssid: n.ssid, password: '', security: 'open', hidden: false }); } catch (_) {}
+          if (wifiBusySsid !== n.ssid) return;
           wifiBusySsid = null;
           selectedWifiSsid = null;
-          setTimeout(() => loadWifiList(true), 2500);
+          refreshWifiNow();
         });
         btnRow.appendChild(connBtn);
         drawer.appendChild(btnRow);
@@ -344,10 +381,12 @@ function showWifiJoin({ ssid, hidden, security }) {
 }
 
 function openWifiView() {
+  if (appState.wifiPresent === false) return;
   switchView('view-wifi', 'state-sub', 316, 208);
   loadWifiList();
 }
 document.getElementById('tile-wifi').addEventListener('click', (e) => {
+  if (appState.wifiPresent === false) return;
   if (e.target.closest('.chev')) return openWifiView();
   toggleRadio('wifi', !appState.wifiRadio);
 });
@@ -355,6 +394,6 @@ document.getElementById('tile-wifi').addEventListener('contextmenu', (e) => {
   e.preventDefault();
   openWifiView();
 });
-document.getElementById('btn-refresh-wifi').addEventListener('click', loadWifiList);
+document.getElementById('btn-refresh-wifi').addEventListener('click', () => startWifiScan());
 document.getElementById('btn-more-wifi').addEventListener('click', () => invokeTauri('open_wifi_settings'));
 

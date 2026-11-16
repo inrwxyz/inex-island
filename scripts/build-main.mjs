@@ -32,3 +32,17 @@ if (current !== next) {
 } else {
   console.log('build-main: src/main.js already up to date');
 }
+
+// jsQR (reads the QR image in the P2P menu) is an npm package: copy its browser build next to the other scripts.
+// The CSP only allows scripts from 'self', so it has to live in src/.
+const jsqrFrom = join(root, 'node_modules', 'jsqr', 'dist', 'jsQR.js');
+const jsqrTo = join(root, 'src', 'jsqr.js');
+if (existsSync(jsqrFrom)) {
+  const a = readFileSync(jsqrFrom, 'utf8');
+  if (!existsSync(jsqrTo) || readFileSync(jsqrTo, 'utf8') !== a) {
+    writeFileSync(jsqrTo, a);
+    console.log('build-main: copied jsQR to src/jsqr.js');
+  }
+} else if (!existsSync(jsqrTo)) {
+  console.warn('build-main: jsqr missing, run `npm install` (P2P QR reading will not work)');
+}

@@ -449,7 +449,7 @@ function mqFit(el) {
 
 function setBtCaption(devices) {
   const first = (devices || []).find((d) => d.connected);
-  let txt = appState.btRadio && first ? first.name : '';
+  let txt = appState.btRadio && appState.btPresent !== false && first ? first.name : '';
   if (txt && SET.overlays.btBattery) {
     const pct = btBatteryFor(first.name);
     if (pct !== null) txt += ` • ${pct}%`;
@@ -458,12 +458,12 @@ function setBtCaption(devices) {
   syncMacBtTileIcon(first);
   const macBtSub = document.getElementById('mac-bt-sub');
   if (macBtSub) {
-    const _s = appState.btRadio ? (first ? first.name : 'On') : 'Off';
+    const _s = appState.btPresent === false ? 'No adapter' : appState.btRadio ? (first ? first.name : 'On') : 'Off';
     if (macBtSub.textContent !== _s) macBtSub.textContent = _s;
   }
 }
 async function refreshBtCaption() {
   if (!slotRunning.has('bt') && SET.appearance?.menuLayout !== 'mac') return;
-  if (!appState.btRadio) { setBtCaption([]); return; }
+  if (appState.btPresent === false || !appState.btRadio) { setBtCaption([]); return; }
   setBtCaption(await invokeTauri('get_bt_devices'));
 }

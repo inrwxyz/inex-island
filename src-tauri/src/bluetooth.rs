@@ -326,6 +326,9 @@ fn make_watcher(
 
 /// Start the paired-device watchers (classic + LE, paired + connected).
 pub fn start(app: AppHandle) {
+    if !crate::live::bt_present() {
+        return; // no Bluetooth adapter in this PC: nothing to watch (live.rs restarts us when one is plugged in)
+    }
     #[cfg(target_os = "windows")]
     {
         let gen = MAIN_GEN.fetch_add(1, Ordering::SeqCst) + 1;
@@ -403,7 +406,7 @@ fn stop_scan() {
 pub fn bt_discovery(app: AppHandle, on: bool) {
     #[cfg(target_os = "windows")]
     {
-        if !on || !crate::live::bt_active() {
+        if !on || !crate::live::bt_active() || !crate::live::bt_present() {
             SCAN_GEN.fetch_add(1, Ordering::SeqCst);
             std::thread::spawn(stop_scan);
             return;
@@ -684,15 +687,26 @@ pub async fn bt_unpair(app: AppHandle, name: String) -> bool {
 /// Returns "ok" | "notfound" | "noradio" | "error"
 #[tauri::command]
 pub async fn bt_set_connection(name: String, on: bool) -> String {
+    if !crate::live::bt_present() {
+        return "noradio".into();
+    }
     #[cfg(target_os = "windows")]
     {
         let n: String = name.chars().take(80).collect();
         if n.trim().is_empty() {
             return "notfound".into();
         }
-        return tauri::async_runtime::spawn_blocking(move || set_connection_blocking(&n, on))
-            .await
-            .unwrap_or_else(|_| "error".into());
+        // the driver can hang for a long time: never leave the UI on "Disconnecting..." for ever
+        return tauri::async_runtime::spawn_blocking(move || {
+            let (tx, rx) = mpsc::channel::<String>();
+            std::thread::spawn(move || {
+                com_init();
+                let _ = tx.send(set_connection_blocking(&n, on));
+            });
+            rx.recv_timeout(std::time::Duration::from_secs(22)).unwrap_or_else(|_| "timeout".to_string())
+        })
+        .await
+        .unwrap_or_else(|_| "error".into());
     }
     #[cfg(not(target_os = "windows"))]
     {
@@ -800,11 +814,59 @@ unsafe fn ks_audio_oneshot(
         .ok()
 }
 
+/// Is `name` connected right now? (fresh WinRT lookup, so it never reports a stale answer)
+#[cfg(target_os = "windows")]
+fn bt_is_connected(name: &str) -> bool {
+    com_init();
+    bt_paired_winrt()
+        .map(|l| l.iter().any(|d| d.connected && d.name.eq_ignore_ascii_case(name)))
+        .unwrap_or(false)
+}
+
+/// Wait (only while a click is being handled) until the device reaches the wanted state.
+#[cfg(target_os = "windows")]
+fn wait_state(name: &str, want: bool, max_ms: u64) -> bool {
+    let end = std::time::Instant::now() + std::time::Duration::from_millis(max_ms);
+    loop {
+        if bt_is_connected(name) == want {
+            return true;
+        }
+        if std::time::Instant::now() >= end {
+            return false;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(350));
+    }
+}
+
+/// Connect / disconnect and CHECK that Windows really reached that state.
+/// Returns "ok" | "notfound" | "noradio" | "still_connected" | "failed" | "error"
 #[cfg(target_os = "windows")]
 fn set_connection_blocking(name: &str, on: bool) -> String {
-    if send_audio_oneshot_by_name(name, on) {
+    if bt_is_connected(name) == on {
+        return "ok".into(); // already there
+    }
+    // 1) the audio driver's own one-shot request (fast; this is what drops / restores the link)
+    let sent = send_audio_oneshot_by_name(name, on);
+    if on && sent && wait_state(name, true, 5000) {
         return "ok".into();
     }
+    // 2) switch the audio services off (disconnect) or off+on (connect). For a disconnect this is also what
+    //    stops the earbuds from grabbing the PC again the moment the link drops.
+    let r = set_services_blocking(name, on);
+    if (r == "noradio" || r == "notfound") && !sent {
+        return r;
+    }
+    if wait_state(name, on, if on { 8000 } else { 6000 }) {
+        "ok".into()
+    } else if on {
+        "failed".into()
+    } else {
+        "still_connected".into()
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn set_services_blocking(name: &str, on: bool) -> String {
     use std::mem::{size_of, zeroed};
     use windows::core::GUID;
     use windows::Win32::Devices::Bluetooth::{
@@ -984,7 +1046,7 @@ pub async fn get_bt_battery(name: String) -> Option<i32> {
 
 #[tauri::command]
 pub async fn get_bt_devices() -> Vec<BtDev> {
-    if !crate::live::bt_active() {
+    if !crate::live::bt_active() || !crate::live::bt_present() {
         return vec![];
     }
     #[cfg(target_os = "windows")]

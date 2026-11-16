@@ -43,6 +43,7 @@ let dropLeaveTimeout = null;
 
 function onNativeDrop(p) {
   if (!p) return;
+  if (typeof p2pNativeDrop === 'function' && p2pNativeDrop(p)) return;   // P2P menu open: a QR image goes to its slot
   if (isMacMenu()) { onNativeDropMac(p); return; }
   if (p.type === 'enter' || p.type === 'over') {
     clearTimeout(dropLeaveTimeout);
@@ -142,11 +143,18 @@ function renderMacTray() {
   document.getElementById('mt-count').textContent = `Tray · ${files.length} file${files.length === 1 ? '' : 's'}`;
   const list = document.getElementById('mt-files');
   list.innerHTML = '';
+  // same rule as the classic tray: nothing picked yet = everything is picked
+  if (!appState.traySelectedIds) appState.traySelectedIds = new Set();
+  const liveIds = new Set(files.map((x) => x.id));
+  for (const id of Array.from(appState.traySelectedIds)) if (!liveIds.has(id)) appState.traySelectedIds.delete(id);
+  if (appState.traySelectedIds.size === 0 && files.length > 0) files.forEach((x) => appState.traySelectedIds.add(x.id));
   files.forEach((f) => {
     const card = document.createElement('div');
-    card.className = 'mt-file';
-    card.title = f.name;
+    const picked = appState.traySelectedIds.has(f.id);
+    card.className = 'mt-file' + (picked ? ' sel' : '');
+    card.title = `${f.name} (Click to ${picked ? 'deselect' : 'select'})`;
     card.innerHTML = `
+      <span class="mt-check">✓</span>
       <button class="mt-del" title="Remove file">×</button>
       <svg viewBox="0 0 24 24" width="22" height="22" stroke="currentColor" stroke-width="1.8" fill="none"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>
       <div class="mt-fname">${escHtml(f.name)}</div>`;
@@ -156,16 +164,27 @@ function renderMacTray() {
       if (appState.traySelectedIds) appState.traySelectedIds.delete(f.id);
       updateTrayUI();
     });
-    // press + move = drag the file out
+    // press + move = drag the file out; plain click = tick / untick it for sending (like the classic tray)
     card.addEventListener('mousedown', (e) => {
       if (e.button !== 0 || e.target.closest('.mt-del')) return;
       const sx = e.clientX, sy = e.clientY;
-      const cleanup = () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', cleanup); };
+      let dragged = false;
+      const cleanup = () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up); };
       const move = (ev) => {
-        if (Math.abs(ev.clientX - sx) + Math.abs(ev.clientY - sy) > 8) { cleanup(); startDragOut(f); }
+        if (dragged) return;
+        if (Math.abs(ev.clientX - sx) + Math.abs(ev.clientY - sy) > 8) { dragged = true; cleanup(); startDragOut(f); }
+      };
+      const up = () => {
+        cleanup();
+        if (dragged) return;
+        if (appState.traySelectedIds.has(f.id)) appState.traySelectedIds.delete(f.id);
+        else appState.traySelectedIds.add(f.id);
+        const now = appState.traySelectedIds.has(f.id);
+        card.classList.toggle('sel', now);
+        card.title = `${f.name} (Click to ${now ? 'deselect' : 'select'})`;
       };
       window.addEventListener('mousemove', move);
-      window.addEventListener('mouseup', cleanup);
+      window.addEventListener('mouseup', up);
     });
     list.appendChild(card);
   });
@@ -176,7 +195,7 @@ function renderMacTray() {
 //  P2P         -> NO code is generated for you; with a connected peer the files are offered to it, otherwise the
 //                 P2P panel opens and you press Generate yourself
 async function macSendToInexDrop() {
-  const files = appState.trayFiles || [];
+  const files = getSelectedTrayFiles();   // only the ticked files go (nothing ticked = all), same as the classic tray
   if (getDropMode() === 'p2p') {
     if (files.length && (appState.peers || []).length > 0) {
       appState.peers.forEach((p) => offerFilesToPeer(p.id, [...files]));

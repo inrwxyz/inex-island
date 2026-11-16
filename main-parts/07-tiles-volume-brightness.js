@@ -9,7 +9,43 @@ document.querySelectorAll('.back-btn').forEach((btn) => {
   });
 });
 
+// No adapter in this PC (no Bluetooth dongle / no Wi-Fi card): the tile is blocked, nothing opens, nothing is queried.
+function applyPresence(kind, present) {
+  const key = kind === 'wifi' ? 'wifiPresent' : 'btPresent';
+  if (appState[key] === present) return;
+  appState[key] = present;
+  const label = kind === 'wifi' ? 'Wi-Fi' : 'Bluetooth';
+  const tiles = kind === 'wifi' ? ['tile-wifi', 'mac-tile-wifi'] : ['tile-bt', 'mac-tile-bt'];
+  tiles.forEach((id) => {
+    const t = document.getElementById(id);
+    if (!t) return;
+    t.classList.toggle('unavailable', !present);
+    t.setAttribute('aria-disabled', String(!present));
+    t.title = present ? '' : `No ${label} adapter found`;
+    if (!present) t.classList.remove('active');
+  });
+  const tog = document.getElementById(kind === 'wifi' ? 'wifi-master-toggle' : 'bt-master-toggle');
+  if (tog) { tog.disabled = !present; if (!present) tog.checked = false; }
+  if (!present) {
+    if (kind === 'wifi') appState.wifiRadio = false; else appState.btRadio = false;
+    (kind === 'wifi' ? ['wifi-sub', 'mac-wifi-sub'] : ['bt-sub', 'mac-bt-sub']).forEach((id) => {
+      const e = document.getElementById(id); if (e) e.textContent = 'No adapter';
+    });
+    const cap = document.getElementById(kind === 'wifi' ? 'wifi-cap' : 'bt-cap'); if (cap) cap.textContent = '';
+    if (kind === 'bt' && typeof syncMacBtTileIcon === 'function') syncMacBtTileIcon(null);
+    // a list of a missing adapter must not stay open
+    const open = kind === 'wifi' ? isWifiViewOpen() : isBtViewOpen();
+    if (open) { try { if (currentMacSubTarget) closeMacSub(); else openControlMenu(); } catch (_) {} }
+  } else {
+    // adapter plugged in: read its real on/off state and show it
+    if (typeof refreshRadios === 'function') refreshRadios().catch(() => {});
+    if (kind === 'bt' && typeof refreshBtCaption === 'function') refreshBtCaption();
+    if (kind === 'wifi' && typeof refreshWifiNow === 'function') refreshWifiNow();
+  }
+}
+
 function applyRadio(kind, on) {
+  if (kind === 'wifi' ? appState.wifiPresent === false : appState.btPresent === false) return;
   if (kind === 'wifi') {
     appState.wifiRadio = on;
     document.getElementById('tile-wifi').classList.toggle('active', on);
@@ -37,6 +73,7 @@ function applyRadio(kind, on) {
 }
 
 async function toggleRadio(kind, on) {
+  if (kind === 'wifi' ? appState.wifiPresent === false : appState.btPresent === false) return;   // no adapter: nothing to switch
   applyRadio(kind, on);
   try {
     await invokeTauri('set_radio_state', { kind, on });
@@ -261,6 +298,7 @@ setTimeout(() => invokeTauri('get_system_brightness').then(setBrightUI), 5000);
 // Mac in-place subview management (keeps 500x210 locked, zero window resize or jitter)
 currentMacSubTarget = null;
 function openMacSub(viewId, title, from) {
+  if ((viewId === 'view-bt' && appState.btPresent === false) || (viewId === 'view-wifi' && appState.wifiPresent === false)) return;
   if (typeof closeMacTrayPane === 'function') closeMacTrayPane();
   closeMacSub();
   const src = document.getElementById(viewId);
@@ -269,6 +307,7 @@ function openMacSub(viewId, title, from) {
   if (!src || !mount) return;
   currentMacSubTarget = { id: viewId, parent: src.parentNode, next: src.nextSibling };
   mount.appendChild(src);
+  mount.classList.toggle('no-scroll', viewId === 'view-inexdrop' || viewId === 'view-p2p');   // these two never scroll here (no scrollbar flash)
   src.classList.add('active', 'in-mac-sub');
   const titleEl = document.getElementById('mac-sub-title');
   if (titleEl) titleEl.textContent = title;
@@ -282,7 +321,7 @@ function openMacSub(viewId, title, from) {
       currentMacSubTarget.actionsNext = headerRight.nextSibling;
       actionsSlot.appendChild(headerRight);
     }
-    if (viewId === 'view-p2p') mountP2PBarItems(actionsSlot);   // Generate / code / Cancel / status sit in the Back line, like Wi-Fi / Bluetooth
+    if (viewId === 'view-p2p') mountP2PBarItems(actionsSlot);   // timer / Cancel / status sit in the Back line (the QR slot stays in the body), like Wi-Fi / Bluetooth
   }
 
   document.getElementById('mac-right-home')?.classList.add('hidden');
@@ -322,7 +361,7 @@ function mountP2PBarItems(slot) {
   const wrap = document.createElement('div');
   wrap.className = 'mx-p2p-actions';
   currentMacSubTarget.moved = [];
-  ['btn-gen-code', 'code-display-box', 'p2p-expiry-timer', 'btn-exit-room', 'p2p-status-pill'].forEach((id) => {
+  ['p2p-expiry-timer', 'btn-exit-room', 'p2p-status-pill'].forEach((id) => {
     const el = document.getElementById(id);
     if (!el) return;
     currentMacSubTarget.moved.push({ el, parent: el.parentNode, next: el.nextSibling });
@@ -345,6 +384,7 @@ function closeMacSub() {
   }
   const actionsSlot = document.getElementById('mac-sub-actions');
   if (actionsSlot) actionsSlot.innerHTML = '';
+  document.getElementById('mac-sub-mount')?.classList.remove('no-scroll');
   if (el && currentMacSubTarget.parent) {
     el.classList.remove('active', 'in-mac-sub');
     currentMacSubTarget.parent.insertBefore(el, currentMacSubTarget.next);
@@ -374,6 +414,7 @@ document.getElementById('mac-sub-back')?.addEventListener('click', () => {
 // Mac 2x2 Control Center tiles
 // Clicking tile body toggles power directly (just like normal mode); clicking chevron or right-click opens in-place subpanel
 document.getElementById('mac-tile-wifi')?.addEventListener('click', (e) => {
+  if (appState.wifiPresent === false) return;
   if (e.target.closest('.mx-tile-chev')) openMacSub('view-wifi', 'Wi-Fi');
   else toggleRadio('wifi', !appState.wifiRadio);
 });
@@ -383,6 +424,7 @@ document.getElementById('mac-tile-wifi')?.addEventListener('contextmenu', (e) =>
 });
 
 document.getElementById('mac-tile-bt')?.addEventListener('click', (e) => {
+  if (appState.btPresent === false) return;
   if (e.target.closest('.mx-tile-chev')) openMacSub('view-bt', 'Bluetooth');
   else toggleRadio('bt', !appState.btRadio);
 });

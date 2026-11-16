@@ -311,7 +311,7 @@ function renderCompactChip(iconSvg, text, cls) {
 
 function formatCompactCenterHtml(timeStr) {
   const mode = (SET.notch && SET.notch.compactContent) || 'clock';
-  if (mode === 'clock') return { html: false, val: timeStr };
+  if (mode === 'clock' || mode === 'pet') return { html: false, val: timeStr };
   const stats = appState.stats;
   const pick = (k) => {
     if (k === 'weather') {

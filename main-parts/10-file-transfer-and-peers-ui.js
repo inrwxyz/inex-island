@@ -397,6 +397,7 @@ function renderPeersUI() {
   updateCompactStateClasses();
 
   listEl.innerHTML = '';
+  listEl.classList.toggle('is-empty', count === 0);   // only a short hint: no scrollbar
   if (count === 0) {
     const hint = document.createElement('div');
     hint.className = 'empty-hint';

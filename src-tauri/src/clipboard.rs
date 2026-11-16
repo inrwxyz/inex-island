@@ -367,6 +367,31 @@ pub async fn read_screenshot_bytes(path: String) -> Result<tauri::ipc::Response,
     .map_err(|e| e.to_string())?
 }
 
+/// Raw bytes of an image file (png / jpg / webp / bmp / gif, max 12 MB) so the P2P menu can read a QR that was
+/// dropped on it or copied as a file. Nothing else is readable through this.
+#[tauri::command]
+pub async fn read_image_file(path: String) -> Result<tauri::ipc::Response, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let pb = Path::new(&path);
+        let ext_ok = pb
+            .extension()
+            .and_then(|e| e.to_str())
+            .map(|e| matches!(e.to_ascii_lowercase().as_str(), "png" | "jpg" | "jpeg" | "webp" | "bmp" | "gif"))
+            .unwrap_or(false);
+        if !ext_ok {
+            return Err("not an image".to_string());
+        }
+        let meta = std::fs::metadata(pb).map_err(|_| "missing".to_string())?;
+        if !meta.is_file() || meta.len() == 0 || meta.len() > 12 * 1024 * 1024 {
+            return Err("unreadable size".to_string());
+        }
+        let bytes = std::fs::read(pb).map_err(|e| e.to_string())?;
+        Ok(tauri::ipc::Response::new(bytes))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 use tauri::AppHandle;
 
 #[cfg(test)]

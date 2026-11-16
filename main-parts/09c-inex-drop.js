@@ -148,6 +148,7 @@ async function refreshDropUI() {
   const pill = document.getElementById('drop-status-pill');
   const toggle = document.getElementById('qs-master-toggle');
   if (toggle) toggle.checked = dropActive;
+  syncScanHint();
 
   const boxIdle = document.getElementById('drop-state-idle');
   const boxActive = document.getElementById('drop-state-active');
@@ -231,6 +232,12 @@ async function refreshDropUI() {
   }
 
   renderSelection();
+}
+
+// "Nearby devices" (in the Back line) only shows while Quick Share is on and no transfer is running
+function syncScanHint() {
+  const h = document.getElementById('qs-scan-hint');
+  if (h) h.classList.toggle('off', !dropActive || !!inTransfer);
 }
 
 function renderSelection() {
@@ -409,6 +416,7 @@ function showTransferBox(title, sub, canPause) {
   clearTimeout(xferHideTimer);
 
   document.getElementById('drop-state-active')?.classList.add('is-xfer');
+  syncScanHint();
   const box = document.getElementById('qs-transfer-box');
   const tTitle = document.getElementById('qs-xfer-title');
   const tSub = document.getElementById('qs-xfer-sub');

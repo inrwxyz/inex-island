@@ -37,7 +37,9 @@ const appState = {
   timerInterval: null,
   volOpen: false,
   wifiRadio: true,
-  btRadio: true
+  btRadio: true,
+  wifiPresent: true,   // false = no such adapter in this PC (no dongle plugged in)
+  btPresent: true
 };
 
 let currentMacSubTarget = null;
@@ -67,10 +69,32 @@ async function invokeTauri(cmd, args = {}) {
   return null;
 }
 
+// Clickable area = the island's REAL width for compact pills / HUDs / popups (they all pass the nominal 548 wide), so the empty
+// transparent space left and right of a small pill lets clicks through to the apps below. Menus and sub-views (tall) keep their size.
+let _hitReq = null, _lastHitW = -1, _lastHitH = -1;
+const HIT_SIDE_PAD = 40;   // curved ears hang ~17px outside the island + a little grace for the spring overshoot
+function realHitWidth(nominalW) {
+  try {
+    const w = parseFloat(getComputedStyle(island).width);   // local (unzoomed) px, same unit as the nominal size
+    if (w > 40) return Math.min(nominalW, Math.ceil(w) + HIT_SIDE_PAD);
+  } catch (_) {}
+  return nominalW;
+}
 function reportIslandSize(size) {
   appState.islandSize = { width: size.width, height: size.height };
+  _hitReq = { width: size.width, height: size.height };
   const k = SET.appearance.scale / 100;
-  return invokeTauri('set_island_hit', { width: Math.round(size.width * k), height: Math.round(size.height * k) }).catch(() => {});
+  const w = size.height <= 112 ? realHitWidth(size.width) : size.width;
+  const hw = Math.round(w * k), hh = Math.round(size.height * k);
+  if (hw === _lastHitW && hh === _lastHitH) return Promise.resolve();   // spring frames often give the same rounded size
+  _lastHitW = hw; _lastHitH = hh;
+  return invokeTauri('set_island_hit', { width: hw, height: hh }).catch(() => {});
+}
+// While the island grows / shrinks (spring), keep the clickable width following it.
+if (typeof ResizeObserver === 'function') {
+  new ResizeObserver(() => {
+    if (_hitReq && _hitReq.height <= 112) reportIslandSize(_hitReq);
+  }).observe(island);
 }
 
 function playStatusSound(category, kind) {

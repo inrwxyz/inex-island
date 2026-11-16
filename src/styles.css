@@ -726,8 +726,6 @@ body {
 
 /* Subtle Icon Animations when Active */
 .ico-p2p .flow { stroke-dasharray: 3 3; }
-.ctrl-tile.active .ico-p2p .f1 { animation: flow 0.9s linear infinite; }
-.ctrl-tile.active .ico-p2p .f2 { animation: flow 0.9s linear infinite reverse; }
 @keyframes flow { to { stroke-dashoffset: -12; } }
 
 /* Quick Action Row */
@@ -1114,29 +1112,6 @@ body {
   font-weight: 700;
   cursor: pointer;
   white-space: nowrap;
-}
-.code-badge {
-  background: var(--color-tile-bg);
-  border: 1px dashed currentColor;
-  border-radius: 9px;
-  padding: 5px 10px;
-  font-size: 12px;
-  font-weight: 700;
-  font-family: var(--font-mono);
-  letter-spacing: 1px;
-  cursor: pointer;
-}
-.join-box { display: flex; flex: 1; gap: 4px; }
-.join-box input {
-  width: 100%;
-  background: var(--color-tile-bg);
-  border: 1px solid rgba(150, 150, 160, 0.3);
-  border-radius: 9px;
-  padding: 5px 8px;
-  color: inherit;
-  font-size: 11px;
-  font-family: var(--font-mono);
-  outline: none;
 }
 .pair-btn {
   background: var(--color-tile-on-bg);
@@ -1638,51 +1613,6 @@ body {
   color: #ff453a;
   background: rgba(255, 69, 58, 0.15);
 }
-.clipboard-item-image {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: color-mix(in srgb, var(--menu-fg) 8%, transparent);
-  background-image:
-    linear-gradient(45deg, color-mix(in srgb, var(--menu-fg) 5%, transparent) 25%, transparent 25%, transparent 75%, color-mix(in srgb, var(--menu-fg) 5%, transparent) 75%),
-    linear-gradient(45deg, color-mix(in srgb, var(--menu-fg) 5%, transparent) 25%, transparent 25%, transparent 75%, color-mix(in srgb, var(--menu-fg) 5%, transparent) 75%);
-  background-size: 10px 10px;
-  background-position: 0 0, 5px 5px;
-  border-radius: 6px;
-  overflow: hidden;
-}
-.clipboard-item-image img {
-  display: block;
-  max-width: 100%;
-  max-height: 84px;
-  object-fit: contain;
-  pointer-events: none;
-}
-.clipboard-item-image.small img { max-height: 44px; }
-.clipboard-item-files {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-.clipboard-file-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 11px;
-  color: var(--menu-fg);
-  min-width: 0;
-}
-.clipboard-file-row svg { flex: none; opacity: 0.6; }
-.clipboard-file-row span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.clipboard-file-more {
-  font-size: 9.5px;
-  color: var(--menu-fg-dim);
-  padding-left: 20px;
-}
 .clipboard-empty {
   display: flex;
   flex-direction: column;
@@ -1721,7 +1651,6 @@ body {
   background: var(--color-tile-bg); color: inherit; border: 1px solid rgb(var(--on));
   border-radius: 9px; padding: 1px 4px; outline: none; user-select: text;
 }
-.timer-hint { font-size: 8.5px; opacity: 0.6; }
 .timer-action-row {
   display: flex;
   align-items: center;
@@ -1849,12 +1778,6 @@ body {
   transition: border-color 0.25s ease, box-shadow 0.25s ease;
 }
 
-.island.island-locker-locked {
-  border-color: rgba(251, 191, 36, 0.45) !important;
-  box-shadow: 0 0 8px rgba(251, 191, 36, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.10) !important;
-  transition: border-color 0.25s ease, box-shadow 0.25s ease;
-}
-
 .c-toast.t-lock .c-toast-ico { color: #f59e0b; }
 .c-toast.t-phone .c-toast-ico { color: #22c55e; }
 .c-toast.t-unphone .c-toast-ico { color: #94a3b8; }
@@ -1962,11 +1885,6 @@ body {
   transition-duration: 0.08s !important;
 }
 
-.c-btn:active {
-  transform: scale(0.92);
-  transition: transform 0.08s ease;
-}
-
 .tray-file-card {
   transition: transform 0.16s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.18s ease, background-color 0.18s ease;
 }
@@ -2050,13 +1968,6 @@ body {
   background: transparent !important;
   border: none !important;
   padding: 0 !important;
-}
-
-.island[data-theme="matrix"]:not(.state-compact) :is(.timer-digits, .timer-edit, .cal-month-heading, .media-meta strong, .weather-text) {
-  font-family: 'Doto', 'Space Mono', monospace !important;
-  font-weight: 800 !important;
-  letter-spacing: 0.06em;
-  text-shadow: none !important;
 }
 .island[data-theme="matrix"]:not(.state-compact) .top-clock {
   font-family: 'Doto', 'Space Mono', monospace !important;
@@ -2770,36 +2681,6 @@ body {
   display: grid; place-items: center; margin-bottom: 8px;
 }
 .drop-idle-title { font-size: 13.5px; font-weight: 600; margin-bottom: 3px; color: var(--menu-fg); }
-.drop-idle-sub { font-size: 11px; color: var(--menu-fg-dim); max-width: 220px; line-height: 1.3; }
-
-.drop-qr-wrap {
-  width: 102px; height: 102px; background: #fff; border-radius: 14px;
-  padding: 6px; display: grid; place-items: center;
-  box-shadow: 0 4px 18px rgba(0,0,0,0.45);
-}
-.drop-qr-wrap svg { width: 90px; height: 90px; display: block; }
-.drop-qr-hint { font-size: 10.5px; font-weight: 500; color: var(--menu-fg-dim); margin-top: 8px; }
-
-.drop-conn-card {
-  width: 100%; display: flex; align-items: center; gap: 10px;
-  padding: 10px 12px; border-radius: 14px;
-  background: color-mix(in srgb, var(--menu-fg) 8%, transparent);
-  text-align: left;
-}
-.drop-dev-ico {
-  width: 36px; height: 36px; border-radius: 50%;
-  background: color-mix(in srgb, var(--menu-fg) 14%, transparent);
-  color: var(--mac-accent); display: grid; place-items: center; flex-shrink: 0;
-}
-.drop-dev-info strong { display: block; font-size: 12.5px; font-weight: 600; color: var(--menu-fg); }
-.drop-dev-info small { font-size: 10.5px; color: var(--menu-fg-dim); }
-.drop-actions-card {
-  width: 100%; padding: 10px 12px; border-radius: 14px;
-  background: color-mix(in srgb, var(--menu-fg) 6%, transparent);
-  margin-top: 8px; text-align: left;
-}
-.drop-act-row { display: flex; justify-content: space-between; font-size: 11.5px; color: var(--menu-fg-dim); }
-.drop-act-row strong { color: var(--menu-fg); }
 
 /* Inex Drop Transfer Authorization Prompt (Accept / Decline) */
 .drop-prompt-card {
@@ -2874,22 +2755,6 @@ body {
 .radar { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--mac-accent);
          box-shadow: 0 0 0 0 var(--mac-accent); animation: radarRipple 1.6s infinite; flex-shrink: 0; }
 @keyframes radarRipple { 0% { box-shadow: 0 0 0 0 rgba(74, 158, 255, 0.55); } 100% { box-shadow: 0 0 0 10px rgba(74, 158, 255, 0); } }
-
-.qs-status-bar {
-  width: 100%; display: flex; align-items: center; justify-content: space-between;
-  padding: 5px 8px; border-radius: 10px; background: color-mix(in srgb, var(--menu-fg) 6%, transparent);
-  box-sizing: border-box; margin-bottom: 2px;
-}
-.qs-card {
-  width: 100%; border-radius: 12px; padding: 8px 10px;
-  background: color-mix(in srgb, var(--menu-fg) 6%, transparent);
-  text-align: left; box-sizing: border-box;
-}
-.qs-sel-box {
-  display: flex; justify-content: space-between; align-items: center;
-  background: rgba(0, 0, 0, 0.3); border-radius: 8px; padding: 3px 8px;
-  font-size: 10.5px; margin-bottom: 4px; color: var(--menu-fg);
-}
 .qs-clear-btn {
   background: transparent; border: 0; color: var(--menu-fg-dim); cursor: pointer;
   font-size: 11px; padding: 0 4px; line-height: 1;
@@ -2924,7 +2789,6 @@ body {
   font-size: 11px; font-weight: 600; color: var(--menu-fg);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 170px;
 }
-.qs-device-sub { font-size: 9px; color: var(--menu-fg-dim); }
 
 .qs-transfer-box {
   width: 100%; padding: 8px 10px; border-radius: 12px;
@@ -3037,12 +2901,6 @@ body {
 .island.state-compact.transferring.xfer-live .c-transfer-cancel-btn:active { transform: scale(0.92); }
 
 /* clipboard: tile for copied videos (no frame preview) */
-.clipboard-video-tile {
-  display: flex; align-items: center; justify-content: center; height: 62px;
-  border-radius: 6px; color: var(--menu-fg-dim);
-  background: color-mix(in srgb, var(--menu-fg) 8%, transparent);
-}
-.clipboard-video-tile.small { height: 36px; }
 
 /* clipboard: image / file items = same height as a text item, small thumbnail in front, details beside it */
 .clipboard-item.clip-media .clip-media-row { display: flex; align-items: center; gap: 9px; min-width: 0; }
@@ -3095,7 +2953,6 @@ body {
 /* Off state: only the Quick Share icon + name, dead centre of the whole panel (the header is ~38px, so lift by half of it) */
 #drop-state-idle { margin-top: -38px; }
 .drop-idle-title { margin: 0; width: 100%; text-align: center; }
-.drop-idle-sub { display: none; }
 .p2p-body .p2p-top-actions { justify-content: center; }
 .gen-code-btn { padding: 6px 8px; }
 .empty-hint { width: 100%; margin-left: auto; margin-right: auto; }
@@ -3108,22 +2965,16 @@ body {
 .ctrl-tile .ico-p2p-alt { display: none; }
 .ctrl-tile.mode-p2p .ico-drop { display: none; }
 .ctrl-tile.mode-p2p .ico-p2p-alt { display: block; }
-.ctrl-tile.mode-p2p.active .ico-p2p-alt .f1 { animation: flow 0.9s linear infinite; }
 
 /* File Tray: a single "Inex Drop" button (follows the selected mode) */
 .tray-share-actions { grid-template-columns: 1fr; }
 
 /* ==================== P2P LINK: one code box, no server ==================== */
 .p2p-top-actions { flex-wrap: wrap; justify-content: center; }
-.p2p-top-actions .join-box { flex: 1 1 120px; min-width: 0; }
-.p2p-top-actions .code-badge { flex: 1 1 100%; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.code-badge.copied { border-style: solid; }
 .gen-code-btn.busy { pointer-events: none; animation: p2pGenPulse 0.9s ease-in-out infinite; }
-.code-badge.pop { animation: p2pCodeIn 0.34s cubic-bezier(0.2, 0.8, 0.2, 1); }
-.p2p-body.drop-over { outline: 1px dashed currentColor; outline-offset: -4px; border-radius: 12px; }
 @keyframes p2pGenPulse { 0%, 100% { opacity: 0.5; } 50% { opacity: 1; } }
 @keyframes p2pCodeIn { from { opacity: 0; transform: translateY(4px) scale(0.96); filter: blur(3px); } to { opacity: 1; transform: none; filter: none; } }
-.island.no-anim .gen-code-btn.busy, .island.no-anim .code-badge.pop { animation: none; }
+.island.no-anim .gen-code-btn.busy { animation: none; }
 
 
 /* ===== Mac-Style Expanded Notch Menu: 500 x 210 ===== */
@@ -3320,7 +3171,6 @@ body {
   transition: background 0.14s ease; cursor: pointer;
 }
 .mx-sub-back-btn:hover { background: color-mix(in srgb, var(--menu-fg) 10%, transparent); }
-.mx-sub-title { font-size: 11px; font-weight: 700; color: var(--menu-fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mx-sub-mount { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; display: flex; flex-direction: column; }
 
 /* In-place subview overrides inside Control Deck */
@@ -3944,13 +3794,11 @@ body {
 
 /* P2P: options live in the Back line; the body only keeps the join row + peers */
 .mx-p2p-actions { display: flex; align-items: center; gap: 5px; min-width: 0; }
-.mx-p2p-actions .gen-code-btn { height: 22px; padding: 0 10px; border-radius: 11px; font-size: 10px; }
-.mx-p2p-actions .code-badge { flex: 0 1 auto; max-width: 118px; padding: 3px 7px; font-size: 10px; letter-spacing: 0.5px; border-radius: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mx-p2p-actions .p2p-exit-btn { height: 20px; padding: 0 7px; }
 .mx-p2p-actions .p2p-expiry-badge { font-size: 10px; padding: 0; }
 .mx-p2p-actions .status-tag { flex: none; max-width: 92px; padding: 2px 7px; font-size: 9px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .island.state-control-mac #view-p2p .p2p-body { flex: 1; min-height: 0; margin: 0; padding: 2px 36px 0 2px; gap: 6px; }
-.island.state-control-mac #view-p2p .p2p-top-actions { justify-content: stretch; }
+.island.state-control-mac #view-p2p .p2p-top-actions { justify-content: center; }
 
 /* Mac menu: lay the content out at its FINAL width from the first frame of the opening, centred, and let the
    island simply reveal it. Before, the content was 100% of the still-growing island, so the clock wrapped onto
@@ -4021,3 +3869,103 @@ body {
 .in-mac-sub #drop-state-prompt .drop-prompt-actions { margin-bottom: 0; gap: 6px; }
 .in-mac-sub #drop-state-prompt .prompt-accept-btn,
 .in-mac-sub #drop-state-prompt .prompt-decline-btn { height: 24px !important; font-size: 10.5px !important; }
+
+
+/* ==================== P2P LINK: one QR slot (Generate -> QR -> friend's QR lands here -> reply QR) ==================== */
+.qr-slot {
+  position: relative; flex: none; width: 104px; height: 104px; box-sizing: border-box;
+  display: flex; align-items: center; justify-content: center; overflow: hidden; outline: none;
+  border: 1px dashed currentColor; border-radius: 14px; background: var(--color-tile-bg);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.qr-slot.has-qr { background: #fff; border: 1px solid rgba(255, 255, 255, 0.5); cursor: pointer; }
+.qr-slot .qr-canvas { width: 100%; height: 100%; display: block; image-rendering: pixelated; }
+.qr-slot-idle { display: flex; flex-direction: column; align-items: center; gap: 7px; padding: 6px; text-align: center; }
+.qr-slot-hint { font-size: 9px; line-height: 1.3; opacity: 0.6; }
+.qr-slot.drop-over { border-style: solid; transform: scale(1.05); box-shadow: 0 0 0 2px rgba(48, 209, 88, 0.7); }
+.qr-slot:focus-visible { border-style: solid; box-shadow: 0 0 0 2px rgba(150, 150, 160, 0.6); }
+.qr-slot .qr-scan-line {
+  position: absolute; left: 0; right: 0; top: 0; height: 2px; opacity: 0; pointer-events: none;
+  background: linear-gradient(90deg, transparent, #30d158, transparent); box-shadow: 0 0 10px 2px #30d158;
+}
+.qr-slot.scanning .qr-scan-line { opacity: 1; animation: p2pScanLine 0.8s ease-in-out infinite alternate; }
+.qr-slot-toast {
+  position: absolute; left: 0; right: 0; bottom: 0; padding: 4px 0; text-align: center; pointer-events: none;
+  font-size: 10px; font-weight: 700; color: #fff; background: rgba(0, 0, 0, 0.78); transform: translateY(100%); transition: transform 0.18s ease;
+}
+.qr-slot.copied .qr-slot-toast { transform: none; }
+.qr-slot.pop { animation: p2pCodeIn 0.34s cubic-bezier(0.2, 0.8, 0.2, 1); }
+@keyframes p2pScanLine { from { top: 0; } to { top: calc(100% - 2px); } }
+.island.no-anim .qr-slot.pop, .island.no-anim .qr-slot.scanning .qr-scan-line { animation: none; }
+
+/* P2P with no peers: just the one-line hint, so the list never scrolls (Classic and Mac menu) */
+#p2p-peers-list.is-empty {
+  flex: none; overflow: hidden; padding: 0 8px; margin: 0;
+  -webkit-mask-image: none; mask-image: none;
+}
+#p2p-peers-list.is-empty .empty-hint { margin: 0; font-size: 9.5px; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#view-p2p .p2p-body { overflow: hidden; }
+
+/* Inex Drop / P2P panels (Classic + Mac menu): never show a scrollbar, even for a moment while the side rail switches Quick Share <-> P2P.
+   Long device lists still scroll with the wheel. */
+#view-inexdrop .drop-body,
+#view-inexdrop .smooth-scroll-list,
+#view-p2p .p2p-body,
+#view-p2p .smooth-scroll-list {
+  scrollbar-width: none;
+  overflow-x: hidden;
+}
+#view-inexdrop .drop-body::-webkit-scrollbar,
+#view-inexdrop .smooth-scroll-list::-webkit-scrollbar,
+#view-p2p .p2p-body::-webkit-scrollbar,
+#view-p2p .smooth-scroll-list::-webkit-scrollbar {
+  display: none; width: 0; height: 0;
+}
+
+/* Side rail (Quick Share <-> P2P) in the Mac menu: the right-hand mount used to flash a scrollbar while the panel
+   slid / animated in (the rise animation briefly overflows it). Those two panels never need to scroll there. */
+.mx-sub-mount.no-scroll { overflow: hidden !important; scrollbar-width: none; }
+.mx-sub-mount.no-scroll::-webkit-scrollbar { display: none; width: 0; height: 0; }
+#view-inexdrop.in-mac-sub,
+#view-p2p.in-mac-sub { overflow: hidden; scrollbar-width: none; }
+#view-inexdrop.in-mac-sub::-webkit-scrollbar,
+#view-p2p.in-mac-sub::-webkit-scrollbar { display: none; width: 0; height: 0; }
+
+/* "Nearby devices" sits in the Back line (next to the on/off switch), so the device list is never squeezed into a scroll */
+.qs-header-right .qs-scan-hint {
+  margin: 0; padding: 0; flex: 0 1 auto; min-width: 0; max-width: 150px;
+  font-size: 9.5px; white-space: nowrap; color: var(--menu-fg-dim);
+}
+.qs-header-right .qs-scan-hint #qs-scan-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.qs-header-right .qs-scan-hint.idle,
+.qs-header-right .qs-scan-hint.off { display: none !important; }
+.qs-devices-list { overflow-y: auto; scrollbar-width: none; }
+.qs-devices-list::-webkit-scrollbar { display: none; width: 0; }
+
+/* Mac tray: tick / untick files (click), same look as the classic tray */
+.mt-file.sel {
+  border: 1.5px solid #38bdf8 !important;
+  background: rgba(56, 189, 248, 0.14) !important;
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.35);
+}
+.mt-file .mt-check {
+  display: none; position: absolute; top: 3px; left: 3px; width: 15px; height: 15px; border-radius: 50%;
+  background: #38bdf8; color: #000; font-size: 10px; font-weight: 900; line-height: 1;
+  align-items: center; justify-content: center;
+}
+.mt-file.sel .mt-check { display: flex; }
+.mt-file { cursor: pointer; user-select: none; }
+
+/* Mac tray: Inex Drop is a slim button on the far left (click it = send the ticked files), the tray gets the rest */
+.mt-drop { flex: 0 0 64px; width: 64px; padding: 0 2px; gap: 2px; }
+.mt-drop .mt-ico { width: 24px; height: 24px; }
+.mt-drop b { font-size: 9px; margin-top: 2px; text-align: center; line-height: 1.15; white-space: nowrap; }
+.mt-drop small { display: none; }
+
+/* Wi-Fi / Bluetooth tile of an adapter that is not in this PC (no dongle): blocked */
+.ctrl-tile.unavailable, .mx-tile.unavailable {
+  opacity: 0.42; filter: grayscale(1); cursor: not-allowed;
+}
+.ctrl-tile.unavailable:hover, .mx-tile.unavailable:hover { background: inherit !important; }
+.ctrl-tile.unavailable:active, .mx-tile.unavailable:active { transform: none; }
+.ctrl-tile.unavailable .chev, .mx-tile.unavailable .mx-tile-chev { pointer-events: none; opacity: 0.4; }

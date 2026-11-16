@@ -12,7 +12,11 @@
     const d = Math.round(r.left * dpr) / dpr - r.left;
     if (Math.abs(d) > 0.001) island.style.left = (d / zoom) + 'px';
   };
-  if (typeof ResizeObserver === 'function') new ResizeObserver(snap).observe(island);
+  // Snap only AFTER the island stopped resizing (hover / open springs fire the observer every frame; snapping each frame made the
+  // whole island flip 1 device px left/right = the small shake on hover).
+  let snapT = 0;
+  const snapLater = () => { clearTimeout(snapT); snapT = setTimeout(snap, 140); };
+  if (typeof ResizeObserver === 'function') new ResizeObserver(snapLater).observe(island);
   window.addEventListener('resize', snap);
   snap();
 })();

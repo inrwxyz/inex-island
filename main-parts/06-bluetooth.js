@@ -37,6 +37,19 @@ function showBtNote(text) {
 }
 
 let selectedBtName = null;
+let btAction = null;   // { name, on } while a connect / disconnect is really running
+let btScanning = false, btScanT = null;
+
+// Refresh button: restart discovery and keep the spinner running for the discovery window (nothing polls)
+function startBtScan() {
+  if (!appState.btRadio) return loadBtList();
+  btScanning = true;
+  document.getElementById('btn-refresh-bt')?.classList.add('spin');
+  clearTimeout(btScanT);
+  btScanT = setTimeout(() => { btScanning = false; document.getElementById('btn-refresh-bt')?.classList.remove('spin'); }, 5000);
+  invokeTauri('bt_discovery', { on: true });
+  loadBtList(true);
+}
 
 async function loadBtList(soft) {
   const btList = document.getElementById('bt-device-list');
@@ -51,8 +64,14 @@ async function loadBtList(soft) {
     btList.innerHTML = `<div class="empty-hint">Scanning…</div>`;
   }
   const devices = await invokeTauri('get_bt_devices');
-  btn.classList.remove('spin');
+  if (!btScanning) btn.classList.remove('spin');
   if (!isBtViewOpen() || appState.btBusy) return;
+  // Windows already shows the device in the state we asked for: the action is done, even if the native call
+  // is still finishing its checks. Let go of the busy state NOW so the button is not stuck on "Connecting…".
+  if (btAction && Array.isArray(devices)) {
+    const hit = devices.find((x) => x.name === btAction.name);
+    if (hit && hit.connected === btAction.on) { btAction = null; selectedBtName = null; }
+  }
   btList.innerHTML = '';
   const subs = [];
   if (!devices || devices.length === 0) {
@@ -60,7 +79,8 @@ async function loadBtList(soft) {
   } else {
     setBtCaption(devices);
     devices.forEach((d) => {
-      const isExpanded = selectedBtName === d.name;
+      const working = !!btAction && btAction.name === d.name;
+      const isExpanded = selectedBtName === d.name || working;
       const row = document.createElement('div');
       row.className = 'list-row-item' + (d.connected ? ' on' : '') + (isExpanded ? ' expanded' : '');
       const ico = document.createElement('span');
@@ -89,27 +109,39 @@ async function loadBtList(soft) {
 
         const connBtn = document.createElement('button');
         connBtn.className = 'drawer-btn ' + (d.connected ? 'danger' : 'primary');
-        connBtn.textContent = d.connected ? 'Disconnect' : 'Connect';
+        connBtn.textContent = working ? (btAction.on ? 'Connecting…' : 'Disconnecting…') : (d.connected ? 'Disconnect' : 'Connect');
 
         const unpairBtn = document.createElement('button');
         unpairBtn.className = 'drawer-btn ghost danger';
         unpairBtn.textContent = 'Remove';
+        if (working) connBtn.disabled = unpairBtn.disabled = true;
 
         const errEl = document.createElement('div');
         errEl.className = 'drawer-err';
 
         connBtn.addEventListener('click', async () => {
+          const wantOn = !d.connected;
           connBtn.disabled = unpairBtn.disabled = true;
-          connBtn.textContent = d.connected ? 'Disconnecting…' : 'Connecting…';
+          connBtn.textContent = wantOn ? 'Connecting…' : 'Disconnecting…';
           errEl.textContent = '';
-          const r = await invokeTauri('bt_set_connection', { name: d.name, on: !d.connected });
+          const token = { name: d.name, on: wantOn };
+          btAction = token;   // list refreshes during the action keep showing "Disconnecting…" until the state really changes
+          let r = 'error';
+          try { r = await invokeTauri('bt_set_connection', { name: d.name, on: wantOn }); } catch (_) { r = 'error'; }
+          const stillMine = btAction === token;
+          if (stillMine) btAction = null;
+          else if (r !== 'ok') return;   // the list already showed the wanted state and released the button
           if (r !== 'ok') {
-            connBtn.disabled = unpairBtn.disabled = false;
-            connBtn.textContent = d.connected ? 'Disconnect' : 'Connect';
-            errEl.textContent = 'Could not ' + (d.connected ? 'disconnect' : 'connect');
+            const why = r === 'timeout' ? 'The device did not answer'
+              : r === 'still_connected' ? 'It stayed connected (the device may be reconnecting by itself)'
+              : r === 'notfound' ? 'Device not found'
+              : 'Could not ' + (wantOn ? 'connect' : 'disconnect');
+            if (isBtViewOpen()) await loadBtList(true);
+            const e2 = document.querySelector('#bt-device-list .inline-action-drawer .drawer-err');
+            if (e2) e2.textContent = why;
           } else {
             selectedBtName = null;
-            setTimeout(() => { if (isBtViewOpen()) loadBtList(true); }, 500);
+            if (isBtViewOpen()) loadBtList(true);   // Windows confirmed the new state, show it now
           }
         });
 
@@ -298,6 +330,7 @@ function showBtPrompt(p) {
 }
 
 function openBtView() {
+  if (appState.btPresent === false) return;
   switchView('view-bt', 'state-sub', 316, 208);
   invokeTauri('bt_discovery', { on: true });
   loadBtList();
@@ -327,7 +360,6 @@ const BATT_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" str
 
 function hudIsFloating() { return !!(SET.notch && SET.notch.style === 'floating'); }
 function hudCanShow() { return appState.currentView === 'view-compact'; }   // never fight an open menu
-function hudUiScale() { return Math.max(0.8, ((SET.appearance && SET.appearance.scale) || 100) / 100); }
 function hudIslandSize() {
   // Nominal size of the HUD / popup pill; reportIslandSize() applies SET.appearance.scale to it.
   return { width: ISLAND_WIN_W, height: hudIsFloating() ? 64 : 54 };
@@ -542,6 +574,7 @@ onTauriEvent('bluetooth-nearby', () => { clearTimeout(btNearT); btNearT = setTim
 onTauriEvent('bt-pairing', (e) => showBtPrompt(e && e.payload));
 
 document.getElementById('tile-bt').addEventListener('click', (e) => {
+  if (appState.btPresent === false) return;
   if (e.target.closest('.chev')) return openBtView();
   toggleRadio('bt', !appState.btRadio);
 });
@@ -549,6 +582,6 @@ document.getElementById('tile-bt').addEventListener('contextmenu', (e) => {
   e.preventDefault();
   openBtView();
 });
-document.getElementById('btn-refresh-bt').addEventListener('click', () => { invokeTauri('bt_discovery', { on: true }); loadBtList(); });
+document.getElementById('btn-refresh-bt').addEventListener('click', () => startBtScan());
 document.getElementById('btn-more-bt').addEventListener('click', () => invokeTauri('open_bt_settings'));
 

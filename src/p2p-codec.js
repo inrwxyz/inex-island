@@ -69,12 +69,8 @@
     return s;
   }
 
-  function codeToBytes(code) {
-    const cl = clean(code).slice(0, 8);
-    if (cl.length < 8) throw new Error('Invalid session code.');
-    return b32dec(cl).slice(0, 5);
-  }
   function bytesToCode(b) { return b32enc(b).slice(0, 8); }
+  function codeToBytes(c) { return Array.from(b32dec(String(c))).slice(0, 5); }   // 8 symbols = exactly 5 bytes
 
   /* ---------------- SDP -> info ---------------- */
   function parseSdp(sdp) {

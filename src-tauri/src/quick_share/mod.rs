@@ -69,8 +69,32 @@ fn status_json(eng: &QuickShareEngine) -> serde_json::Value {
     })
 }
 
+#[cfg(windows)]
+fn ensure_firewall() {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x08000000;
+    if let Ok(exe) = std::env::current_exe() {
+        let exe_str = exe.to_string_lossy().to_string();
+        let _ = std::process::Command::new("netsh")
+            .args(["advfirewall", "firewall", "add", "rule", "name=InexIsland QuickShare", "dir=in", "action=allow", &format!("program={}", exe_str), "enable=yes", "profile=any"])
+            .creation_flags(CREATE_NO_WINDOW)
+            .spawn();
+        let _ = std::process::Command::new("netsh")
+            .args(["advfirewall", "firewall", "add", "rule", "name=InexIsland QuickShare Port 52345", "dir=in", "action=allow", "protocol=TCP", "localport=52345", "enable=yes", "profile=any"])
+            .creation_flags(CREATE_NO_WINDOW)
+            .spawn();
+        let _ = std::process::Command::new("netsh")
+            .args(["advfirewall", "firewall", "add", "rule", "name=InexIsland QuickShare Port 5353", "dir=in", "action=allow", "protocol=UDP", "localport=5353", "enable=yes", "profile=any"])
+            .creation_flags(CREATE_NO_WINDOW)
+            .spawn();
+    }
+}
+
 #[tauri::command]
 pub async fn start_quick_share(app: AppHandle) -> Result<serde_json::Value, String> {
+    #[cfg(windows)]
+    ensure_firewall();
+
     let eng = get_engine();
     events::set_app_handle(app.clone());
 

@@ -631,6 +631,95 @@ impl Session {
     }
 }
 
+// ───────────────────────────── "Disconnect" that stays disconnected ─────────────────────────────
+//
+// WlanDisconnect alone is undone within seconds: the saved profile is set to "connect automatically",
+// so the WLAN service just joins it again. When the user presses Disconnect we therefore switch that
+// profile to manual-connect, and put it back to auto when the user connects again (and when the app
+// starts, so a reboot behaves like normal). The profile names are kept in a tiny text file.
+
+fn manual_file() -> Option<std::path::PathBuf> {
+    let base = std::env::var_os("LOCALAPPDATA")?;
+    let dir = std::path::PathBuf::from(base).join("inex-island");
+    let _ = std::fs::create_dir_all(&dir);
+    Some(dir.join("wifi-manual.txt"))
+}
+
+fn manual_read() -> Vec<String> {
+    manual_file()
+        .and_then(|f| std::fs::read_to_string(f).ok())
+        .map(|t| t.lines().map(|l| l.trim().to_string()).filter(|l| !l.is_empty()).collect())
+        .unwrap_or_default()
+}
+
+fn manual_write(list: &[String]) {
+    if let Some(f) = manual_file() {
+        if list.is_empty() {
+            let _ = std::fs::remove_file(f);
+        } else {
+            let _ = std::fs::write(f, list.join("\n"));
+        }
+    }
+}
+
+fn manual_add(name: &str) {
+    let mut l = manual_read();
+    if !l.iter().any(|n| n == name) {
+        l.push(name.to_string());
+        manual_write(&l);
+    }
+}
+
+fn manual_remove(name: &str) {
+    let mut l = manual_read();
+    let before = l.len();
+    l.retain(|n| n != name);
+    if l.len() != before {
+        manual_write(&l);
+    }
+}
+
+impl Session {
+    /// Flip the profile's connection mode ("auto" <-> "manual"). true = the profile now has the wanted
+    /// mode. Deliberately no per-user fallback (see put_profile): that would shadow an all-user profile.
+    fn set_connect_mode(&self, guid: &Guid, name: &str, mode: &str) -> bool {
+        let Some((xml, flags)) = self.get_profile(guid, name) else { return false };
+        let want = format!("<connectionMode>{mode}</connectionMode>");
+        if xml.contains(&want) {
+            return true;
+        }
+        let from = if mode == "manual" { "auto" } else { "manual" };
+        let have = format!("<connectionMode>{from}</connectionMode>");
+        if !xml.contains(&have) {
+            return false;
+        }
+        self.set_profile_scope(guid, &xml.replace(&have, &want), flags & PROFILE_USER).is_ok()
+    }
+
+    /// Connect-automatically back on for a profile we switched off earlier.
+    fn restore_auto(&self, guid: &Guid, name: &str) {
+        if manual_read().iter().any(|n| n == name) && self.set_connect_mode(guid, name, "auto") {
+            manual_remove(name);
+        }
+    }
+}
+
+/// App start: give every profile we switched to manual its automatic connect back.
+fn restore_all_auto() {
+    let names = manual_read();
+    if names.is_empty() {
+        return;
+    }
+    let Ok(sess) = Session::open() else { return };
+    let Ok(guid) = sess.first_adapter() else { return };
+    for n in names {
+        // gone (forgotten meanwhile) or switched back = nothing left to do for it
+        if sess.get_profile(&guid, &n).is_none() || sess.set_connect_mode(&guid, &n, "auto") {
+            manual_remove(&n);
+        }
+    }
+}
+
 impl Drop for Session {
     fn drop(&mut self) {
         unsafe {
@@ -691,6 +780,7 @@ unsafe extern "system" fn on_wlan_event(data: *mut NotifData, _ctx: *mut c_void)
 
 pub fn start(app: AppHandle) {
     let _ = APP.set(app);
+    std::thread::spawn(restore_all_auto);   // profiles our Disconnect switched to manual go back to auto
     let mut slot = LISTENER.lock().unwrap_or_else(|e| e.into_inner());
     if *slot != 0 {
         return;
@@ -823,6 +913,7 @@ fn join_sync(ssid: &str, password: &str, security: &str, hidden: bool) -> String
         Err(_) => return "failed".to_string(),
     };
 
+    manual_remove(&name);   // the profile was just rewritten with connect-automatically
     match sess.connect_and_wait(&guid, &name) {
         Outcome::Connected => "ok".to_string(),
         other => {
@@ -848,6 +939,7 @@ fn connect_saved_sync(ssid: &str) -> bool {
     let Ok(sess) = Session::open() else { return false };
     let Ok(guid) = sess.first_adapter() else { return false };
     let Some(name) = sess.profile_for(&guid, ssid) else { return false };
+    sess.restore_auto(&guid, &name);   // it may have been set to manual by our own Disconnect
     matches!(sess.connect_and_wait(&guid, &name), Outcome::Connected)
 }
 
@@ -890,20 +982,53 @@ pub async fn wifi_join(
     .map_err(|e| e.to_string())
 }
 
-#[tauri::command]
-pub async fn disconnect_wifi() -> Result<(), String> {
-    tauri::async_runtime::spawn_blocking(|| -> Result<(), String> {
-        let sess = Session::open()?;
-        let guid = sess.first_adapter()?;
-        let rc = unsafe { WlanDisconnect(sess.0, &guid, null_mut()) };
-        if rc == 0 {
-            Ok(())
-        } else {
-            Err(format!("disconnect_failed:{rc}"))
+/// Disconnect for real. Ok(true) = Windows confirms we are offline, Ok(false) = it did not let go.
+fn disconnect_sync() -> Result<bool, String> {
+    let sess = Session::open()?;
+    let guid = sess.first_adapter()?;
+    let Some((ssid, _)) = sess.connection(&guid) else { return Ok(true) };   // already offline
+
+    // stop Windows from joining it again straight away
+    if let Some(name) = sess.profile_for(&guid, &ssid) {
+        if sess.set_connect_mode(&guid, &name, "manual") {
+            manual_add(&name);
         }
+    }
+    for _ in 0..2 {
+        let rc = unsafe { WlanDisconnect(sess.0, &guid, null_mut()) };
+        if rc != 0 {
+            return Err(format!("disconnect_failed:{rc}"));
+        }
+        // short wait for Windows to confirm (only while the user's click is being handled)
+        for _ in 0..30 {
+            std::thread::sleep(Duration::from_millis(100));
+            if sess.connection(&guid).is_none() {
+                return Ok(true);
+            }
+        }
+    }
+    Ok(false)
+}
+
+#[tauri::command]
+pub async fn disconnect_wifi() -> Result<bool, String> {
+    tauri::async_runtime::spawn_blocking(disconnect_sync)
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+/// Ask Windows for a fresh radio scan right now (the refresh button). The result arrives as the usual
+/// `wifi-changed` event, so nothing waits or polls here.
+#[tauri::command]
+pub async fn wifi_rescan() -> bool {
+    tauri::async_runtime::spawn_blocking(|| {
+        let Ok(sess) = Session::open() else { return false };
+        let Ok(guid) = sess.first_adapter() else { return false };
+        sess.kick_scan(&guid, 1_500);
+        true
     })
     .await
-    .map_err(|e| e.to_string())?
+    .unwrap_or(false)
 }
 
 #[tauri::command]
@@ -913,6 +1038,7 @@ pub async fn wifi_forget(ssid: String) -> Result<(), String> {
         let guid = sess.first_adapter()?;
         let name = sess.profile_for(&guid, &ssid).unwrap_or(ssid);
         let rc = sess.delete_profile(&guid, &name);
+        manual_remove(&name);
         // 1168 = profile not found: already gone, that's fine
         if rc == 0 || rc == 1168 {
             Ok(())

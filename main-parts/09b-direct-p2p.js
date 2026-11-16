@@ -1,9 +1,10 @@
 // ==================== 09b. P2P LINK: DIRECT 1-ON-1, NO SERVER ====================
 // Nothing runs (no RTCPeerConnection, no timer, no network) until you press Generate or paste a code.
-// Handshake = two short copy-paste codes:
-//   HOST   : Generate -> host code (click it to copy) -> send it to the friend
-//   FRIEND : paste / drop it in the box -> a reply code is made (and copied) -> send it back
-//   HOST   : paste / drop the reply code in the same box -> connected
+// Handshake = two QR images, one slot in the P2P menu does everything:
+//   HOST   : Generate -> the QR appears in the slot (click it = the QR image is copied) -> send it to the friend
+//   FRIEND : paste (Ctrl+V) / drop the QR on the same slot -> a scan animation -> the reply QR replaces it (and is copied)
+//   HOST   : paste / drop the reply QR on the same slot -> connected
+// (a plain text code pasted instead of an image still works)
 // A code is valid for 3 minutes (CODE_TTL_MS) and is dead as soon as the link is up.
 // (var + functions on purpose: other parts call these before this part has run)
 
@@ -12,6 +13,7 @@ var directJoinSession = null;   // { pc, replyCode, expiresAt }
 var directTimer = null;         // 3-minute expiry of the code that is waiting
 var directTick = null;          // 1 s countdown in the header
 var directGenSeq = 0;           // Cancel bumps it, so a half-made code is thrown away
+var p2pScanning = false;        // an image is being decoded: scan animation on the slot
 var directUi = { phase: 'standby' };   // standby | generating | offer-ready | joining | reply-ready | connecting | connected
 
 function waitCandidatesGathered(pc, maxWaitMs = 4500) {
@@ -89,18 +91,13 @@ function directPhaseLabel() {
 
 function p2pHintText() {
   switch (directUi.phase) {
-    case 'generating': return 'Creating your code…';
-    case 'offer-ready': return 'Click the code to copy it and send it to your friend. Then paste their reply code above.';
+    case 'generating': return 'Creating code…';
+    case 'offer-ready': return 'Click QR to copy, then paste reply.';
     case 'joining': return 'Joining…';
-    case 'reply-ready': return 'Reply code copied. Send it back to your friend (valid 3 minutes).';
+    case 'reply-ready': return 'Reply copied. Send it back.';
     case 'connecting': return 'Connecting…';
-    default: return 'Generate a code, or paste a code from your friend.';
+    default: return 'Generate or paste a QR.';
   }
-}
-
-function directCodePreview(code) {
-  const flat = String(code || '').replace(/[\s-]/g, '');
-  return flat.length > 14 ? `${flat.slice(0, 9)} … ${flat.slice(-4)}` : flat;
 }
 
 function updateDirectCountdown() {
@@ -108,6 +105,121 @@ function updateDirectCountdown() {
   if (!el || !directUi.expiresAt) return;
   const rem = Math.max(0, Math.floor((directUi.expiresAt - Date.now()) / 1000));
   el.textContent = `${Math.floor(rem / 60)}:${String(rem % 60).padStart(2, '0')}`;
+}
+
+// ---------- QR: draw / copy / read ----------
+// black on white, 4-module quiet zone, 10 px per module: still scans after a chat app recompresses it
+function drawP2PQr(canvas, text) {
+  const t = String(text).toUpperCase();   // the codec alphabet is A-Z 2-9 and "-": alphanumeric mode = the smallest QR
+  let qr;
+  try { qr = qrcode(0, 'L'); qr.addData(t, 'Alphanumeric'); qr.make(); }
+  catch (_) { qr = qrcode(0, 'L'); qr.addData(t, 'Byte'); qr.make(); }
+  const n = qr.getModuleCount(), quiet = 4, px = 10;
+  const size = (n + quiet * 2) * px;
+  canvas.width = size; canvas.height = size;
+  const g = canvas.getContext('2d');
+  g.fillStyle = '#fff'; g.fillRect(0, 0, size, size);
+  g.fillStyle = '#000';
+  for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) {
+    if (qr.isDark(r, c)) g.fillRect((c + quiet) * px, (r + quiet) * px, px, px);
+  }
+}
+
+async function copyP2PQr() {
+  const slot = document.getElementById('code-display-box');
+  const cv = document.getElementById('p2p-qr-canvas');
+  if (!slot || !cv || cv.classList.contains('hidden')) return false;
+  try {
+    const blob = await new Promise((res) => cv.toBlob(res, 'image/png'));
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+  } catch (_) { return false; }
+  const toast = document.getElementById('p2p-qr-toast');
+  if (toast) toast.textContent = 'Copied \u2713';
+  slot.classList.add('copied');
+  clearTimeout(slot._copyT);
+  slot._copyT = setTimeout(() => slot.classList.remove('copied'), 1200);
+  return true;
+}
+
+// jsQR (~130 KB) is loaded the first time an image is read, not at startup: zero cost while the island sits idle
+var jsQrLoading = null;
+function loadJsQr() {
+  if (typeof jsQR === 'function') return Promise.resolve();
+  if (!jsQrLoading) {
+    jsQrLoading = new Promise((resolve, reject) => {
+      const el = document.createElement('script');
+      el.src = 'jsqr.js';
+      el.onload = resolve;
+      el.onerror = () => { jsQrLoading = null; el.remove(); reject(new Error('QR reader missing (run npm install)')); };
+      document.head.appendChild(el);
+    });
+  }
+  return jsQrLoading;
+}
+
+// image -> text of the QR in it. null = no QR found
+async function decodeP2PImage(blob) {
+  await loadJsQr();
+  const bmp = await createImageBitmap(blob);
+  const cv = document.createElement('canvas');
+  const g = cv.getContext('2d', { willReadFrequently: true });
+  const base = Math.min(1, 1000 / Math.max(bmp.width, bmp.height));
+  for (const k of [1, 0.6, 0.4]) {            // big screenshots: a smaller copy often reads better
+    const w = Math.max(60, Math.round(bmp.width * base * k)), h = Math.max(60, Math.round(bmp.height * base * k));
+    cv.width = w; cv.height = h;
+    g.fillStyle = '#fff'; g.fillRect(0, 0, w, h);
+    g.drawImage(bmp, 0, 0, w, h);
+    const hit = jsQR(g.getImageData(0, 0, w, h).data, w, h, { inversionAttempts: 'attemptBoth' });
+    if (hit && hit.data) { try { bmp.close(); } catch (_) {} return hit.data; }
+  }
+  try { bmp.close(); } catch (_) {}
+  return null;
+}
+
+function setP2PScanning(v) { p2pScanning = v; renderP2PView(); }
+
+// any image (pasted / dropped / from a file) -> scan animation -> same path as a typed code
+async function handleP2PImage(blob) {
+  const ph = directUi.phase;
+  if (!blob || p2pScanning || ph === 'generating' || ph === 'joining' || ph === 'connecting' || appState.peers.length > 0) return;
+  setP2PScanning(true);
+  let text = null, err = null;
+  const minShow = directSleep(600);            // the animation is always seen
+  try { text = await decodeP2PImage(blob); } catch (e) { err = e; }
+  await minShow;
+  setP2PScanning(false);
+  if (err) { showToast('lock', err.message || 'Could not read the image', 2600); return; }
+  if (!text) { showToast('lock', 'No QR found in that image', 2200); return; }
+  handleDirectCodeInput(text);
+}
+
+var P2P_IMG_EXT = /\.(png|jpe?g|webp|bmp|gif)$/i;
+async function handleP2PPath(path) {
+  try {
+    const buf = await invokeTauri('read_image_file', { path });
+    if (buf) await handleP2PImage(new Blob([buf]));
+  } catch (_) { showToast('lock', 'Could not read that file', 2200); }
+}
+
+function p2pViewActive() {
+  const v = document.getElementById('view-p2p');
+  return !!(v && v.classList.contains('active'));
+}
+
+// Native file drag from Explorer / a chat app (the window has native drop on, so the webview never sees these).
+// Called first by onNativeDrop (08): while the P2P menu is open an image goes to the QR slot, not to the tray.
+function p2pNativeDrop(p) {
+  if (!p2pViewActive() || !p) return false;
+  const slot = document.getElementById('code-display-box');
+  if (p.type === 'enter' || p.type === 'over') { slot?.classList.add('drop-over'); return true; }
+  if (p.type === 'leave') { slot?.classList.remove('drop-over'); return true; }
+  if (p.type === 'drop') {
+    slot?.classList.remove('drop-over');
+    const img = (p.paths || []).find((x) => P2P_IMG_EXT.test(x));
+    if (img) handleP2PPath(img); else showToast('lock', 'Drop a QR image here', 2000);
+    return true;
+  }
+  return false;
 }
 
 // ---------- the P2P view (everything in it is decided from directUi + connected peers) ----------
@@ -120,31 +232,29 @@ function renderP2PView() {
   const hosting = !connected && ph === 'offer-ready';
   const replying = !connected && ph === 'reply-ready';
 
-  gen.classList.toggle('hidden', connected || !(ph === 'standby' || ph === 'generating'));
-  gen.classList.toggle('busy', ph === 'generating');
-  gen.textContent = ph === 'generating' ? 'Generating…' : 'Generate';
-
-  const box = $('code-display-box');
-  const codeEl = $('my-p2p-code');
+  // the one slot: idle (Generate + hint) -> QR -> (friend's QR lands on it) -> scan -> reply QR
+  const slot = $('code-display-box');
+  const cv = $('p2p-qr-canvas');
+  const idle = $('p2p-slot-idle');
   const code = hosting ? directUi.code : (replying ? directUi.replyCode : '');
-  box.classList.toggle('hidden', !code);
+  slot.classList.toggle('hidden', connected || ph === 'connecting');
+  slot.classList.toggle('has-qr', !!code);
+  slot.classList.toggle('scanning', p2pScanning || ph === 'joining');
+  cv.classList.toggle('hidden', !code);
+  idle.classList.toggle('hidden', !!code);
+  gen.classList.toggle('hidden', !(ph === 'standby' || ph === 'generating'));
+  gen.classList.toggle('busy', ph === 'generating');
+  gen.textContent = ph === 'generating' ? 'Generating\u2026' : 'Generate';
   if (code) {
-    if (box.dataset.shown !== code) {          // a new code: small pop-in animation
-      box.dataset.shown = code;
-      box.classList.remove('pop'); void box.offsetWidth; box.classList.add('pop');
+    if (slot.dataset.shown !== code) {          // a new QR: draw it + small pop-in animation
+      slot.dataset.shown = code;
+      drawP2PQr(cv, code);
+      slot.classList.remove('pop'); void slot.offsetWidth; slot.classList.add('pop');
     }
-    if (!box.classList.contains('copied')) codeEl.textContent = directCodePreview(code);
   } else {
-    box.dataset.shown = '';
-    box.classList.remove('copied');
+    slot.dataset.shown = '';
+    slot.classList.remove('copied');
   }
-
-  const joinBox = $('p2p-join-box');
-  joinBox.classList.toggle('hidden', connected || !(ph === 'standby' || ph === 'offer-ready'));
-  const inp = $('input-peer-code');
-  if (inp) inp.placeholder = hosting ? 'Paste friend\u2019s reply code' : 'Paste or drop code';
-  const joinBtn = $('btn-join-code');
-  if (joinBtn) joinBtn.textContent = hosting ? 'Connect' : 'Join';
 
   $('btn-exit-room')?.classList.toggle('hidden', connected || ph === 'standby');
 
@@ -269,10 +379,8 @@ async function handleDirectJoinOffer(hostCode) {
     directJoinSession = { pc, replyCode, expiresAt };
     armDirectExpiry(expiresAt);
     setDirectState({ phase: 'reply-ready', replyCode, expiresAt });
-    try {
-      await navigator.clipboard.writeText(replyCode);
-      showToast('done', 'Reply code copied', 1600);
-    } catch (_) {}
+    await directSleep(60);                       // let the reply QR get drawn first
+    if (await copyP2PQr()) showToast('done', 'Reply QR copied', 1600);
   } catch (err) {
     try { if (pc) pc.close(); } catch (_) {}
     if (tok === directGenSeq) {
@@ -338,49 +446,56 @@ function handleDirectDisconnect() {
 // ---------- wiring ----------
 (function wireP2PView() {
   const $ = (id) => document.getElementById(id);
-  $('btn-gen-code')?.addEventListener('click', handleDirectGenOffer);
+  $('btn-gen-code')?.addEventListener('click', (e) => { e.stopPropagation(); handleDirectGenOffer(); });
   $('btn-exit-room')?.addEventListener('click', handleDirectDisconnect);
 
-  const inp = $('input-peer-code');
-  const submit = () => { if (inp && handleDirectCodeInput(inp.value)) inp.value = ''; };
-  $('btn-join-code')?.addEventListener('click', submit);
-  inp?.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
-  inp?.addEventListener('paste', (e) => {          // pasting a code starts it straight away
-    const t = ((e.clipboardData || window.clipboardData).getData('text') || '').trim();
-    if (!t) return;
+  const slot = $('code-display-box');
+  slot?.addEventListener('animationend', () => slot.classList.remove('pop'));
+  // click the QR = copy it as an image. Click an empty slot = focus it, so Ctrl+V lands here
+  slot?.addEventListener('click', async () => {
+    slot.focus({ preventScroll: true });
+    if (!slot.classList.contains('has-qr')) return;
+    if (!(await copyP2PQr())) showToast('lock', 'Copy failed', 1500);
+  });
+
+  // Ctrl+V anywhere in the P2P menu: an image (screenshot / "Copy image" / copied file) or a text code
+  document.addEventListener('paste', async (e) => {
+    if (!p2pViewActive()) return;
+    const cd = e.clipboardData || window.clipboardData;
+    if (!cd) return;
+    const items = Array.from(cd.items || []);
+    const imgItem = items.find((i) => i.kind === 'file' && /^image\//.test(i.type));
+    if (imgItem) { e.preventDefault(); handleP2PImage(imgItem.getAsFile()); return; }
+    const text = (cd.getData('text/plain') || '').trim();
+    if (text) { e.preventDefault(); handleDirectCodeInput(text); return; }
+    // a copied image FILE (Explorer / chat app): the page sees nothing, so ask the native clipboard
     e.preventDefault();
-    inp.value = handleDirectCodeInput(t) ? '' : t;
+    try {
+      const paths = (await invokeTauri('get_clipboard_files')) || [];
+      const img = paths.find((x) => P2P_IMG_EXT.test(x));
+      if (img) handleP2PPath(img); else showToast('lock', 'Nothing to paste', 1600);
+    } catch (_) {}
   });
 
-  // click the code = copy it
-  const box = $('code-display-box');
-  box?.addEventListener('animationend', () => box.classList.remove('pop'));
-  box?.addEventListener('click', async () => {
-    const code = directUi.phase === 'reply-ready' ? directUi.replyCode : directUi.code;
-    if (!code) return;
-    try { await navigator.clipboard.writeText(code); } catch (_) { showToast('lock', 'Copy failed', 1500); return; }
-    box.classList.add('copied');
-    $('my-p2p-code').textContent = 'Copied ✓';
-    clearTimeout(box._copyT);
-    box._copyT = setTimeout(() => { box.classList.remove('copied'); renderP2PView(); }, 1200);
-  });
-
-  // drop a text code anywhere on the view (files keep going to the tray)
+  // drag an image (or a text code) onto the menu when the webview itself receives the drop
   const body = $('p2p-body');
-  const hasText = (e) => {
+  const hasPayload = (e) => {
     const t = e.dataTransfer && e.dataTransfer.types ? Array.from(e.dataTransfer.types) : [];
-    return t.includes('text/plain') && !t.includes('Files');
+    return t.includes('Files') || t.includes('text/plain');
   };
-  ['dragenter', 'dragover'].forEach((n) => body?.addEventListener(n, (e) => {
-    if (!hasText(e)) return;
-    e.preventDefault(); e.stopPropagation();
-    body.classList.add('drop-over');
+  ['dragenter', 'dragover'].forEach((n) => body?.addEventListener(n, (ev) => {
+    if (!hasPayload(ev)) return;
+    ev.preventDefault(); ev.stopPropagation();
+    slot?.classList.add('drop-over');
   }));
-  body?.addEventListener('dragleave', () => body.classList.remove('drop-over'));
-  body?.addEventListener('drop', (e) => {
-    body.classList.remove('drop-over');
-    if (!hasText(e)) return;
-    e.preventDefault(); e.stopPropagation();
-    handleDirectCodeInput(e.dataTransfer.getData('text/plain'));
+  body?.addEventListener('dragleave', (ev) => { if (!body.contains(ev.relatedTarget)) slot?.classList.remove('drop-over'); });
+  body?.addEventListener('drop', (ev) => {
+    slot?.classList.remove('drop-over');
+    if (!hasPayload(ev)) return;
+    ev.preventDefault(); ev.stopPropagation();
+    const f = Array.from(ev.dataTransfer.files || []).find((x) => /^image\//.test(x.type));
+    if (f) { handleP2PImage(f); return; }
+    const t = ev.dataTransfer.getData('text/plain');
+    if (t) handleDirectCodeInput(t);
   });
 })();

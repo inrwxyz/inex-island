@@ -1,4 +1,4 @@
-// ==================== 08. P2P PEERS (WebRTC DATA CHANNEL, NO SERVER) ====================
+// ==================== 09. P2P PEERS (WebRTC DATA CHANNEL, NO SERVER) ====================
 // How a link is made (host code / reply code) lives in 09b. This part owns what happens once a peer
 // exists: data channel, heartbeat, ordered message queue, cleanup. Nothing here runs until a peer connects.
 

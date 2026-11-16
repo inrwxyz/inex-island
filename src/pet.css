@@ -1,0 +1,163 @@
+/* ================================================================================================
+   Notch Companion (pet) + Smart Health Reminders.  Loaded after styles.css (see index.html).
+   Rules: no :has(); every animation below moves only `transform` / `opacity` (compositor);
+   state comes from JS class toggles on #island:  .has-pet  .pet-peeking  .pet-pinned  .pet-center
+   .wellness-hud-active  .hud-water-active  .hud-eye-active  .hud-stretch-active
+   ================================================================================================ */
+
+.c-center { position: relative; }
+
+/* ---------- pet box ---------- */
+.pet-box { display: flex; align-items: center; justify-content: center; pointer-events: none; }
+.pet-box.at-center { position: absolute; inset: 0; z-index: 2; }                  /* overlay on the clock (Peeker) */
+.pet-box.at-inline { position: relative; flex: none; }                             /* Resting Pill = Companion Pet: replaces the time */
+.island.pet-center #c-clock { display: none; }
+.island:not(.state-compact) .pet-box { display: none !important; }                 /* never inside the open menu */
+
+.pet-inner { pointer-events: auto; cursor: pointer; transform-origin: 50% 100%; will-change: transform, opacity; }
+.pet-svg { display: block; width: 30px; height: 15px; overflow: visible; will-change: transform; }
+.pet-box[data-skin="cat"] .pet-svg { width: 29px; height: 18px; }
+.pet-box[data-skin="dots"] .pet-svg { width: 30px; height: 12px; }
+
+/* Peeker: the clock steps aside while the pet springs up out of the notch */
+#c-clock { transition: opacity 0.25s ease, transform 0.45s var(--ease-close); }
+.island.pet-peeking #c-clock { opacity: 0; transform: translate3d(0, -7px, 0) scale(0.9); }
+.pet-box.at-center .pet-inner {
+  opacity: 0; transform: translate3d(0, 12px, 0) scale(0.6);
+  transition: transform 0.35s var(--ease-close), opacity 0.18s ease;
+}
+.island.pet-peeking .pet-box.at-center .pet-inner {
+  opacity: 1; transform: none;
+  transition: transform 0.65s var(--spring-pop), opacity 0.2s ease;
+}
+.pet-box.at-inline .pet-inner { opacity: 1; }
+
+/* ---------- Skin A: cyberpunk robot eyes ---------- */
+.eye-glow { fill: rgba(47, 247, 212, 0.16); animation: petGlow 3.2s ease-in-out infinite; }
+.eye-body { fill: #06201c; stroke: #2ff7d4; stroke-width: 1.3; }
+.pupil-core { fill: #8dfff0; transform-box: fill-box; transform-origin: center; transition: transform 0.22s var(--spring); }
+.eye-lid { transform-box: fill-box; transform-origin: center; animation: petBlink 5.2s infinite; transition: transform 0.18s var(--spring); }
+.eye-r .eye-lid { animation-delay: 0.04s; }
+.pet-box.is-hover .pupil-core { transform: scale(1.32); }                          /* hover = pupil dilation */
+.pet-box.m-happy .eye-lid { animation: none; transform: scaleY(0.45) translate3d(0, 1.5px, 0); }   /* delight squint */
+.pet-box.m-wink .eye-r .eye-lid { animation: none; transform: scaleY(0.08); }
+.pet-box.m-sleepy .eye-lid, .pet-box.idle-sleepy .eye-lid { animation: none; transform: scaleY(0.3) translate3d(0, 3px, 0); }
+.pet-box.m-happy .eye-glow { animation-duration: 0.9s; }
+@keyframes petBlink { 0%, 93%, 100% { transform: scaleY(1); } 96% { transform: scaleY(0.08); } }
+@keyframes petGlow { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
+
+/* ---------- new eye styles (same blink / mood / tracking as the original eyes) ---------- */
+.pupil-shine { fill: #fff; }
+/* Round Eyes: white eyes, dark pupil with a shine */
+.pet-box[data-skin="orbs"] .eye-glow { fill: rgba(220, 235, 255, 0.14); }
+.pet-box[data-skin="orbs"] .eye-body { fill: #f3f7ff; stroke: none; }
+.pet-box[data-skin="orbs"] .pupil-core { fill: #11141d; }
+/* Slit Eyes: amber eyes with a vertical slit pupil */
+.pet-box[data-skin="slits"] .eye-glow { fill: rgba(255, 176, 60, 0.18); }
+.pet-box[data-skin="slits"] .eye-body { fill: #2a1604; stroke: #ffb03c; stroke-width: 1.3; }
+.pet-box[data-skin="slits"] .pupil-core { fill: #ffd27a; }
+/* Visor: wide neon pills */
+.pet-box[data-skin="visor"] .eye-glow { fill: rgba(255, 95, 210, 0.18); }
+.pet-box[data-skin="visor"] .eye-body { fill: #260a22; stroke: #ff5fd2; stroke-width: 1.3; }
+.pet-box[data-skin="visor"] .pupil-core { fill: #ffc2ee; }
+
+/* ---------- Skin B: 8-bit cat (steps() = real pixel-animation feel) ---------- */
+.cat-eye { transform-box: fill-box; transform-origin: center; animation: catBlink 4.6s steps(1) infinite; }
+.cat-happy { opacity: 0; }
+.pet-box.m-happy .cat-happy { opacity: 1; }
+.pet-box.m-happy .cat-eyes { opacity: 0; }
+.pet-box.m-wink .cat-eye:last-child { animation: none; transform: scaleY(0); }
+.pet-box.m-sleepy .cat-eyes, .pet-box.idle-sleepy .cat-eyes { opacity: 0.35; }
+.cat-ear-r { animation: catEar 5s steps(1) infinite; }
+@keyframes catBlink { 0%, 92% { transform: scaleY(1); } 94%, 97% { transform: scaleY(0); } 98%, 100% { transform: scaleY(1); } }
+@keyframes catEar { 0%, 88% { transform: translate(0, 0); } 90%, 94% { transform: translate(0, 1px); } 96%, 100% { transform: translate(0, 0); } }
+
+/* ---------- Skin C: kinetic dots / monogram ---------- */
+.dot { fill: #e9f1ff; transform-box: fill-box; transform-origin: center; animation: dotBreath 2.8s ease-in-out infinite; }
+.dot.d2 { animation-delay: 0.22s; }
+.dot.d3 { animation-delay: 0.44s; }
+.pet-box.m-happy .dot { animation-duration: 0.7s; }
+.mono-ring { fill: none; stroke: #e9f1ff; stroke-width: 1.1; transform-box: fill-box; transform-origin: center; animation: ringBreath 3.4s ease-in-out infinite; }
+.mono-i { stroke: #e9f1ff; stroke-width: 1.6; stroke-linecap: round; fill: none; }
+.pet-box.m-happy .mono-ring { animation-duration: 0.8s; }
+@keyframes dotBreath { 0%, 100% { transform: scale(0.8); opacity: 0.7; } 50% { transform: scale(1.25); opacity: 1; } }
+@keyframes ringBreath { 0%, 100% { transform: scale(0.92); opacity: 0.75; } 50% { transform: scale(1.1); opacity: 1; } }
+
+/* ---------- one-shot reactions (added to .pet-inner by JS) ---------- */
+.pet-inner.r-purr { animation: rPurr 0.12s ease-in-out 7 alternate; }
+.pet-inner.r-giggle { animation: rGiggle 0.7s var(--spring); }
+.pet-inner.r-spin { animation: rSpin 0.8s var(--spring); }
+.pet-inner.r-wave { animation: rWave 0.9s ease-in-out; }
+@keyframes rPurr { from { transform: translate3d(-0.6px, 0, 0); } to { transform: translate3d(0.6px, 0, 0); } }
+@keyframes rGiggle { 0%, 100% { transform: none; } 20% { transform: translate3d(0, -4px, 0) scale(1.06); } 40% { transform: none; } 60% { transform: translate3d(0, -3px, 0) scale(1.04); } 80% { transform: none; } }
+@keyframes rSpin { 0% { transform: rotate(0) scale(1); } 50% { transform: rotate(190deg) scale(1.15); } 100% { transform: rotate(360deg) scale(1); } }
+@keyframes rWave { 0% { transform: rotate(0); } 20% { transform: rotate(-12deg) translate3d(0, -2px, 0); } 40% { transform: rotate(10deg); } 60% { transform: rotate(-10deg); } 80% { transform: rotate(6deg); } 100% { transform: rotate(0); } }
+
+/* ================================================================================================
+   WELLNESS HUD - identical morph to the timer-end card / Bluetooth HUD:
+   hud-pre (old content blurs away) -> spring open -> content stagger -> hud-out -> hud-back
+   ================================================================================================ */
+.c-wellness-hud {
+  display: none; align-items: center; gap: 7px; width: 100%; height: 100%;
+  cursor: pointer; user-select: none; --wl: #7dd3fc;
+  font-family: "SF Pro Display", -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+.island.hud-water-active .c-wellness-hud { --wl: #4cc9ff; }
+.island.hud-eye-active .c-wellness-hud { --wl: #6ee7a8; }
+.island.hud-stretch-active .c-wellness-hud { --wl: #ffb86b; }
+
+.island.state-compact.wellness-hud-active {
+  /* identical size, corners and spring to the device-connect HUD (.bt-hud-active) */
+  width: 220px !important; height: 37px !important; border-radius: 19px !important; top: 7px !important;
+  background: var(--notch-bg) !important; color: var(--notch-fg) !important; border: 0 !important; box-shadow: none !important;
+  --ear-edge: 0px;
+  transition: width 0.65s var(--spring-pop), height 0.6s var(--spring-pop),
+              top 0.45s var(--ease-close), border-radius 0.5s var(--ease-close) !important;
+}
+.island:not([data-style="floating"]).state-compact.wellness-hud-active {
+  top: 0 !important; height: 40px !important;
+  border-radius: 0 0 var(--radius) var(--radius) !important;                       /* follows Settings > Corner Roundness */
+}
+.island.state-compact.wellness-hud-active .compact-bar { padding: 0 12px 0 9px !important; justify-content: space-between !important; height: 100% !important; }
+.island:not([data-style="floating"]).state-compact.wellness-hud-active .compact-bar { padding: 0 13px 0 10px !important; }
+.island.state-compact.wellness-hud-active :is(.c-left, .c-center, .c-right, .c-biometric-hud, .c-bt-hud, .c-timer-chip) { display: none !important; }
+.island.state-compact.wellness-hud-active .c-wellness-hud { display: flex !important; }
+.island.state-compact.wellness-hud-active .notch-ear { display: none !important; }
+.island.island.island.island.island.island.island.state-compact.wellness-hud-active { border-color: transparent !important; }
+.island.hud-out .c-wellness-hud { animation: hudOut 0.16s ease-in forwards !important; }
+
+.c-wellness-hud > * { animation: wlIn 0.45s var(--ease-close) both; }
+.c-wellness-hud > .wl-ico { animation-delay: 0.14s; }
+.c-wellness-hud > .wl-text { animation-delay: 0.2s; }
+@keyframes wlIn { 0% { opacity: 0; transform: scale(0.9) translate3d(0, 2px, 0); } 100% { opacity: 1; transform: none; } }
+
+.wl-ico { flex: none; width: 23px; height: 23px; display: flex; align-items: center; justify-content: center; }
+.wl-svg { display: block; width: 20px; height: 20px; overflow: visible; fill: none; stroke: var(--wl); stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.wl-text { display: flex; flex-direction: column; min-width: 0; flex: 1 1 auto; line-height: 1.2; }
+.wl-title { font-size: 10.5px; font-weight: 600; letter-spacing: -0.015em; color: var(--notch-fg, #fff); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wl-sub { font-size: 8.5px; font-weight: 500; letter-spacing: -0.005em; color: var(--notch-fg-dim, rgba(255, 255, 255, 0.55)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* water: droplet falls, squashes, ripples spread */
+.wl-svg .drop { fill: var(--wl); fill-opacity: 0.92; stroke: none; transform-box: fill-box; transform-origin: 50% 100%; animation: wlDrop 0.9s var(--ease-close) 0.15s both; }
+.wl-svg .rip { opacity: 0; stroke-width: 1; transform-box: fill-box; transform-origin: center; animation: wlRipple 1.5s ease-out 3 both; }
+.wl-svg .rip.r1 { animation-delay: 0.55s; }
+.wl-svg .rip.r2 { animation-delay: 0.9s; }
+@keyframes wlDrop { 0% { transform: translate3d(0, -9px, 0) scale(0.7, 1.25); opacity: 0; } 45% { transform: none; opacity: 1; } 62% { transform: scale(1.14, 0.86); } 100% { transform: none; opacity: 1; } }
+@keyframes wlRipple { 0% { transform: scale(0.3); opacity: 0.8; } 100% { transform: scale(1.7); opacity: 0; } }
+
+/* eye rest: iris slowly looks far left and right */
+.wl-svg .eye-iris { fill: var(--wl); stroke: none; animation: wlLook 2.6s ease-in-out infinite alternate; }
+.wl-svg .eye-iris .gl { fill: #fff; }
+@keyframes wlLook { 0% { transform: translate3d(-3.2px, 0, 0); } 100% { transform: translate3d(3.2px, 0, 0); } }
+
+/* stretch: little figure bobs, arms stretch up */
+.wl-svg .st-fig { animation: wlBob 1.6s ease-in-out infinite alternate; }
+.wl-svg .st-head { fill: var(--wl); stroke: none; }
+.wl-svg .st-arms { transform-box: fill-box; transform-origin: 50% 100%; animation: wlArms 1.6s ease-in-out infinite alternate; }
+@keyframes wlBob { 0% { transform: translate3d(0, 1px, 0); } 100% { transform: translate3d(0, -1px, 0); } }
+@keyframes wlArms { 0% { transform: scale(1, 0.8); } 100% { transform: scale(1, 1.08); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .pet-inner, .pet-svg *, .c-wellness-hud * { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; }
+}

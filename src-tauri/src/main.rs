@@ -305,6 +305,33 @@ fn set_island_hit(width: f64, height: f64) {
     }
 }
 
+// ---- Notch Companion: cursor + idle probe ----------------------------------------------------------------
+// Returns [cursor_x, cursor_y, idle_ms]. The cursor is in WINDOW-relative logical px (same space as the page's
+// getBoundingClientRect) because the island window is click-through outside the island and the page gets no
+// mouse events there. idle_ms = time since the last keyboard / mouse input anywhere in Windows.
+#[cfg(target_os = "windows")]
+#[tauri::command]
+fn pet_probe(window: tauri::WebviewWindow) -> Option<(f64, f64, u32)> {
+    use windows::Win32::Foundation::POINT;
+    use windows::Win32::System::SystemInformation::GetTickCount;
+    use windows::Win32::UI::Input::KeyboardAndMouse::{GetLastInputInfo, LASTINPUTINFO};
+    use windows::Win32::UI::WindowsAndMessaging::GetCursorPos;
+    let mut p = POINT::default();
+    unsafe { GetCursorPos(&mut p).ok()?; }
+    let pos = window.outer_position().ok()?;
+    let sf = window.scale_factor().ok()?;
+    let mut li = LASTINPUTINFO { cbSize: std::mem::size_of::<LASTINPUTINFO>() as u32, dwTime: 0 };
+    let _ = unsafe { GetLastInputInfo(&mut li) };
+    let idle = if li.dwTime == 0 { 0 } else { unsafe { GetTickCount() }.wrapping_sub(li.dwTime) };
+    Some(((p.x - pos.x) as f64 / sf, (p.y - pos.y) as f64 / sf, idle))
+}
+
+#[cfg(not(target_os = "windows"))]
+#[tauri::command]
+fn pet_probe() -> Option<(f64, f64, u32)> {
+    None
+}
+
 #[cfg(target_os = "windows")]
 fn start_hit_poller(window: WebviewWindow, win_logical_w: f64) {
     use windows::Win32::Foundation::{HWND, POINT, RECT};
@@ -1406,6 +1433,35 @@ fn radio_kind(name: &str) -> Option<windows::Devices::Radios::RadioKind> {
     }
 }
 
+/// Does this PC have the adapter at all (Bluetooth dongle plugged in, Wi-Fi card present)?
+/// Kept current by the radio watcher in live.rs; the first call before it has looked checks directly.
+#[tauri::command]
+async fn get_radio_present(kind: String) -> Option<bool> {
+    if let Some(p) = live::radio_present_known(&kind) {
+        return Some(p);
+    }
+    #[cfg(target_os = "windows")]
+    {
+        use windows::Devices::Radios::Radio;
+        let wanted = radio_kind(&kind)?;
+        let radios = Radio::GetRadiosAsync().ok()?.get().ok()?;
+        let mut found = false;
+        for i in 0..radios.Size().ok()? {
+            if radios.GetAt(i).ok()?.Kind().ok()? == wanted {
+                found = true;
+                break;
+            }
+        }
+        live::present_store(&kind, found);
+        return Some(found);
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = kind;
+        None
+    }
+}
+
 #[tauri::command]
 async fn get_radio_state(kind: String) -> Option<bool> {
     #[cfg(target_os = "windows")]
@@ -1841,6 +1897,11 @@ fn settings_changed(app: AppHandle, json: String) {
     let _ = app.emit("settings-changed", json);
 }
 
+#[tauri::command]
+fn trigger_companion_demo(app: AppHandle, kind: String) {
+    let _ = app.emit("companion-demo", kind);
+}
+
 // Autostart lives in two HKCU keys: Run (the command) and StartupApproved\Run (the on/off flag
 // shown in Windows' Startup Apps list). Both are read and written with the registry API.
 #[cfg(target_os = "windows")]
@@ -2135,6 +2196,8 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             set_island_hit,
+            pet_probe,
+            trigger_companion_demo,
             clipboard_seq,
             get_clipboard_text,
             clipboard::get_clipboard_files,
@@ -2142,6 +2205,7 @@ fn main() {
             clipboard::filter_screenshot_paths,
             clipboard::filter_existing_paths,
             clipboard::read_screenshot_bytes,
+            clipboard::read_image_file,
             get_net_speed,
             privacy::privacy_watch_start,
             focus_island,
@@ -2172,6 +2236,7 @@ fn main() {
             get_system_volume,
             get_media_art,
             get_radio_state,
+            get_radio_present,
             set_radio_state,
             set_system_brightness,
             get_sys_stats,
@@ -2182,6 +2247,7 @@ fn main() {
             wifi::wifi_forget,
             wifi::get_wifi_status,
             wifi::disconnect_wifi,
+            wifi::wifi_rescan,
             wifi_backend,
             bt_backend,
             get_mic_muted,

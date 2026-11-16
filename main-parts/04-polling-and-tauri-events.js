@@ -1,9 +1,17 @@
 async function refreshRadios() {
   const macOn = SET.appearance && SET.appearance.menuLayout === 'mac';
   // only ask about radios whose slot is shown (or always in Mac layout)
+  const askWifi = slotRunning.has('wifi') || macOn, askBt = slotRunning.has('bt') || macOn;
+  // is the adapter there at all? (event-driven in Rust: dongle plugged in / removed)
+  const [wifiHere, btHere] = await Promise.all([
+    askWifi ? invokeTauri('get_radio_present', { kind: 'wifi' }) : null,
+    askBt ? invokeTauri('get_radio_present', { kind: 'bt' }) : null
+  ]);
+  if (typeof wifiHere === 'boolean') applyPresence('wifi', wifiHere);
+  if (typeof btHere === 'boolean') applyPresence('bt', btHere);
   const [wifiOn, btOn] = await Promise.all([
-    (slotRunning.has('wifi') || macOn) ? invokeTauri('get_radio_state', { kind: 'wifi' }) : null,
-    (slotRunning.has('bt') || macOn) ? invokeTauri('get_radio_state', { kind: 'bt' }) : null
+    askWifi && appState.wifiPresent ? invokeTauri('get_radio_state', { kind: 'wifi' }) : null,
+    askBt && appState.btPresent ? invokeTauri('get_radio_state', { kind: 'bt' }) : null
   ]);
   if (typeof wifiOn === 'boolean') applyRadio('wifi', wifiOn);
   if (typeof btOn === 'boolean') applyRadio('bt', btOn);
@@ -306,7 +314,10 @@ async function refreshWifiNow() {
   if (appState.wifiRadio) document.getElementById('wifi-sub').textContent = st.name;
   if (appState.currentView === 'view-wifi') loadWifiList(true);
 }
-onTauriEvent('wifi-changed', () => { clearTimeout(wifiEvT); wifiEvT = setTimeout(refreshWifiNow, 300); });
+onTauriEvent('wifi-changed', () => {
+  clearTimeout(wifiEvT);
+  wifiEvT = setTimeout(() => { if (typeof endWifiScan === 'function') endWifiScan(); refreshWifiNow(); }, 300);
+});
 onTauriEvent('settings-changed', (e) => {
   try {
     if (e && e.payload) {

@@ -40,6 +40,8 @@ export const DEFAULTS = {
     actionTiles: ['awake', 'snip', 'calendar', 'timer', 'clipboard', 'lock', 'settings']
   },
   overlays: { btBattery: true, privacyDot: true },
+  companion: { enabled: false, skin: 'eyes', monogram: false, tracking: true, peekMinMin: 25, peekMaxMin: 60, activityPeekMin: 45 },
+  wellness: { enabled: false, water: true, waterEvery: 45, eye: true, eyeEvery: 20, stretch: true, stretchEvery: 60, idleReset: 30 },
   share: { deviceName: '' }
 };
 

@@ -15,6 +15,9 @@ use tauri::Emitter;
 static RADIO_WIFI: AtomicI8 = AtomicI8::new(-1); // -1 unknown, 0 off, 1 on
 static RADIO_BT: AtomicI8 = AtomicI8::new(-1);
 static RADIO_AT: AtomicU64 = AtomicU64::new(0); // unix seconds of the last known state
+// Is there such an ADAPTER in the PC at all (dongle plugged in / built-in card present)?  -1 unknown, 0 none, 1 yes.
+static PRESENT_WIFI: AtomicI8 = AtomicI8::new(-1);
+static PRESENT_BT: AtomicI8 = AtomicI8::new(-1);
 
 // Which control-panel slots are switched on (set from the island's slot registry).
 // A slot that is swapped away stops emitting events and its commands return at once.
@@ -35,6 +38,34 @@ fn radio_active(kind: &str) -> bool {
         "bt" => ACT_BT.load(Ordering::Relaxed),
         _ => false,
     }
+}
+
+fn present_slot(kind: &str) -> Option<&'static AtomicI8> {
+    match kind {
+        "wifi" => Some(&PRESENT_WIFI),
+        "bt" => Some(&PRESENT_BT),
+        _ => None,
+    }
+}
+
+/// None = not checked yet.
+pub fn radio_present_known(kind: &str) -> Option<bool> {
+    let v = present_slot(kind)?.load(Ordering::Relaxed);
+    if v >= 0 { Some(v == 1) } else { None }
+}
+
+/// "Not checked yet" counts as present, so nothing is ever blocked by mistake.
+pub fn radio_present(kind: &str) -> bool {
+    radio_present_known(kind).unwrap_or(true)
+}
+
+pub fn bt_present() -> bool {
+    radio_present("bt")
+}
+
+/// Remember whether the adapter exists. Returns the old value (-1 / 0 / 1).
+pub fn present_store(kind: &str, present: bool) -> i8 {
+    present_slot(kind).map(|s| s.swap(present as i8, Ordering::Relaxed)).unwrap_or(-1)
 }
 
 pub fn bt_active() -> bool {
@@ -86,50 +117,106 @@ pub fn wifi_now() -> Option<(String, u32)> {
     None
 }
 
+/// Adapter plugged in / removed. Called from the radio watcher only.
+#[cfg(target_os = "windows")]
+fn adapter_changed(app: &AppHandle, name: &str, present: bool) {
+    let old = present_store(name, present);
+    if old == present as i8 {
+        return;
+    }
+    if !present {
+        // no adapter = no state to show
+        if let Some(sl) = slot(name) {
+            sl.store(-1, Ordering::Relaxed);
+        }
+    }
+    if name == "bt" && radio_active("bt") {
+        if present && old == 0 {
+            crate::bluetooth::start(app.clone()); // dongle plugged in: bring the device watchers back
+        } else if !present {
+            crate::bluetooth::stop(); // dongle gone: nothing left to watch
+        }
+    }
+    let _ = app.emit("radio-changed", ());
+}
+
+/// Radio on/off (Wi-Fi, Bluetooth) AND adapter hot-plug, all from Windows events: zero polling.
+/// A DeviceWatcher on the radio selector fires when an adapter appears or disappears; each burst of events
+/// triggers one re-scan of the radios.
 #[cfg(target_os = "windows")]
 fn radio_watcher(app: AppHandle) {
+    use std::sync::mpsc;
+    use std::time::Duration;
+    use windows::Devices::Enumeration::{DeviceInformation, DeviceInformationUpdate, DeviceWatcher};
     use windows::Devices::Radios::{Radio, RadioKind, RadioState};
-    use windows::Foundation::TypedEventHandler;
+    use windows::Foundation::{EventRegistrationToken, TypedEventHandler};
     use windows::Win32::System::Com::{CoInitializeEx, COINIT_MULTITHREADED};
     unsafe {
         let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
     }
-    let radios = match Radio::GetRadiosAsync().ok().and_then(|op| op.get().ok()) {
-        Some(r) => r,
-        None => return,
-    };
-    let mut keep: Vec<Radio> = Vec::new();
-    for r in radios {
-        let kind = match r.Kind() {
-            Ok(k) => k,
-            Err(_) => continue,
-        };
-        let name = if kind == RadioKind::WiFi {
-            "wifi"
-        } else if kind == RadioKind::Bluetooth {
-            "bt"
-        } else {
-            continue;
-        };
-        if let Ok(st) = r.State() {
-            radio_store(name, st == RadioState::On);
+
+    let (tx, rx) = mpsc::channel::<()>();
+    let mut _watcher: Option<DeviceWatcher> = None; // kept alive for the whole run
+    if let Ok(sel) = Radio::GetDeviceSelector() {
+        if let Ok(w) = DeviceInformation::CreateWatcherAqsFilter(&sel) {
+            let t1 = tx.clone();
+            let _ = w.Added(&TypedEventHandler::<DeviceWatcher, DeviceInformation>::new(move |_, _| {
+                let _ = t1.send(());
+                Ok(())
+            }));
+            let t2 = tx.clone();
+            let _ = w.Removed(&TypedEventHandler::<DeviceWatcher, DeviceInformationUpdate>::new(move |_, _| {
+                let _ = t2.send(());
+                Ok(())
+            }));
+            let _ = w.Start();
+            _watcher = Some(w);
         }
-        let r2 = r.clone();
-        let app2 = app.clone();
-        let _ = r.StateChanged(&TypedEventHandler::new(move |_, _| {
-            if let Ok(st) = r2.State() {
+    }
+    let _ = tx.send(()); // first look right now
+
+    let mut hooked: Vec<(Radio, EventRegistrationToken)> = Vec::new();
+    while rx.recv().is_ok() {
+        // one plug-in produces a burst of events: wait until it is quiet, then look once
+        while rx.recv_timeout(Duration::from_millis(600)).is_ok() {}
+
+        for (r, t) in hooked.drain(..) {
+            let _ = r.RemoveStateChanged(t);
+        }
+        let Some(radios) = Radio::GetRadiosAsync().ok().and_then(|op| op.get().ok()) else {
+            continue; // cannot tell right now: keep what we knew
+        };
+        let (mut has_wifi, mut has_bt) = (false, false);
+        for r in radios {
+            let Ok(kind) = r.Kind() else { continue };
+            let name = if kind == RadioKind::WiFi {
+                has_wifi = true;
+                "wifi"
+            } else if kind == RadioKind::Bluetooth {
+                has_bt = true;
+                "bt"
+            } else {
+                continue;
+            };
+            if let Ok(st) = r.State() {
                 radio_store(name, st == RadioState::On);
             }
-            if radio_active(name) {
-                let _ = app2.emit("radio-changed", ());
+            let r2 = r.clone();
+            let app2 = app.clone();
+            if let Ok(token) = r.StateChanged(&TypedEventHandler::new(move |_, _| {
+                if let Ok(st) = r2.State() {
+                    radio_store(name, st == RadioState::On);
+                }
+                if radio_active(name) {
+                    let _ = app2.emit("radio-changed", ());
+                }
+                Ok(())
+            })) {
+                hooked.push((r, token));
             }
-            Ok(())
-        }));
-        keep.push(r); // the watcher thread owns them for the whole run
-    }
-    loop {
-        std::thread::sleep(std::time::Duration::from_secs(3600));
-        let _ = &keep;
+        }
+        adapter_changed(&app, "wifi", has_wifi);
+        adapter_changed(&app, "bt", has_bt);
     }
 }
 
