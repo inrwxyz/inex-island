@@ -111,6 +111,12 @@ function trimClipboardItems() {
   clipboardItems = clipboardItems.slice(0, CLIPBOARD_MAX);
 }
 
+// The clipboard view is open either as its own view (Classic) or mounted inside the Mac Control Deck sub-panel.
+function isClipboardViewOpen() {
+  return appState.currentView === 'view-clipboard' ||
+         (typeof currentMacSubTarget !== 'undefined' && currentMacSubTarget?.id === 'view-clipboard');
+}
+
 function pushClipboardItem(item) {
   const idx = clipboardItems.findIndex((it) => it.kind === item.kind && it.hash === item.hash);
   if (idx === 0) return false;
@@ -118,7 +124,7 @@ function pushClipboardItem(item) {
   clipboardItems.unshift(item);
   trimClipboardItems();
   saveClipboardHistory();
-  if (appState.currentView === 'view-clipboard') renderClipboardList();
+  if (isClipboardViewOpen()) renderClipboardList();
   return true;
 }
 
@@ -157,7 +163,7 @@ function removeScreenshotByPath(path) {
   clipboardItems = clipboardItems.filter((it) => !(it.kind === 'screenshot' && clipPathKey(it.path) === key));
   if (clipboardItems.length === before) return false;
   saveClipboardHistory();
-  if (appState.currentView === 'view-clipboard') renderClipboardList();
+  if (isClipboardViewOpen()) renderClipboardList();
   return true;
 }
 
@@ -180,7 +186,7 @@ const CLIP_ICON_SCREENSHOT = '<svg viewBox="0 0 24 24" width="20" height="20" fi
 async function hydrateScreenshotThumb(path, containerEl, gen) {
   try {
     const ab = await invokeTauri('read_screenshot_bytes', { path });
-    if (gen !== clipRenderGen || appState.currentView !== 'view-clipboard') return;
+    if (gen !== clipRenderGen || !isClipboardViewOpen()) return;
     if (!ab || ab.byteLength === 0) {
       if (removeScreenshotByPath(path)) return;
       return;
@@ -194,7 +200,7 @@ async function hydrateScreenshotThumb(path, containerEl, gen) {
       c.height = bmp.height;
       c.getContext('2d').drawImage(bmp, 0, 0);
       const smallBlob = await new Promise((r) => c.toBlob(r, 'image/webp', 0.8));
-      if (smallBlob && gen === clipRenderGen && appState.currentView === 'view-clipboard') {
+      if (smallBlob && gen === clipRenderGen && isClipboardViewOpen()) {
         thumbUrl = URL.createObjectURL(smallBlob);
       }
     } finally {
@@ -216,7 +222,7 @@ async function hydrateScreenshotThumb(path, containerEl, gen) {
 
 // ---------- drawing ----------
 function renderClipboardList() {
-  if (appState.currentView !== 'view-clipboard') return;
+  if (!isClipboardViewOpen()) return;
   const container = document.getElementById('clipboard-list');
   if (!container) return;
 

@@ -14,7 +14,7 @@ export const DEFAULTS = {
     fontStyle: 'mono', scale: 110, animations: true
   },
   notch: {
-    mode: 'smart', style: 'attached', macEars: true, compactContent: 'clock', musicMode: true, compactMode: true, ambientGlow: true, compactGlow: true,
+    mode: 'smart', style: 'curved', compactContent: 'clock', musicMode: true, compactMode: true, ambientGlow: true, compactGlow: true,
     calendarTimer: true, timerSound: true, eqSync: true, eqSensitivity: 100
   },
   sounds: {
@@ -29,13 +29,11 @@ export const DEFAULTS = {
     showWeather: true,
     showStats: true,
     showMedia: true,
-    showSliders: true,
     showBattery: true,
     statsMode: 'sys'
   },
   weather: { enabled: true, unit: 'C', city: '' },
   widgets: { enabled: true, left: 'weather', right: 'ram' },
-  slots: { a: 'bt', b: 'wifi', c: 'drop', d: 'tray' },
   menu: {
     actionTiles: ['awake', 'snip', 'calendar', 'timer', 'clipboard', 'lock', 'settings']
   },
@@ -50,29 +48,17 @@ export const DEFAULT_ACTION_TILES = ['awake', 'snip', 'calendar', 'timer', 'clip
 
 export const ALL_ACTION_TILES = {
   awake: { id: 'awake', label: 'Keep Awake', desc: 'Prevent PC from sleeping', icon: 'sun' },
+  mic: { id: 'mic', label: 'Microphone Mute', desc: 'Mute/unmute microphone', icon: 'mic' },
   snip: { id: 'snip', label: 'Snip Tool', desc: 'Screenshot crop tool (Win+Shift+S)', icon: 'snip' },
   calendar: { id: 'calendar', label: 'Calendar', desc: 'Monthly calendar view', icon: 'calendar' },
   timer: { id: 'timer', label: 'Focus Timer', desc: 'Productivity split timer', icon: 'clock' },
   clipboard: { id: 'clipboard', label: 'Clipboard', desc: 'Recent copied snippets & history', icon: 'clipboard' },
   lock: { id: 'lock', label: 'Lock PC', desc: 'Instantly lock Windows session', icon: 'lock' },
   settings: { id: 'settings', label: 'Settings', desc: 'Open Inex Island settings', icon: 'gear' },
-  alarm: { id: 'alarm', label: 'Alarm', desc: 'Wake-up / clock alarms with snooze', icon: 'bell' },
   calc: { id: 'calc', label: 'Calculator', desc: 'Windows Calculator tool', icon: 'calc' },
   restart: { id: 'restart', label: 'Restart Island', desc: 'Restart Inex Island engine', icon: 'refresh' },
-  notepad: { id: 'notepad', label: 'Quick Notes', desc: 'Floating note editor', icon: 'clipboard' },
-  drop: { id: 'drop', label: 'Inex Drop', desc: 'Nearby file sharing with Android & Windows', icon: 'folder' }
+  notepad: { id: 'notepad', label: 'Quick Notes', desc: 'Floating note editor', icon: 'clipboard' }
 };
-
-// Control-panel slots: id + label. The island (main.js) holds the behaviour of each id.
-// To add a new one: add it here and add a SLOT_DEFS entry (+ tile) in main.js.
-export const SLOT_OPTIONS = [
-  ['wifi', 'Wi-Fi'],
-  ['drop', 'Inex Drop'],
-  ['bt', 'Bluetooth'],
-  ['tray', 'File Tray'],
-  ['notepad', 'Quick Notes'],
-  ['mic', 'Microphone']
-];
 
 const FONT_MAP = {
   jakarta: "'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif",
@@ -104,7 +90,14 @@ export function load() {
   const base = JSON.parse(JSON.stringify(DEFAULTS));
   try {
     const raw = localStorage.getItem(KEY);
-    if (raw) merge(base, JSON.parse(raw));
+    if (raw) {
+      const saved = JSON.parse(raw);
+      merge(base, saved);
+      // old saves had a separate "Curved Bezel Ears" toggle: fold it into Notch Style (on -> Curved, off -> Bezel)
+      const sn = saved && saved.notch;
+      if (sn && 'macEars' in sn && sn.style !== 'floating') base.notch.style = sn.macEars === false ? 'attached' : 'curved';
+    }
+    delete base.notch.macEars;
     if (!base.menu) base.menu = {};
     if (!Array.isArray(base.menu.actionTiles) || base.menu.actionTiles.length === 0) {
       base.menu.actionTiles = [...DEFAULT_ACTION_TILES];
@@ -117,21 +110,6 @@ export function load() {
     if (base.menu.actionTiles.length > MAX_ACTION_TILES) {
       const withoutNotes = base.menu.actionTiles.filter((id) => id !== 'notepad');
       base.menu.actionTiles = (withoutNotes.length >= MAX_ACTION_TILES ? withoutNotes : base.menu.actionTiles).slice(0, MAX_ACTION_TILES);
-    }
-    if (!base.slots) base.slots = { a: 'wifi', b: 'drop', c: 'bt', d: 'tray' };
-    if (!base.slots.a) base.slots.a = 'bt';
-    if (!base.slots.b) base.slots.b = 'wifi';
-    if (!base.slots.c) base.slots.c = 'drop';
-    if (!base.slots.d) base.slots.d = 'tray';
-    const usedSlots = new Set();
-    const validSlots = ['wifi', 'drop', 'bt', 'tray', 'notepad', 'mic'];
-    for (const k of ['a', 'b', 'c', 'd']) {
-      let val = base.slots[k];
-      if (!validSlots.includes(val) || usedSlots.has(val)) {
-        val = validSlots.find(opt => !usedSlots.has(opt)) || 'wifi';
-        base.slots[k] = val;
-      }
-      usedSlots.add(val);
     }
     if (!base.share.deviceName) base.share.deviceName = localStorage.getItem('island_pc_name') || '';
     if (base.share) delete base.share.firebaseUrl;          // Firebase is gone: drop the old saved URL
@@ -167,6 +145,32 @@ export function subscribe(cb) {
     }
   };
   register();
+}
+
+// ---------- clock alarms ----------
+// One store for the island (16-alarm.js rings them) and the Settings window (Alarms section edits them).
+// localStorage "inex.alarms.v1": [{ id, h, m, on, daily }]  (h = 0-23)
+export const ALARM_KEY = 'inex.alarms.v1';
+export const MAX_ALARMS = 12;
+
+export function loadAlarms() {
+  try {
+    const a = JSON.parse(localStorage.getItem(ALARM_KEY) || '[]');
+    if (Array.isArray(a)) {
+      return a.filter((x) => x && Number.isInteger(x.h) && Number.isInteger(x.m) && x.h >= 0 && x.h < 24 && x.m >= 0 && x.m < 60)
+        .map((x) => ({ id: String(x.id || Date.now().toString(36)), h: x.h, m: x.m, on: !!x.on, daily: !!x.daily }));
+    }
+  } catch (_) {}
+  return [];
+}
+
+export function storeAlarms(list) {
+  try { localStorage.setItem(ALARM_KEY, JSON.stringify(list)); } catch (_) {}
+}
+
+// Fires when the OTHER window changes the alarms (the storage event never fires in the window that wrote them)
+export function subscribeAlarms(cb) {
+  window.addEventListener('storage', (e) => { if (e.key === ALARM_KEY || e.key === null) cb(loadAlarms()); });
 }
 
 export function hexToRgb(hex) {

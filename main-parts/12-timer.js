@@ -196,6 +196,24 @@ document.getElementById('btn-timer-toggle').addEventListener('click', function (
   }
 });
 
+// Smart Feature Suspension: pause the running Focus Timer (remaining time is kept) when its tile is
+// no longer available in the active layout, so it doesn't keep counting - or show in the pill - unseen.
+function suspendFocusTimer() {
+  if (!appState.timerRunning) return;
+  clearInterval(appState.timerInterval);
+  appState.timerInterval = null;
+  appState.timerRunning = false;
+  appState.timerStartPending = false;
+  const tgl = document.getElementById('btn-timer-toggle');
+  if (tgl) tgl.textContent = '▶ Start';
+  document.getElementById('act-timer')?.classList.remove('active');
+  const cClock = document.getElementById('c-clock');
+  if (cClock) cClock.classList.remove('c-clock-timer');
+  formatTimerDisplay();   // also refreshes the timer chip
+  updateClocks();         // pill goes back to showing the normal clock
+  updateTimerChip();
+}
+
 document.getElementById('btn-timer-reset').addEventListener('click', () => {
   clearInterval(appState.timerInterval);
   appState.timerRunning = false;

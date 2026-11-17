@@ -1,10 +1,9 @@
 // ---------------------------------------------------------------------------------------
-// Control-panel slots (small registry). The settings choose what sits in the two slots.
-//   id      -> { el: tile element id, start(): called when the slot becomes visible,
-//                stop(): called when it is swapped away }
-// A slot that is not shown has its whole backend stopped (Wi-Fi: WLAN watcher closed,
-// Bluetooth: all commands idle, no timers, no events).
-// To add an item: add it to SLOT_OPTIONS in shared.js, add a tile in index.html and an entry here.
+// Classic control panel: the 4 main tiles are FIXED (no slot swapping any more):
+//   1 Wi-Fi, 2 Bluetooth, 3 Inex Drop, 4 File Tray
+//   id -> { el: tile element id, start(): called when the tile is first shown, stop() }
+// Wi-Fi / Bluetooth keep their backends running while their tile is shown.
+// Microphone mute and Quick Notes are Quick Action tiles now (see renderQuickActionTiles).
 // ---------------------------------------------------------------------------------------
 const slotRunning = new Set();
 const SLOT_DEFS = {
@@ -24,21 +23,6 @@ const SLOT_DEFS = {
       document.getElementById('bt-cap').textContent = '';
     }
   },
-  mic: {
-    el: 'tile-mic',
-    start: () => refreshMic(),
-    stop: () => {},
-    click: () => toggleMic()
-  },
-  notepad: {
-    el: 'tile-notepad',
-    start: () => {},
-    stop: () => {},
-    click: () => {
-      switchView('view-notepad', 'state-sub', 316, 240);
-      if (typeof focusNotepad === 'function') focusNotepad();
-    }
-  },
   drop: {
     el: 'tile-drop',
     start: () => {},
@@ -56,67 +40,26 @@ const SLOT_DEFS = {
   }
 };
 
+const FIXED_TILE_ORDER = ['wifi', 'bt', 'drop', 'tray'];
 function applySlots() {
-  let a = SET.slots && SET.slots.a;
-  let b = SET.slots && SET.slots.b;
-  let c = SET.slots && SET.slots.c;
-  let d = SET.slots && SET.slots.d;
-  if (!SLOT_DEFS[a]) a = 'wifi';
-  if (!SLOT_DEFS[b]) b = 'drop';
-  if (!SLOT_DEFS[c]) c = 'bt';
-  if (!SLOT_DEFS[d]) d = 'tray';
-
-  const used = new Set();
-  const allDefs = Object.keys(SLOT_DEFS);
-  const slots = [a, b, c, d];
-  for (let i = 0; i < 4; i++) {
-    if (used.has(slots[i])) {
-      const alt = allDefs.find(k => !used.has(k)) || 'wifi';
-      slots[i] = alt;
-    }
-    used.add(slots[i]);
-  }
-  [a, b, c, d] = slots;
-
-  const slotMap = { [a]: 1, [b]: 2, [c]: 3, [d]: 4 };
-  const want = new Set([a, b, c, d]);
-  if (SET.appearance && SET.appearance.menuLayout === 'mac') {
-    want.add('wifi');
-    want.add('bt');
-  }
-
-  Object.entries(SLOT_DEFS).forEach(([id, def]) => {
+  FIXED_TILE_ORDER.forEach((id, i) => {
+    const def = SLOT_DEFS[id];
     const tile = document.getElementById(def.el);
     if (!tile) return;
-    const on = want.has(id);
-    tile.classList.toggle('hidden', !on);
-    if (on) {
-      tile.style.order = slotMap[id];
-      if (!slotRunning.has(id)) {
-        slotRunning.add(id);
-        def.start();
-      }
-    } else {
-      if (slotRunning.has(id)) {
-        slotRunning.delete(id);
-        def.stop();
-      }
+    tile.classList.remove('hidden');
+    tile.style.order = i + 1;
+    if (!slotRunning.has(id)) {
+      slotRunning.add(id);
+      def.start();
     }
   });
 }
 
-// Microphone slot: real system mute of the default capture device
+// Microphone: real system mute of the default capture device
 let micMutedState = null;
 function renderMic(m) {
   micMutedState = m;
   const none = m === null || m === undefined;
-  const t = document.getElementById('tile-mic');
-  if (t) {
-    t.classList.toggle('muted', m === true);
-    t.classList.toggle('active', m === false);
-    document.getElementById('mic-sub').textContent = none ? 'No mic' : m ? 'Muted' : 'On';
-    document.getElementById('mic-cap').textContent = none ? 'No mic' : m ? 'Muted' : '';
-  }
   // Mac menu mic tile
   const mt = document.getElementById('mac-tile-mic');
   if (mt) {
@@ -125,6 +68,8 @@ function renderMic(m) {
     const ms = document.getElementById('mac-mic-sub');
     if (ms) ms.textContent = none ? 'No mic' : m ? 'Muted' : 'On';
   }
+  // Quick-action mic buttons (Classic quick row + Mac quick row)
+  if (typeof syncMicQuickUi === 'function') syncMicQuickUi(m);
 }
 async function refreshMic() {
   renderMic(await invokeTauri('get_mic_muted'));
@@ -133,10 +78,8 @@ async function toggleMic() {
   await invokeTauri('set_mic_muted', { muted: micMutedState !== true });
   refreshMic();
 }
-document.getElementById('tile-mic').addEventListener('click', () => SLOT_DEFS.mic.click());
 document.getElementById('mac-tile-mic')?.addEventListener('click', () => toggleMic());
 refreshMic();
-document.getElementById('tile-notepad').addEventListener('click', () => SLOT_DEFS.notepad.click());
 
 let _wasCompactBusy = false;
 function updateCompactStateClasses() {
@@ -216,6 +159,8 @@ function switchView(viewId, stateClass, winWidth, winHeight) {
   if (viewId === 'view-compact' && typeof compactIslandSize === 'function') win = compactIslandSize(win);
   reportIslandSize(win);
 
+  if (typeof suspendInactiveFeatures === 'function') suspendInactiveFeatures();   // Mac <-> Classic: drop features whose tile this layout lacks
+
   if (viewId === 'view-compact' && appState.timerStartPending) {
     appState.timerStartPending = false;
     setTimeout(() => { if (appState.timerRunning && typeof showTimerStartHud === 'function') showTimerStartHud(); }, 450);
@@ -229,7 +174,6 @@ function applyMacMenuConfig() {
     weather: cfg.showWeather !== false && (!SET.weather || SET.weather.enabled !== false),
     stats: cfg.showStats !== false,
     media: cfg.showMedia !== false && (!SET.notch || SET.notch.musicMode !== false),
-    sliders: cfg.showSliders !== false,
   };
   Object.keys(map).forEach((k) => {
     const el = document.querySelector(`#view-control-mac [data-mac="${k}"]`);
@@ -251,6 +195,7 @@ function applyMacMenuConfig() {
 }
 
 function openControlMenu() {
+  if (typeof suspendInactiveFeatures === 'function') suspendInactiveFeatures();
   if (SET.appearance && SET.appearance.menuLayout === 'mac') {
     applyMacMenuConfig();
     invokeTauri('wifi_backend', { on: true }).catch(() => {});
@@ -268,7 +213,7 @@ function openControlMenu() {
     switchView('view-control', 'state-control', 316, 292);
   }
   try { refreshBtCaption(); } catch (_) {}
-  if (slotRunning.has('mic')) try { refreshMic(); } catch (_) {}
+  try { refreshMic(); } catch (_) {}
 }
 
 function openMedia() {

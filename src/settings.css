@@ -252,18 +252,6 @@ main > * { max-width: 760px; margin-left: auto; margin-right: auto; }
 .mp-classic b { grid-column: 1 / -1; border-radius: 4px; }
 .mp-mac { grid-template-columns: 1.3fr 1fr; grid-template-rows: 1fr 1fr; }
 .mp-mac .w1 { grid-row: 1 / 3; }
-.tp { height: 54px; border-radius: 9px; border: 1px solid var(--line-strong); position: relative; overflow: hidden; display: grid; grid-template-columns: 26% 1fr; }
-.tp .sd { display: block; }
-.tp .ln { position: absolute; left: 34%; height: 5px; border-radius: 3px; }
-.tp .l1 { top: 11px; width: 36%; }
-.tp .l2 { top: 22px; width: 50%; }
-.tp .l3 { top: 33px; width: 28%; }
-.tp .dot { position: absolute; right: 8px; bottom: 8px; width: 9px; height: 9px; border-radius: 50%; background: #0f9d88; }
-.tp-dark { background: #0c0c0f; } .tp-dark .sd { background: #09090c; } .tp-dark .ln { background: #34343d; } .tp-dark .dot { background: #2cc3ac; }
-.tp-light { background: #faf9f6; } .tp-light .sd { background: #f0ede6; } .tp-light .ln { background: #dcd8cd; }
-.tp-system { background: linear-gradient(115deg, #0c0c0f 0 50%, #faf9f6 50% 100%); }
-.tp-system .sd { background: linear-gradient(115deg, #09090c 0 50%, #f0ede6 50% 100%); }
-.tp-system .ln { background: linear-gradient(115deg, #34343d 0 50%, #dcd8cd 50% 100%); }
 
 /* ---------- sections (static groups with divider headers) ---------- */
 .sec { margin-bottom: 30px; }
@@ -454,3 +442,17 @@ main > * { max-width: 760px; margin-left: auto; margin-right: auto; }
 .range.stepper.mins .mins-in:hover { border-color: var(--line-strong); }
 .range.stepper.mins .mins-in:focus { border-color: var(--accent); }
 .range.stepper.mins .mins-unit { font-family: var(--font-mono); font-size: 10.5px; color: var(--dim); }
+
+/* alarms (System page) */
+.alarm-pick { flex-wrap: wrap; }
+.alarm-ctl { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-start; }
+.alarm-add { margin-left: auto; }
+.alarm-step .v { width: 26px; text-align: center; color: var(--text); font-size: 12px; }
+.alarm-colon { color: var(--dim); font-family: var(--font-mono); }
+.alarm-ampm.hidden { display: none; }
+.alarm-daily { display: flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 600; color: var(--dim); cursor: pointer; }
+.alarm-add { background: var(--accent); color: var(--bg, #fff); border-color: transparent; }
+.alarm-row.off .t { opacity: 0.5; }
+.alarm-row .ctl { display: flex; align-items: center; gap: 10px; }
+.alarm-del { width: 26px; height: 26px; padding: 0; display: grid; place-items: center; font-size: 11px; }
+.alarm-del:hover { color: var(--red); border-color: var(--red); }

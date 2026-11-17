@@ -1,4 +1,4 @@
-import { load as loadSettings, save as saveSettings, subscribe as onSettings, applyTheme, menuSurface } from './shared.js';
+import { load as loadSettings, save as saveSettings, subscribe as onSettings, applyTheme, menuSurface, ALARM_KEY, loadAlarms, subscribeAlarms } from './shared.js';
 
 let SET = loadSettings();
 applyTheme(SET);

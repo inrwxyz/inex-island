@@ -1,11 +1,10 @@
 
-// ==================== 11. CLOCK ALARMS (quick tile "Alarm") ====================
-// Alarms live in localStorage ("inex.alarms.v1"): [{ id, h, m, on, daily }]  (h = 0-23).
+// ==================== 11. CLOCK ALARMS ====================
+// Managed in Settings > System > Alarms (and still editable from the optional "Alarm" quick tile).
+// Alarms live in localStorage ("inex.alarms.v1", see shared.js): [{ id, h, m, on, daily }]  (h = 0-23).
 // A once-alarm switches itself off after it rang. Snooze rings again after 9 minutes.
-const ALARM_KEY = 'inex.alarms.v1';
 const ALARM_SNOOZE_MS = 9 * 60 * 1000;
-let alarms = [];
-try { const a = JSON.parse(localStorage.getItem(ALARM_KEY) || '[]'); if (Array.isArray(a)) alarms = a.filter((x) => x && Number.isFinite(x.h) && Number.isFinite(x.m)); } catch (_) {}
+let alarms = loadAlarms();
 let alarmPick = { h: 7, m: 30, daily: false };
 let alarmSnoozeAt = 0;          // ms timestamp, 0 = no snooze pending
 let alarmLastFired = '';        // "<id>@<yyyy-mm-dd hh:mm>": never ring twice in one minute
@@ -172,6 +171,13 @@ function scheduleNextAlarm() {
   }
 }
 scheduleNextAlarm();
+
+// The Settings window edits alarms in the same localStorage: pick its changes up and re-arm the background timer
+subscribeAlarms((list) => {
+  alarms = list;
+  scheduleNextAlarm();
+  if (appState.currentView === 'view-alarm') renderAlarmList();
+});
 
 // Catch missed alarms if PC was sleeping/hibernating and wakes up
 onTauriEvent('system-resumed', () => {

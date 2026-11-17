@@ -1,4 +1,4 @@
-import { DEFAULTS, SLOT_OPTIONS, ALL_ACTION_TILES, DEFAULT_ACTION_TILES, load, save, subscribe } from './shared.js';
+import { DEFAULTS, ALL_ACTION_TILES, DEFAULT_ACTION_TILES, MAX_ALARMS, load, save, subscribe, loadAlarms, storeAlarms, subscribeAlarms } from './shared.js';
 
 const invoke = (cmd, args) => (window.__TAURI__?.core ? window.__TAURI__.core.invoke(cmd, args) : Promise.resolve(null));
 let S = load();
@@ -103,8 +103,7 @@ const PAGES = [
     icon: 'notch',
     sections: [
       { id: 'notch-shape', title: 'Design & Resting Pill', defaultOpen: true, rows: [
-        { path: 'notch.style', type: 'seg', icon: 'notch', t: 'Notch Style', d: 'Bezel Notch touches the top edge; Floating Island floats below as a pill', options: [['attached', 'Bezel Notch'], ['floating', 'Floating Island']] },
-        { path: 'notch.macEars', type: 'toggle', icon: 'corner', t: 'Curved Bezel Ears (Mac Style)', d: 'Add smooth outward-curving corners connecting the notch to the screen top edge', showIf: (s) => s.notch.style !== 'floating' },
+        { path: 'notch.style', type: 'select', icon: 'notch', t: 'Notch Style', d: 'Bezel: flat notch on the top edge. Curved: Mac-style curved corners. Floating: a pill below the top edge', options: [['attached', 'Bezel Notch'], ['curved', 'Curved Notch'], ['floating', 'Floating Island']] },
         { path: 'notch.mode', type: 'seg', icon: 'notch', t: 'Behavior', d: 'Smart hides on fullscreen, Fixed stays, Ghost is glass outline', options: [['smart', 'Smart'], ['fixed', 'Fixed'], ['ghost', 'Ghost']] },
         { path: 'notch.compactContent', type: 'select', icon: 'clock', t: 'Resting Pill Display', d: 'What sits in the center when idle — works in both Classic and Control Deck', options: COMPACT_CONTENT_OPTS },
         { path: 'appearance.cornerRadius', type: 'range', icon: 'corner', t: 'Corner Roundness', d: 'Curvature of the notch and menus', min: 0, max: 28, step: 1, unit: 'px', showIf: (s) => s.notch.style !== 'floating' }
@@ -166,20 +165,13 @@ const PAGES = [
       { id: 'menu-appearance', title: 'Panel Appearance', defaultOpen: true, rows: [
         { path: 'appearance.menuStyle', type: 'seg', icon: 'layers', t: 'Glass Style', d: 'Transparent blurred glass or solid contrast color', options: [['transparent', 'Transparent Glass'], ['color', 'Solid Color']] }
       ] },
-      { id: 'menu-slots', title: 'Classic 2×2 Control Slots', defaultOpen: false, showIf: menuIs('classic'), rows: [
-        { path: 'slots.a', type: 'select', icon: 'widgets', t: 'Slot 1 (Top-Left)', d: 'Default is Bluetooth', options: SLOT_OPTIONS, onChange: slotChange('a') },
-        { path: 'slots.b', type: 'select', icon: 'widgets', t: 'Slot 2 (Top-Right)', d: 'Default is Wi-Fi', options: SLOT_OPTIONS, onChange: slotChange('b') },
-        { path: 'slots.c', type: 'select', icon: 'widgets', t: 'Slot 3 (Bottom-Left)', d: 'Default is Inex Drop', options: SLOT_OPTIONS, onChange: slotChange('c') },
-        { path: 'slots.d', type: 'select', icon: 'widgets', t: 'Slot 4 (Bottom-Right)', d: 'Default is File Tray', options: SLOT_OPTIONS, onChange: slotChange('d') }
-      ] },
       { id: 'menu-mac-widgets', title: 'Control Deck Widgets', defaultOpen: true, showIf: menuIs('mac'), rows: [
         { path: 'macMenu.showClock', type: 'toggle', icon: 'clock', t: 'Clock & Date Card', d: 'Show time and weekday header inside the Control Deck' },
         { path: 'macMenu.showBattery', type: 'toggle', icon: 'battery', t: 'Laptop Battery in Header', d: 'Display battery percentage and charging indicator in the top right' },
         { path: 'macMenu.showWeather', type: 'toggle', icon: 'cloud', t: 'Weather Widget', d: 'Live temperature card in the expanded Control Deck' },
         { path: 'macMenu.showStats', type: 'toggle', icon: 'monitor', t: 'System Stats Card', d: 'Compact live performance meters inside the Control Deck' },
         { path: 'macMenu.statsMode', type: 'select', icon: 'monitor', t: 'Stat Card Mode', d: 'What to display in the mini status card', options: [['sys', 'CPU & RAM'], ['bt', 'Bluetooth Device'], ['battery', 'Laptop Battery'], ['disk', 'Disk']], showIf: (s) => s.macMenu.showStats !== false },
-        { path: 'macMenu.showMedia', type: 'toggle', icon: 'music', t: 'Media Quick Card', d: 'Music card in the Control Deck, shown whether or not music is playing' },
-        { path: 'macMenu.showSliders', type: 'toggle', icon: 'sound', t: 'Volume & Brightness Sliders', d: 'Keep quick sliders accessible inside the Control Deck' }
+        { path: 'macMenu.showMedia', type: 'toggle', icon: 'music', t: 'Media Quick Card', d: 'Music card in the Control Deck, shown whether or not music is playing' }
       ] },
       { id: 'menu-motion', title: 'Motion & Feel', defaultOpen: false, rows: [
         { path: 'appearance.animations', type: 'toggle', icon: 'spark', t: 'Micro-Interactions', d: 'Haptic button scaling, spring transitions & glass highlights' }
@@ -188,8 +180,8 @@ const PAGES = [
   },
 
   {
-    id: 'sounds', num: '03', label: 'Sounds', eyebrow: 'AUDIO FEEDBACK',
-    title: 'Sounds', sub: 'Subtle native Windows sounds rendered in memory — zero extra RAM or background audio service.',
+    id: 'sounds', num: '03', label: 'Sounds & Alarms', eyebrow: 'AUDIO & ALARMS',
+    title: 'Sounds & Alarms', sub: 'Native Windows sounds, status alerts, productivity chimes, and desktop clock alarms.',
     icon: 'sound',
     hero: 'soundsMaster',
     sections: [
@@ -221,15 +213,17 @@ const PAGES = [
     id: 'system', num: '05', label: 'System', eyebrow: 'THEME, STARTUP & ALERTS',
     title: 'System', sub: 'Pick your Settings appearance, Windows startup behavior, and toast alerts.',
     icon: 'gear',
-    hero: 'settingsTheme',
     sections: [
+      { id: 'sys-appearance', title: 'Settings Appearance', defaultOpen: true, rows: [
+        { path: 'general.settingsTheme', type: 'seg', icon: 'monitor', t: 'Theme', d: 'Light, Dark, or System Default. Changes instantly.', options: [['system', 'System Default'], ['light', 'Light'], ['dark', 'Dark']] }
+      ] },
       { id: 'sys-island-color', title: 'Island Color', defaultOpen: true, rows: [
         { path: 'appearance.notchColor', type: 'color', icon: 'palette', t: 'Color', d: 'One colour for the notch, bezel ears and menu. Icons, tiles and text switch to black or white automatically to stay readable' },
         { path: 'appearance.notchOpacity', type: 'range', icon: 'drop', t: 'Opacity', d: 'Solid or translucent notch and menu', min: 30, max: 100, step: 5, unit: '%' }
       ] },
       { id: 'sys-startup', title: 'Startup & Time', defaultOpen: true, rows: [
         { path: 'general.launchAtLogin', type: 'toggle', icon: 'power', t: 'Launch at Login', d: 'Start Inex Island automatically with Windows', onChange: (v) => invoke('set_autostart', { on: v }) },
-        { path: 'general.autoUpdate', type: 'toggle', icon: 'spark', t: 'Auto Update', d: 'Download and install updates automatically on launch', },
+        { path: 'general.autoUpdate', type: 'toggle', icon: 'spark', t: 'Auto Update', d: 'Download and install updates automatically on launch' },
         { path: 'general.hour24', type: 'toggle', icon: 'clock', t: '24-Hour Time', d: 'Display 24-hour clock format everywhere' }
       ] },
       { id: 'sys-alerts', title: 'Island Popups & Battery', defaultOpen: false, rows: [
@@ -268,11 +262,11 @@ const PAGES = [
 // ---------- section header icons (non-collapsible group labels) ----------
 const SECTION_ICON = {
   'notch-shape': 'notch', 'notch-type': 'font', 'notch-music': 'music', 'notch-widgets': 'widgets',
-  'menu-appearance': 'palette', 'menu-slots': 'widgets', 'menu-mac-widgets': 'layers', 'menu-motion': 'spark', 'menu-quick-actions': 'widgets',
-  'sounds-events': 'sound', 'sounds-timer': 'bell',
+  'menu-appearance': 'palette', 'menu-mac-widgets': 'layers', 'menu-motion': 'spark', 'menu-quick-actions': 'widgets',
+  'sounds-events': 'sound', 'sounds-timer': 'bell', 'sounds-alarms': 'bell',
   'connect-devices': 'bt',
   'notch-pet': 'spark', 'notch-wellness': 'bell',
-  'sys-startup': 'power', 'sys-alerts': 'bell', 'sys-backup': 'download', 'sys-maint': 'gear',
+  'sys-appearance': 'monitor', 'sys-island-color': 'palette', 'sys-alarms': 'bell', 'sys-startup': 'power', 'sys-alerts': 'bell', 'sys-backup': 'download', 'sys-maint': 'gear',
   'about-links': 'info'
 };
 function sectionHead(id, title, tag) {
@@ -346,21 +340,6 @@ function debouncedCommit(path, value, onChange) {
     setTimeout(() => { isSelfSaving = false; }, 300);
   }, 40);
   if (onChange) onChange(value, prev);
-}
-
-function slotChange(currentKey) {
-  return (v, prev) => {
-    if (!S.slots) S.slots = { a: 'bt', b: 'wifi', c: 'drop', d: 'tray' };
-    const keys = ['a', 'b', 'c', 'd'];
-    for (const k of keys) {
-      if (k !== currentKey && S.slots[k] === v) {
-        S.slots[k] = prev;
-        save(S);
-        break;
-      }
-    }
-    renderPage();
-  };
 }
 
 function previewSound(kind) {
@@ -664,44 +643,9 @@ function renderSoundsHero(main) {
   main.append(hero);
 }
 
-function renderSettingsThemeHero(main) {
-  const cur = S.general?.settingsTheme || 'system';
-  const hero = el('div', 'hero');
-  hero.innerHTML = `
-    <div class="hero-head">
-      <div class="hero-title">Settings Appearance</div>
-      <div class="hero-desc">Choose Light, Dark, or follow Windows System Default.</div>
-    </div>
-    <div class="opt-grid">
-      <button type="button" class="opt ${cur === 'dark' ? 'on' : ''}" data-theme="dark">
-        <div class="tp tp-dark"><span class="sd"></span><span class="ln l1"></span><span class="ln l2"></span><span class="ln l3"></span><span class="dot"></span></div>
-        <div class="o-t"><span>Dark</span><i></i></div>
-        <div class="o-d">Deep charcoal, easy on the eyes.</div>
-      </button>
-      <button type="button" class="opt ${cur === 'light' ? 'on' : ''}" data-theme="light">
-        <div class="tp tp-light"><span class="sd"></span><span class="ln l1"></span><span class="ln l2"></span><span class="ln l3"></span><span class="dot"></span></div>
-        <div class="o-t"><span>Light</span><i></i></div>
-        <div class="o-d">Warm off-white surface & clean cards.</div>
-      </button>
-      <button type="button" class="opt ${cur === 'system' ? 'on' : ''}" data-theme="system">
-        <div class="tp tp-system"><span class="sd"></span><span class="ln l1"></span><span class="ln l2"></span><span class="ln l3"></span><span class="dot"></span></div>
-        <div class="o-t"><span>System Default</span><i></i></div>
-        <div class="o-d">Follows Windows light or dark mode.</div>
-      </button>
-    </div>
-  `;
-  hero.querySelectorAll('.opt').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      commit('general.settingsTheme', btn.dataset.theme);
-      renderPage();
-    });
-  });
-  main.append(hero);
-}
-
 // ---------- pages & version ----------
 let current = 'notch';
-let currentAppVer = '0.4.5';
+let currentAppVer = '0.4.6';
 function updateVerLabels() {
   const bv = document.getElementById('brand-ver');
   if (bv) bv.textContent = `v${currentAppVer}`;
@@ -795,6 +739,118 @@ function renderNav() {
     });
     nav.append(b);
   });
+}
+
+// ---------- Alarms (System page) ----------
+// Stored in localStorage 'inex.alarms.v1' (shared.js); the island rings them in the background (16-alarm.js).
+// Every action re-reads the store first, so a once-alarm the island just switched off is never overwritten with stale data.
+const alarmDraft = { h: 7, m: 30, daily: false };
+const pad2 = (n) => String(n).padStart(2, '0');
+function alarmTimeLabel(h, m) {
+  if (S.general?.hour24) return `${pad2(h)}:${pad2(m)}`;
+  return `${pad2(((h + 11) % 12) + 1)}:${pad2(m)} ${h >= 12 ? 'PM' : 'AM'}`;
+}
+
+function renderAlarmsGroup(main) {
+  const alarms = loadAlarms();
+  const h24 = !!S.general?.hour24;
+
+  const grp = el('section', 'sec');
+  grp.append(sectionHead('sounds-alarms', 'Alarms', `${alarms.length} / ${MAX_ALARMS}`));
+  const body = el('div', 'sec-body');
+
+  // --- picker row: Hour, Minute, AM/PM, Daily, Add ---
+  const pick = el('div', 'row wide alarm-pick');
+  pick.append(el('div', 'ico-box', ICON.bell));
+  const txt = el('div', 'txt');
+  txt.append(el('div', 't', 'New Alarm'), el('div', 'd', 'Pick a time, then tap Add Alarm'));
+  pick.append(txt);
+
+  const ctl = el('div', 'ctl alarm-ctl');
+  const stepper = (title, get1, step) => {
+    const box = el('div', 'range stepper alarm-step');
+    const minus = el('button', 'step-btn', '\u2212'); minus.type = 'button'; minus.title = `${title} \u2212`;
+    const out = el('span', 'v', '');
+    const plus = el('button', 'step-btn', '+'); plus.type = 'button'; plus.title = `${title} +`;
+    minus.addEventListener('click', () => { step(-1); refresh(); });
+    plus.addEventListener('click', () => { step(1); refresh(); });
+    box.append(minus, out, plus);
+    return { box, out, update: () => { out.textContent = get1(); } };
+  };
+  const hourS = stepper('Hour', () => pad2(h24 ? alarmDraft.h : ((alarmDraft.h + 11) % 12) + 1), (d) => { alarmDraft.h = (alarmDraft.h + d + 24) % 24; });
+  const minS = stepper('Minute', () => pad2(alarmDraft.m), (d) => { alarmDraft.m = (alarmDraft.m + d + 60) % 60; });
+  const ampm = el('div', 'seg alarm-ampm');
+  [['AM', 'AM'], ['PM', 'PM']].forEach(([val, label]) => {
+    const b = el('button', '', label); b.type = 'button';
+    b.addEventListener('click', () => {
+      if ((val === 'PM') !== (alarmDraft.h >= 12)) alarmDraft.h = (alarmDraft.h + 12) % 24;
+      refresh();
+    });
+    ampm.append(b);
+  });
+  if (h24) ampm.classList.add('hidden');
+  const dailyWrap = el('label', 'alarm-daily', '<span>Daily</span>');
+  const dailySw = el('button', 'sw'); dailySw.type = 'button'; dailySw.title = 'Repeat every day';
+  dailySw.addEventListener('click', () => { alarmDraft.daily = !alarmDraft.daily; refresh(); });
+  dailyWrap.append(dailySw);
+  const addBtn = el('button', 'btn alarm-add', 'Add Alarm'); addBtn.type = 'button';
+  addBtn.addEventListener('click', () => {
+    const list = loadAlarms();
+    if (list.length >= MAX_ALARMS) { toast(`Max ${MAX_ALARMS} alarms`); return; }
+    const dup = list.find((a) => a.h === alarmDraft.h && a.m === alarmDraft.m && a.daily === alarmDraft.daily);
+    if (dup) dup.on = true;
+    else list.push({ id: Date.now().toString(36), h: alarmDraft.h, m: alarmDraft.m, on: true, daily: alarmDraft.daily });
+    storeAlarms(list);
+    toast(`Alarm set for ${alarmTimeLabel(alarmDraft.h, alarmDraft.m)}`);
+    renderPage();
+  });
+  function refresh() {
+    hourS.update(); minS.update();
+    [...ampm.children].forEach((b) => b.classList.toggle('on', (b.textContent === 'PM') === (alarmDraft.h >= 12)));
+    dailySw.classList.toggle('on', alarmDraft.daily);
+  }
+  refresh();
+  ctl.append(hourS.box, el('span', 'alarm-colon', ':'), minS.box, ampm, dailyWrap, addBtn);
+  pick.append(ctl);
+  body.append(pick);
+
+  // --- list ---
+  if (!alarms.length) {
+    const empty = el('div', 'row');
+    empty.append(el('div', 'ico-box', ICON.clock));
+    const t = el('div', 'txt'); t.append(el('div', 'd', 'No alarms yet.'));
+    empty.append(t);
+    body.append(empty);
+  }
+  [...alarms].sort((a, b) => a.h * 60 + a.m - (b.h * 60 + b.m)).forEach((a) => {
+    const row = el('div', 'row alarm-row' + (a.on ? '' : ' off'));
+    row.append(el('div', 'ico-box', ICON.bell));
+    const t = el('div', 'txt');
+    const title = el('div', 't'); title.textContent = `${alarmTimeLabel(a.h, a.m)} \u2022 ${a.daily ? 'Every day' : 'Once'}`;
+    t.append(title);
+    row.append(t);
+    const c = el('div', 'ctl');
+    const sw = el('button', 'sw' + (a.on ? ' on' : '')); sw.type = 'button'; sw.title = a.on ? 'Turn off' : 'Turn on';
+    sw.addEventListener('click', () => {
+      const list = loadAlarms();
+      const cur = list.find((x) => x.id === a.id);
+      if (!cur) { renderPage(); return; }
+      cur.on = !cur.on;
+      storeAlarms(list);
+      renderPage();
+    });
+    const del = el('button', 'btn btn-outline alarm-del', '\u2715'); del.type = 'button'; del.title = 'Delete alarm';
+    del.addEventListener('click', () => {
+      storeAlarms(loadAlarms().filter((x) => x.id !== a.id));
+      renderPage();
+    });
+    c.append(sw, del);
+    row.append(c);
+    body.append(row);
+  });
+
+  grp.append(body);
+  main.append(grp);
 }
 
 const escHtml = (s) => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -908,7 +964,6 @@ function renderPage(resetScroll) {
 
   if (page.hero === 'menuLayout') renderMenuLayoutHero(main);
   else if (page.hero === 'soundsMaster') renderSoundsHero(main);
-  else if (page.hero === 'settingsTheme') renderSettingsThemeHero(main);
 
   if (page.about) {
     const a = el('div', 'about-minimal');
@@ -943,6 +998,7 @@ function renderPage(resetScroll) {
     sec.visibleRows.forEach((r) => body.append(renderRow(r)));
     grp.append(body);
     main.append(grp);
+    if (sec.id === 'sounds-timer') renderAlarmsGroup(main);   // Alarms sit in Sounds & Alarms right under Focus Timer
   });
 
   if (hasQuickActionsGroup) {
@@ -1045,6 +1101,8 @@ subscribe((incoming) => {
   }
 });
 invoke('get_autostart').then((on) => { if (typeof on === 'boolean' && on !== S.general.launchAtLogin) { S.general.launchAtLogin = on; renderPage(); } });
+// Alarms changed in the island window (a once-alarm switched itself off after ringing)
+subscribeAlarms(() => { if (current === 'sounds') renderPage(); });
 window.addEventListener('focus', () => renderPage());
 renderNav();
 renderPage(true);

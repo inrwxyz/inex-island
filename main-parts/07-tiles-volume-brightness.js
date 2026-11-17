@@ -93,6 +93,7 @@ document.getElementById('bt-master-toggle').addEventListener('change', async (e)
 
 // 5. Dynamic Quick Action Row
 const ACTION_TILE_ICONS = {
+  mic: '<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line class="q-mic-slash" x1="3" y1="3" x2="21" y2="21"/></svg>',
   awake: '<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>',
   snip: '<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/></svg>',
   calendar: '<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>',
@@ -109,6 +110,7 @@ const ACTION_TILE_ICONS = {
 
 const ACTION_TILE_TITLES = {
   awake: 'Keep screen awake: off',
+  mic: 'Microphone mute',
   snip: 'Screenshot Snip',
   calendar: 'Monthly Calendar',
   timer: 'Focus Timer',
@@ -124,6 +126,16 @@ const ACTION_TILE_TITLES = {
 
 let awakeState = false;
 
+// Mic mute button in Classic quick row: slash + red tint while muted
+function syncMicQuickUi(m) {
+  const none = m === null || m === undefined;
+  const title = none ? 'Microphone: no mic' : m ? 'Microphone: muted (click to unmute)' : 'Microphone: on (click to mute)';
+  const el = document.getElementById('act-mic');
+  if (!el) return;
+  el.classList.toggle('muted', m === true);
+  el.title = title;
+}
+
 // Keep-awake button exists in both menus (Classic tile row + Mac top bar): keep both in step
 function syncAwakeUi() {
   const title = awakeState ? 'Keep screen awake: ON' : 'Keep screen awake: off';
@@ -135,12 +147,44 @@ function syncAwakeUi() {
   });
 }
 
+const DEFAULT_ACTION_TILES = ['awake', 'snip', 'calendar', 'timer', 'clipboard', 'lock', 'settings'];
+// Tiles the Mac layout always offers (quick row) - Keep Awake lives in its top bar (#mac-awake-btn), so it is always reachable there
+const MAC_ACTIVE_TILES = ['notepad', 'clipboard', 'timer', 'calendar', 'snip'];
+
+// The tile ids the user can actually reach in the current layout (what renderQuickActionTiles draws: first 7, or the defaults when none are configured)
+function getActiveQuickTiles() {
+  if (SET.appearance && SET.appearance.menuLayout === 'mac') return MAC_ACTIVE_TILES.concat('awake');
+  const cfg = SET.menu && Array.isArray(SET.menu.actionTiles) && SET.menu.actionTiles.length ? SET.menu.actionTiles : DEFAULT_ACTION_TILES;
+  return cfg.slice(0, 7);
+}
+
+// Smart Feature Suspension: a stateful tile feature (Keep Awake, Focus Timer) must not keep running
+// invisibly when the active layout has no control for it (Mac -> Classic switch, or tile removed in Settings).
+// Tiles that are still present keep running untouched.
+let _suspendingAwake = false;
+function suspendInactiveFeatures() {
+  const active = getActiveQuickTiles();
+
+  if (awakeState === true && !active.includes('awake') && !_suspendingAwake) {
+    _suspendingAwake = true;
+    awakeState = false;
+    syncAwakeUi();
+    Promise.resolve(invokeTauri('set_keep_awake', { on: false }))
+      .catch(() => {})
+      .finally(() => { _suspendingAwake = false; });
+  }
+
+  if (appState.timerRunning === true && !active.includes('timer') && typeof suspendFocusTimer === 'function') {
+    suspendFocusTimer();
+  }
+}
+
 function renderQuickActionTiles() {
   const row = document.getElementById('quick-icons-row');
   if (!row) return;
   const list = (SET.menu && Array.isArray(SET.menu.actionTiles) && SET.menu.actionTiles.length)
     ? SET.menu.actionTiles
-    : ['awake', 'snip', 'calendar', 'timer', 'clipboard', 'lock', 'settings'];
+    : DEFAULT_ACTION_TILES;
 
   row.innerHTML = '';
   list.slice(0, 7).forEach((id) => {   // the row fits 7 circles at most
@@ -163,6 +207,8 @@ function renderQuickActionTiles() {
         awakeState = on === true;
         syncAwakeUi();
       });
+    } else if (id === 'mic') {
+      btn.addEventListener('click', () => toggleMic());   // 1-click system mic mute / unmute (state sync via renderMic)
     } else if (id === 'snip') {
       btn.addEventListener('click', () => {
         goCompact();
@@ -210,6 +256,8 @@ function renderQuickActionTiles() {
 
     row.appendChild(btn);
   });
+  syncMicQuickUi(typeof micMutedState === 'undefined' ? null : micMutedState);
+  suspendInactiveFeatures();   // tile set changed: suspend anything whose tile just disappeared
 }
 
 // 6. Volume & Brightness Sliders
@@ -459,7 +507,7 @@ document.querySelectorAll('#mac-quick-row .mx-q').forEach((btn) => {
     if (act === 'notepad') openMacSub('view-notepad', 'Quick Notes', 'bottom');
     else if (act === 'clipboard') openMacSub('view-clipboard', 'Clipboard', 'bottom');
     else if (act === 'timer') openMacSub('view-timer', 'Focus Timer', 'bottom');
-    else if (act === 'alarm') openMacSub('view-alarm', 'Alarm', 'bottom');
+    else if (act === 'snip') { goCompact(); invokeTauri('take_snip'); }
     else if (act === 'calendar') openMacSub('view-calendar', 'Calendar', 'bottom');
   });
 });

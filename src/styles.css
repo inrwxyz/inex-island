@@ -93,57 +93,44 @@ body {
   border-radius: inherit;
 }
 
-/* Mac-style concave curved ears for bezel notch & menu.
-   The ear is a 16px flare that sits exactly against the island's outer side edge (1px border) and shares its
-   fill, so notch, ears and menu read as ONE piece. --ear-overlap hides the sub-pixel seam when the colour is
-   opaque (set by applyTheme; 0 when translucent so no darker line shows). */
-.notch-ear {
+/* ===== CURVED NOTCH: the ears are part of the island itself (::before = left ear, ::after = right ear) =====
+   No separate ear elements any more: they are the island's own pseudo-elements, so they are sized/moved by the very same
+   box and transitions, and they copy the island's own background ("inherit"), so notch + ears + menu are always ONE colour
+   (solid, translucent, media, popups...) with no seam. 16px concave flare, cut with a radial mask. */
+.island.has-mac-ears::before,
+.island.has-mac-ears::after {
   --ear-size: 16px;
+  content: "";
   position: absolute;
   top: 0;
   width: var(--ear-size);
   height: var(--ear-size);
+  background: inherit;
   pointer-events: none;
   z-index: 100;
-  display: block;
 }
-.notch-ear.ear-left  { left:  calc(-1 * var(--ear-edge, 1px) - var(--ear-size) + var(--ear-overlap, 0.5px)); }
-.notch-ear.ear-right { right: calc(-1 * var(--ear-edge, 1px) - var(--ear-size) + var(--ear-overlap, 0.5px)); }
-.notch-ear svg {
-  display: block;
-  width: 100%;
-  height: 100%;
-  overflow: visible;
-  shape-rendering: geometricPrecision;
+.island.has-mac-ears::before {
+  left: calc(-1 * var(--ear-edge, 1px) - var(--ear-size) + var(--ear-overlap, 0.5px));
+  -webkit-mask-image: radial-gradient(circle at 0 100%, transparent 15.5px, #000 16px);
+          mask-image: radial-gradient(circle at 0 100%, transparent 15.5px, #000 16px);
 }
-.notch-ear .ear-fill {
-  fill: var(--notch-bg);
-  transition: fill 0.25s ease;
-}
-/* every open menu uses the menu surface, which now follows the notch colour */
-.island:not(.state-compact) .notch-ear .ear-fill {
-  fill: var(--menu-bg, var(--notch-bg));
-}
-.island[data-menu="transparent"]:not(.state-compact) .notch-ear .ear-fill,
-.island[data-mode="ghost"]:not(.state-compact) .notch-ear .ear-fill {
-  fill: rgba(6, 6, 9, 0.40) !important;
+.island.has-mac-ears::after {
+  right: calc(-1 * var(--ear-edge, 1px) - var(--ear-size) + var(--ear-overlap, 0.5px));
+  -webkit-mask-image: radial-gradient(circle at 100% 100%, transparent 15.5px, #000 16px);
+          mask-image: radial-gradient(circle at 100% 100%, transparent 15.5px, #000 16px);
 }
 /* The faint top highlight line stops at the island edge and made the ears look cut off: no highlight with ears */
 .island.island.island.island.has-mac-ears:not(.state-compact) { box-shadow: none !important; }
-.island[data-style="floating"] .notch-ear,
-.island:not(.has-mac-ears) .notch-ear,
-.island.smart-hidden .notch-ear,
-.island.intro-pre .notch-ear,
-.island.biometric-active .notch-ear,
-.island.has-status .notch-ear,
-.island.state-status .notch-ear,
-.island[data-status-active="true"] .notch-ear {
+/* no ears while hidden / intro / status pills / popups that open from the notch (plain pills) */
+.island:is(.smart-hidden, .intro-pre, .biometric-active, .has-status, .state-status, [data-status-active="true"]).has-mac-ears::before,
+.island:is(.smart-hidden, .intro-pre, .biometric-active, .has-status, .state-status, [data-status-active="true"]).has-mac-ears::after,
+.island.state-compact:is(.bt-hud-active, .alarm-active, .transferring, .has-toast, .incoming-open, .hud-pre, .hud-back).has-mac-ears::before,
+.island.state-compact:is(.bt-hud-active, .alarm-active, .transferring, .has-toast, .incoming-open, .hud-pre, .hud-back).has-mac-ears::after {
   display: none !important;
 }
-/* popups that open from the notch have border:0, so the ear sits flush with the island edge (no 1px gap = no cut-off curve) */
-.island.state-compact:is(.bt-hud-active, .alarm-active, .transferring, .has-toast, .incoming-open) { --ear-edge: 0px; }
-/* the ear must always show in the exact colour of the popup (= Island Color) */
-.island.state-compact:is(.bt-hud-active, .alarm-active, .transferring, .has-toast, .incoming-open) .notch-ear .ear-fill { fill: var(--notch-bg) !important; }
+/* media popup: the border is invisible, so the ears sit flush with the panel edge */
+.island.state-media.has-mac-ears::before { left: calc(0px - var(--ear-size) + var(--ear-overlap, 0.5px)); }
+.island.state-media.has-mac-ears::after  { right: calc(0px - var(--ear-size) + var(--ear-overlap, 0.5px)); }
 
 /* Growing = spring (tiny overshoot, Dynamic Island feel). Shrinking = smooth ease-out, no bounce. */
 .island.state-drop, .island.state-control, .island.state-tray, .island.state-sub,
@@ -223,12 +210,38 @@ body {
   transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.22s ease-out !important;
 }
 
+/* Ghost + Curved Notch: ONE continuous outline. ::before draws both curved ears (ring), ::after draws the notch sides + bottom;
+   the island's own border is hidden, and the side line is cut off above the ear (17px) so no line is left between notch and ears. */
+.island[data-mode="ghost"].state-compact.has-mac-ears { border-color: transparent !important; }
+.island[data-mode="ghost"].state-compact.has-mac-ears::before {
+  left: -17px; right: -17px; width: auto; height: 17px;
+  -webkit-mask-image: none; mask-image: none;
+  background-color: transparent;
+  background-image:
+    radial-gradient(circle at 0 100%, transparent 16px, var(--ghost-line) 16px, var(--ghost-line) 17px, transparent 17px),
+    radial-gradient(circle at 100% 100%, transparent 16px, var(--ghost-line) 16px, var(--ghost-line) 17px, transparent 17px);
+  background-size: 17px 17px, 17px 17px;
+  background-position: 0 0, 100% 0;
+  background-repeat: no-repeat;
+}
+.island[data-mode="ghost"].state-compact.has-mac-ears::after {
+  left: -1px; right: -1px; top: 0; bottom: -1px; width: auto; height: auto;
+  box-sizing: border-box;
+  background: transparent;
+  border: 1px solid var(--ghost-line);
+  border-top: none;
+  border-radius: 0 0 var(--radius) var(--radius);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 17px, #000 17px);
+          mask-image: linear-gradient(to bottom, transparent 17px, #000 17px);
+}
+
 /* Ghost Mode: 100% Transparent Background + Crisp thin border line */
 .island[data-mode="ghost"].state-compact {
+  --ghost-line: rgba(255, 255, 255, 0.16);   /* very faint edge so the notch boundary is still visible; raise/lower 0.16 to taste */
   background: transparent !important;
   color: #f5f5f7 !important;
   backdrop-filter: none !important;
-  border: 1px solid var(--line) !important;
+  border: 1px solid var(--ghost-line) !important;
   border-top: none !important;
   box-shadow: none !important;
 }
@@ -321,12 +334,7 @@ body {
 .island[data-menu="transparent"].state-tray,
 .island[data-menu="transparent"].state-sub,
 .island[data-menu="transparent"].state-calendar,
-.island[data-menu="transparent"].state-drop,
-.island[data-mode="ghost"].state-control,
-.island[data-mode="ghost"].state-tray,
-.island[data-mode="ghost"].state-sub,
-.island[data-mode="ghost"].state-calendar,
-.island[data-mode="ghost"].state-drop {
+.island[data-menu="transparent"].state-drop {
   background: rgba(6, 6, 9, 0.40) !important;
   backdrop-filter: blur(24px) saturate(160%) !important;
   -webkit-backdrop-filter: blur(24px) saturate(160%) !important;
@@ -335,17 +343,16 @@ body {
 }
 
 /* Floating: no extra top highlight on menus either (wins over the menu-style rules below) */
-.island[data-style="floating"][data-menu]:not(.state-compact),
-.island[data-style="floating"][data-mode="ghost"]:not(.state-compact) {
+.island[data-style="floating"][data-menu]:not(.state-compact) {
   box-shadow: none !important;
 }
 
 /* MENU STYLE 2: Color Mode */
-.island[data-menu="color"]:not([data-mode="ghost"]).state-control,
-.island[data-menu="color"]:not([data-mode="ghost"]).state-tray,
-.island[data-menu="color"]:not([data-mode="ghost"]).state-sub,
-.island[data-menu="color"]:not([data-mode="ghost"]).state-calendar,
-.island[data-menu="color"]:not([data-mode="ghost"]).state-drop {
+.island[data-menu="color"].state-control,
+.island[data-menu="color"].state-tray,
+.island[data-menu="color"].state-sub,
+.island[data-menu="color"].state-calendar,
+.island[data-menu="color"].state-drop {
   background: var(--menu-bg) !important;
   color: var(--menu-fg) !important;
   backdrop-filter: blur(28px) saturate(180%) !important;
@@ -702,9 +709,7 @@ body {
 
 /* ACTIVE TILE IN TRANSPARENT MODE */
 .island[data-menu="transparent"] .ctrl-tile.active,
-.island[data-menu="transparent"] .q-icon-btn.active,
-.island[data-mode="ghost"] .ctrl-tile.active,
-.island[data-mode="ghost"] .q-icon-btn.active {
+.island[data-menu="transparent"] .q-icon-btn.active {
   background: rgba(var(--on), 0.06) !important;
   border: 1.4px solid rgb(var(--on)) !important;
   color: rgb(var(--on)) !important;
@@ -712,12 +717,12 @@ body {
 }
 
 /* ACTIVE TILE IN COLOR MODE */
-.island[data-menu="color"]:not([data-mode="ghost"]) .ctrl-tile {
+.island[data-menu="color"] .ctrl-tile {
   background: var(--color-tile-bg);
   border-color: var(--color-tile-border);
 }
-.island[data-menu="color"]:not([data-mode="ghost"]) .ctrl-tile.active,
-.island[data-menu="color"]:not([data-mode="ghost"]) .q-icon-btn.active {
+.island[data-menu="color"] .ctrl-tile.active,
+.island[data-menu="color"] .q-icon-btn.active {
   background: var(--color-tile-on-bg) !important;
   border-color: var(--color-tile-on-bg) !important;
   color: var(--color-tile-on-fg) !important;
@@ -2615,12 +2620,8 @@ body {
 }
 #wifi-sub::before { content: "Wi-Fi"; }
 #tile-drop-sub::before { content: "Inex Drop"; }
-#tile-p2p-sub::before { content: "P2P Link"; }
 #bt-sub::before { content: "Bluetooth"; }
 #tile-tray-sub::before { content: "Tray"; }
-#mic-sub::before { content: "Microphone"; }
-#tile-notepad .sr { font-size: 0 !important; }
-#tile-notepad .sr::before { content: "Quick Notes"; font-size: 11.5px; }
 .island:not([data-theme="matrix"]) #tile-drop-title,
 .island:not([data-theme="matrix"]) #tile-p2p-title,
 .island:not([data-theme="matrix"]) .ctrl-tile .cap { display: none !important; }
@@ -2990,8 +2991,7 @@ body {
   box-shadow: none;
 }
 /* Transparent glass */
-.island[data-menu="transparent"].state-control-mac,
-.island[data-mode="ghost"].state-control-mac {
+.island[data-menu="transparent"].state-control-mac {
   background: rgba(6, 6, 9, 0.40) !important;
   backdrop-filter: blur(24px) saturate(160%) !important;
   -webkit-backdrop-filter: blur(24px) saturate(160%) !important;
@@ -2999,7 +2999,7 @@ body {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12) !important;
 }
 /* Solid colour (Light / Dark via --menu-bg / --menu-fg) */
-.island[data-menu="color"]:not([data-mode="ghost"]).state-control-mac {
+.island[data-menu="color"].state-control-mac {
   background: var(--menu-bg) !important;
   color: var(--menu-fg) !important;
   backdrop-filter: blur(28px) saturate(180%) !important;
@@ -3615,10 +3615,6 @@ body {
 #mac-media:not(.has-media) .media-ambient-wave { opacity: 0; }
 
 /* Album-coloured ears follow the media panel and overlap its borderless edge. */
-.island.state-media .notch-ear.ear-left .ear-fill { fill: color-mix(in srgb, rgb(var(--amb, 70, 130, 180)) 24%, #060608) !important; }
-.island.state-media .notch-ear.ear-right .ear-fill { fill: color-mix(in srgb, rgb(var(--amb, 70, 130, 180)) 13%, #060608) !important; }
-.island.state-media .notch-ear.ear-left { left: calc(0px - var(--ear-size) + var(--ear-overlap, 0.5px)); }
-.island.state-media .notch-ear.ear-right { right: calc(0px - var(--ear-size) + var(--ear-overlap, 0.5px)); }
 
 /* Notch player glow: as subtle as the Mac card. */
 #view-media .media-ambient-wave { opacity: 0.38; }
@@ -3652,9 +3648,6 @@ body {
 #view-media .media-vol-row input[type="range"] { accent-color: var(--menu-fg); }
 #view-media::after { background: var(--menu-fg); }
 #m-art-fallback { stroke: currentColor; }
-/* ears of the media popup = exactly the panel colour */
-.island.state-media .notch-ear.ear-left .ear-fill,
-.island.state-media .notch-ear.ear-right .ear-fill { fill: var(--menu-bg, var(--notch-bg)) !important; }
 
 /* The generic ".view.active > *" entrance ("rise") animated the glow layer's opacity 0 -> 1, so for a third of a second the album glow
    was far stronger than its resting 0.32: the popup opened grey and then lightened (looked cut / not synced). The glow gets its own
@@ -3676,15 +3669,15 @@ body {
 /* Keep-awake button in the Mac menu top bar: filled when ON */
 .mx-icon-btn.active { background: var(--menu-fg) !important; color: var(--menu-bg, #000) !important; }
 
-/* Status popups (Bluetooth / charger / timer / transfer / toast) are plain pills: no curved bezel ears on them */
-.island.state-compact:is(.bt-hud-active, .alarm-active, .transferring, .has-toast, .incoming-open, .hud-pre, .hud-back) .notch-ear {
-  display: none !important;
-}
 
 /* Mac menu: mic tile (slash shows when muted) + tray icon badge in the top bar */
 .mx-mic-slash { display: none; }
 #mac-tile-mic.muted .mx-mic-slash { display: block; }
 #mac-tile-mic.muted .mx-txt small { color: #ff453a; }
+/* Mic mute quick buttons (Classic quick row + Mac quick row): slash + red tint while muted */
+.q-mic-slash { display: none; }
+.q-icon-btn.muted .q-mic-slash, .mx-q.muted .mx-mic-slash { display: block; }
+.q-icon-btn.muted, .mx-q.muted { color: #ff453a !important; }
 .mx-icon-btn { position: relative; }
 .mx-tray-badge {
   position: absolute; top: -4px; right: -4px; min-width: 12px; height: 12px; padding: 0 3px; border-radius: 6px;
@@ -3704,15 +3697,14 @@ body {
   border-top: none !important;
   box-shadow: none;
 }
-.island[data-menu="transparent"].state-tray-mac,
-.island[data-mode="ghost"].state-tray-mac {
+.island[data-menu="transparent"].state-tray-mac {
   background: rgba(6, 6, 9, 0.40) !important;
   backdrop-filter: blur(24px) saturate(160%) !important;
   -webkit-backdrop-filter: blur(24px) saturate(160%) !important;
   color: #f5f5f7 !important;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12) !important;
 }
-.island[data-menu="color"]:not([data-mode="ghost"]).state-tray-mac {
+.island[data-menu="color"].state-tray-mac {
   background: var(--menu-bg) !important;
   color: var(--menu-fg) !important;
   backdrop-filter: blur(28px) saturate(180%) !important;
@@ -3979,14 +3971,14 @@ body {
    variants there so they never wash out on a white or light island.
    Ghost mode is transparent over the desktop, so it keeps the light foreground.
    ================================================================== */
-.island[data-mode="ghost"] {
+.island[data-mode="ghost"].state-compact {
   --notch-fg: #f5f5f7;
   --notch-fg-dim: #8e8e98;
   --notch-fg-rgb: 245, 245, 247;
   --notch-ok: #30d158;
 }
 :root[data-notch-tone="light"] { --notch-ok: #16a34a; }
-:root[data-notch-tone="light"] .island[data-mode="ghost"] { --notch-ok: #30d158; }
+:root[data-notch-tone="light"] .island[data-mode="ghost"].state-compact { --notch-ok: #30d158; }
 
 :root[data-notch-tone="light"] .island:not([data-mode="ghost"]) {
   --notch-ok: #16a34a;

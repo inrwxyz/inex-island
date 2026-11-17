@@ -44,7 +44,7 @@ function applySettings() {
   island.setAttribute('data-mode', SET.notch.mode);
   island.setAttribute('data-style', SET.notch.style || 'attached');
   island.setAttribute('data-theme', validTheme);
-  const macEars = SET.notch && SET.notch.macEars !== false && SET.notch.style !== 'floating';
+  const macEars = SET.notch && SET.notch.style === 'curved';
   island.classList.toggle('has-mac-ears', !!macEars);
   if (SET.notch.mode !== 'smart') island.classList.remove('smart-hidden');
 

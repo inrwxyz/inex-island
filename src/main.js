@@ -1,5 +1,5 @@
 // GENERATED from main-parts/*.js by scripts/build-main.mjs. Edit the parts, not this file.
-import { load as loadSettings, save as saveSettings, subscribe as onSettings, applyTheme, menuSurface } from './shared.js';
+import { load as loadSettings, save as saveSettings, subscribe as onSettings, applyTheme, menuSurface, ALARM_KEY, loadAlarms, subscribeAlarms } from './shared.js';
 
 let SET = loadSettings();
 applyTheme(SET);
@@ -106,12 +106,11 @@ function playStatusSound(category, kind) {
 }
 
 // ---------------------------------------------------------------------------------------
-// Control-panel slots (small registry). The settings choose what sits in the two slots.
-//   id      -> { el: tile element id, start(): called when the slot becomes visible,
-//                stop(): called when it is swapped away }
-// A slot that is not shown has its whole backend stopped (Wi-Fi: WLAN watcher closed,
-// Bluetooth: all commands idle, no timers, no events).
-// To add an item: add it to SLOT_OPTIONS in shared.js, add a tile in index.html and an entry here.
+// Classic control panel: the 4 main tiles are FIXED (no slot swapping any more):
+//   1 Wi-Fi, 2 Bluetooth, 3 Inex Drop, 4 File Tray
+//   id -> { el: tile element id, start(): called when the tile is first shown, stop() }
+// Wi-Fi / Bluetooth keep their backends running while their tile is shown.
+// Microphone mute and Quick Notes are Quick Action tiles now (see renderQuickActionTiles).
 // ---------------------------------------------------------------------------------------
 const slotRunning = new Set();
 const SLOT_DEFS = {
@@ -131,21 +130,6 @@ const SLOT_DEFS = {
       document.getElementById('bt-cap').textContent = '';
     }
   },
-  mic: {
-    el: 'tile-mic',
-    start: () => refreshMic(),
-    stop: () => {},
-    click: () => toggleMic()
-  },
-  notepad: {
-    el: 'tile-notepad',
-    start: () => {},
-    stop: () => {},
-    click: () => {
-      switchView('view-notepad', 'state-sub', 316, 240);
-      if (typeof focusNotepad === 'function') focusNotepad();
-    }
-  },
   drop: {
     el: 'tile-drop',
     start: () => {},
@@ -163,67 +147,26 @@ const SLOT_DEFS = {
   }
 };
 
+const FIXED_TILE_ORDER = ['wifi', 'bt', 'drop', 'tray'];
 function applySlots() {
-  let a = SET.slots && SET.slots.a;
-  let b = SET.slots && SET.slots.b;
-  let c = SET.slots && SET.slots.c;
-  let d = SET.slots && SET.slots.d;
-  if (!SLOT_DEFS[a]) a = 'wifi';
-  if (!SLOT_DEFS[b]) b = 'drop';
-  if (!SLOT_DEFS[c]) c = 'bt';
-  if (!SLOT_DEFS[d]) d = 'tray';
-
-  const used = new Set();
-  const allDefs = Object.keys(SLOT_DEFS);
-  const slots = [a, b, c, d];
-  for (let i = 0; i < 4; i++) {
-    if (used.has(slots[i])) {
-      const alt = allDefs.find(k => !used.has(k)) || 'wifi';
-      slots[i] = alt;
-    }
-    used.add(slots[i]);
-  }
-  [a, b, c, d] = slots;
-
-  const slotMap = { [a]: 1, [b]: 2, [c]: 3, [d]: 4 };
-  const want = new Set([a, b, c, d]);
-  if (SET.appearance && SET.appearance.menuLayout === 'mac') {
-    want.add('wifi');
-    want.add('bt');
-  }
-
-  Object.entries(SLOT_DEFS).forEach(([id, def]) => {
+  FIXED_TILE_ORDER.forEach((id, i) => {
+    const def = SLOT_DEFS[id];
     const tile = document.getElementById(def.el);
     if (!tile) return;
-    const on = want.has(id);
-    tile.classList.toggle('hidden', !on);
-    if (on) {
-      tile.style.order = slotMap[id];
-      if (!slotRunning.has(id)) {
-        slotRunning.add(id);
-        def.start();
-      }
-    } else {
-      if (slotRunning.has(id)) {
-        slotRunning.delete(id);
-        def.stop();
-      }
+    tile.classList.remove('hidden');
+    tile.style.order = i + 1;
+    if (!slotRunning.has(id)) {
+      slotRunning.add(id);
+      def.start();
     }
   });
 }
 
-// Microphone slot: real system mute of the default capture device
+// Microphone: real system mute of the default capture device
 let micMutedState = null;
 function renderMic(m) {
   micMutedState = m;
   const none = m === null || m === undefined;
-  const t = document.getElementById('tile-mic');
-  if (t) {
-    t.classList.toggle('muted', m === true);
-    t.classList.toggle('active', m === false);
-    document.getElementById('mic-sub').textContent = none ? 'No mic' : m ? 'Muted' : 'On';
-    document.getElementById('mic-cap').textContent = none ? 'No mic' : m ? 'Muted' : '';
-  }
   // Mac menu mic tile
   const mt = document.getElementById('mac-tile-mic');
   if (mt) {
@@ -232,6 +175,8 @@ function renderMic(m) {
     const ms = document.getElementById('mac-mic-sub');
     if (ms) ms.textContent = none ? 'No mic' : m ? 'Muted' : 'On';
   }
+  // Quick-action mic buttons (Classic quick row + Mac quick row)
+  if (typeof syncMicQuickUi === 'function') syncMicQuickUi(m);
 }
 async function refreshMic() {
   renderMic(await invokeTauri('get_mic_muted'));
@@ -240,10 +185,8 @@ async function toggleMic() {
   await invokeTauri('set_mic_muted', { muted: micMutedState !== true });
   refreshMic();
 }
-document.getElementById('tile-mic').addEventListener('click', () => SLOT_DEFS.mic.click());
 document.getElementById('mac-tile-mic')?.addEventListener('click', () => toggleMic());
 refreshMic();
-document.getElementById('tile-notepad').addEventListener('click', () => SLOT_DEFS.notepad.click());
 
 let _wasCompactBusy = false;
 function updateCompactStateClasses() {
@@ -323,6 +266,8 @@ function switchView(viewId, stateClass, winWidth, winHeight) {
   if (viewId === 'view-compact' && typeof compactIslandSize === 'function') win = compactIslandSize(win);
   reportIslandSize(win);
 
+  if (typeof suspendInactiveFeatures === 'function') suspendInactiveFeatures();   // Mac <-> Classic: drop features whose tile this layout lacks
+
   if (viewId === 'view-compact' && appState.timerStartPending) {
     appState.timerStartPending = false;
     setTimeout(() => { if (appState.timerRunning && typeof showTimerStartHud === 'function') showTimerStartHud(); }, 450);
@@ -336,7 +281,6 @@ function applyMacMenuConfig() {
     weather: cfg.showWeather !== false && (!SET.weather || SET.weather.enabled !== false),
     stats: cfg.showStats !== false,
     media: cfg.showMedia !== false && (!SET.notch || SET.notch.musicMode !== false),
-    sliders: cfg.showSliders !== false,
   };
   Object.keys(map).forEach((k) => {
     const el = document.querySelector(`#view-control-mac [data-mac="${k}"]`);
@@ -358,6 +302,7 @@ function applyMacMenuConfig() {
 }
 
 function openControlMenu() {
+  if (typeof suspendInactiveFeatures === 'function') suspendInactiveFeatures();
   if (SET.appearance && SET.appearance.menuLayout === 'mac') {
     applyMacMenuConfig();
     invokeTauri('wifi_backend', { on: true }).catch(() => {});
@@ -375,7 +320,7 @@ function openControlMenu() {
     switchView('view-control', 'state-control', 316, 292);
   }
   try { refreshBtCaption(); } catch (_) {}
-  if (slotRunning.has('mic')) try { refreshMic(); } catch (_) {}
+  try { refreshMic(); } catch (_) {}
 }
 
 function openMedia() {
@@ -2465,6 +2410,7 @@ document.getElementById('bt-master-toggle').addEventListener('change', async (e)
 
 // 5. Dynamic Quick Action Row
 const ACTION_TILE_ICONS = {
+  mic: '<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line class="q-mic-slash" x1="3" y1="3" x2="21" y2="21"/></svg>',
   awake: '<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>',
   snip: '<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/></svg>',
   calendar: '<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>',
@@ -2481,6 +2427,7 @@ const ACTION_TILE_ICONS = {
 
 const ACTION_TILE_TITLES = {
   awake: 'Keep screen awake: off',
+  mic: 'Microphone mute',
   snip: 'Screenshot Snip',
   calendar: 'Monthly Calendar',
   timer: 'Focus Timer',
@@ -2496,6 +2443,16 @@ const ACTION_TILE_TITLES = {
 
 let awakeState = false;
 
+// Mic mute button in Classic quick row: slash + red tint while muted
+function syncMicQuickUi(m) {
+  const none = m === null || m === undefined;
+  const title = none ? 'Microphone: no mic' : m ? 'Microphone: muted (click to unmute)' : 'Microphone: on (click to mute)';
+  const el = document.getElementById('act-mic');
+  if (!el) return;
+  el.classList.toggle('muted', m === true);
+  el.title = title;
+}
+
 // Keep-awake button exists in both menus (Classic tile row + Mac top bar): keep both in step
 function syncAwakeUi() {
   const title = awakeState ? 'Keep screen awake: ON' : 'Keep screen awake: off';
@@ -2507,12 +2464,44 @@ function syncAwakeUi() {
   });
 }
 
+const DEFAULT_ACTION_TILES = ['awake', 'snip', 'calendar', 'timer', 'clipboard', 'lock', 'settings'];
+// Tiles the Mac layout always offers (quick row) - Keep Awake lives in its top bar (#mac-awake-btn), so it is always reachable there
+const MAC_ACTIVE_TILES = ['notepad', 'clipboard', 'timer', 'calendar', 'snip'];
+
+// The tile ids the user can actually reach in the current layout (what renderQuickActionTiles draws: first 7, or the defaults when none are configured)
+function getActiveQuickTiles() {
+  if (SET.appearance && SET.appearance.menuLayout === 'mac') return MAC_ACTIVE_TILES.concat('awake');
+  const cfg = SET.menu && Array.isArray(SET.menu.actionTiles) && SET.menu.actionTiles.length ? SET.menu.actionTiles : DEFAULT_ACTION_TILES;
+  return cfg.slice(0, 7);
+}
+
+// Smart Feature Suspension: a stateful tile feature (Keep Awake, Focus Timer) must not keep running
+// invisibly when the active layout has no control for it (Mac -> Classic switch, or tile removed in Settings).
+// Tiles that are still present keep running untouched.
+let _suspendingAwake = false;
+function suspendInactiveFeatures() {
+  const active = getActiveQuickTiles();
+
+  if (awakeState === true && !active.includes('awake') && !_suspendingAwake) {
+    _suspendingAwake = true;
+    awakeState = false;
+    syncAwakeUi();
+    Promise.resolve(invokeTauri('set_keep_awake', { on: false }))
+      .catch(() => {})
+      .finally(() => { _suspendingAwake = false; });
+  }
+
+  if (appState.timerRunning === true && !active.includes('timer') && typeof suspendFocusTimer === 'function') {
+    suspendFocusTimer();
+  }
+}
+
 function renderQuickActionTiles() {
   const row = document.getElementById('quick-icons-row');
   if (!row) return;
   const list = (SET.menu && Array.isArray(SET.menu.actionTiles) && SET.menu.actionTiles.length)
     ? SET.menu.actionTiles
-    : ['awake', 'snip', 'calendar', 'timer', 'clipboard', 'lock', 'settings'];
+    : DEFAULT_ACTION_TILES;
 
   row.innerHTML = '';
   list.slice(0, 7).forEach((id) => {   // the row fits 7 circles at most
@@ -2535,6 +2524,8 @@ function renderQuickActionTiles() {
         awakeState = on === true;
         syncAwakeUi();
       });
+    } else if (id === 'mic') {
+      btn.addEventListener('click', () => toggleMic());   // 1-click system mic mute / unmute (state sync via renderMic)
     } else if (id === 'snip') {
       btn.addEventListener('click', () => {
         goCompact();
@@ -2582,6 +2573,8 @@ function renderQuickActionTiles() {
 
     row.appendChild(btn);
   });
+  syncMicQuickUi(typeof micMutedState === 'undefined' ? null : micMutedState);
+  suspendInactiveFeatures();   // tile set changed: suspend anything whose tile just disappeared
 }
 
 // 6. Volume & Brightness Sliders
@@ -2831,7 +2824,7 @@ document.querySelectorAll('#mac-quick-row .mx-q').forEach((btn) => {
     if (act === 'notepad') openMacSub('view-notepad', 'Quick Notes', 'bottom');
     else if (act === 'clipboard') openMacSub('view-clipboard', 'Clipboard', 'bottom');
     else if (act === 'timer') openMacSub('view-timer', 'Focus Timer', 'bottom');
-    else if (act === 'alarm') openMacSub('view-alarm', 'Alarm', 'bottom');
+    else if (act === 'snip') { goCompact(); invokeTauri('take_snip'); }
     else if (act === 'calendar') openMacSub('view-calendar', 'Calendar', 'bottom');
   });
 });
@@ -6535,6 +6528,24 @@ document.getElementById('btn-timer-toggle').addEventListener('click', function (
   }
 });
 
+// Smart Feature Suspension: pause the running Focus Timer (remaining time is kept) when its tile is
+// no longer available in the active layout, so it doesn't keep counting - or show in the pill - unseen.
+function suspendFocusTimer() {
+  if (!appState.timerRunning) return;
+  clearInterval(appState.timerInterval);
+  appState.timerInterval = null;
+  appState.timerRunning = false;
+  appState.timerStartPending = false;
+  const tgl = document.getElementById('btn-timer-toggle');
+  if (tgl) tgl.textContent = '▶ Start';
+  document.getElementById('act-timer')?.classList.remove('active');
+  const cClock = document.getElementById('c-clock');
+  if (cClock) cClock.classList.remove('c-clock-timer');
+  formatTimerDisplay();   // also refreshes the timer chip
+  updateClocks();         // pill goes back to showing the normal clock
+  updateTimerChip();
+}
+
 document.getElementById('btn-timer-reset').addEventListener('click', () => {
   clearInterval(appState.timerInterval);
   appState.timerRunning = false;
@@ -7458,6 +7469,12 @@ function trimClipboardItems() {
   clipboardItems = clipboardItems.slice(0, CLIPBOARD_MAX);
 }
 
+// The clipboard view is open either as its own view (Classic) or mounted inside the Mac Control Deck sub-panel.
+function isClipboardViewOpen() {
+  return appState.currentView === 'view-clipboard' ||
+         (typeof currentMacSubTarget !== 'undefined' && currentMacSubTarget?.id === 'view-clipboard');
+}
+
 function pushClipboardItem(item) {
   const idx = clipboardItems.findIndex((it) => it.kind === item.kind && it.hash === item.hash);
   if (idx === 0) return false;
@@ -7465,7 +7482,7 @@ function pushClipboardItem(item) {
   clipboardItems.unshift(item);
   trimClipboardItems();
   saveClipboardHistory();
-  if (appState.currentView === 'view-clipboard') renderClipboardList();
+  if (isClipboardViewOpen()) renderClipboardList();
   return true;
 }
 
@@ -7504,7 +7521,7 @@ function removeScreenshotByPath(path) {
   clipboardItems = clipboardItems.filter((it) => !(it.kind === 'screenshot' && clipPathKey(it.path) === key));
   if (clipboardItems.length === before) return false;
   saveClipboardHistory();
-  if (appState.currentView === 'view-clipboard') renderClipboardList();
+  if (isClipboardViewOpen()) renderClipboardList();
   return true;
 }
 
@@ -7527,7 +7544,7 @@ const CLIP_ICON_SCREENSHOT = '<svg viewBox="0 0 24 24" width="20" height="20" fi
 async function hydrateScreenshotThumb(path, containerEl, gen) {
   try {
     const ab = await invokeTauri('read_screenshot_bytes', { path });
-    if (gen !== clipRenderGen || appState.currentView !== 'view-clipboard') return;
+    if (gen !== clipRenderGen || !isClipboardViewOpen()) return;
     if (!ab || ab.byteLength === 0) {
       if (removeScreenshotByPath(path)) return;
       return;
@@ -7541,7 +7558,7 @@ async function hydrateScreenshotThumb(path, containerEl, gen) {
       c.height = bmp.height;
       c.getContext('2d').drawImage(bmp, 0, 0);
       const smallBlob = await new Promise((r) => c.toBlob(r, 'image/webp', 0.8));
-      if (smallBlob && gen === clipRenderGen && appState.currentView === 'view-clipboard') {
+      if (smallBlob && gen === clipRenderGen && isClipboardViewOpen()) {
         thumbUrl = URL.createObjectURL(smallBlob);
       }
     } finally {
@@ -7563,7 +7580,7 @@ async function hydrateScreenshotThumb(path, containerEl, gen) {
 
 // ---------- drawing ----------
 function renderClipboardList() {
-  if (appState.currentView !== 'view-clipboard') return;
+  if (!isClipboardViewOpen()) return;
   const container = document.getElementById('clipboard-list');
   if (!container) return;
 
@@ -7849,7 +7866,7 @@ function applySettings() {
   island.setAttribute('data-mode', SET.notch.mode);
   island.setAttribute('data-style', SET.notch.style || 'attached');
   island.setAttribute('data-theme', validTheme);
-  const macEars = SET.notch && SET.notch.macEars !== false && SET.notch.style !== 'floating';
+  const macEars = SET.notch && SET.notch.style === 'curved';
   island.classList.toggle('has-mac-ears', !!macEars);
   if (SET.notch.mode !== 'smart') island.classList.remove('smart-hidden');
 
@@ -7973,13 +7990,12 @@ setTimeout(async () => {
   }
 }, 25000);
 
-// ==================== 11. CLOCK ALARMS (quick tile "Alarm") ====================
-// Alarms live in localStorage ("inex.alarms.v1"): [{ id, h, m, on, daily }]  (h = 0-23).
+// ==================== 11. CLOCK ALARMS ====================
+// Managed in Settings > System > Alarms (and still editable from the optional "Alarm" quick tile).
+// Alarms live in localStorage ("inex.alarms.v1", see shared.js): [{ id, h, m, on, daily }]  (h = 0-23).
 // A once-alarm switches itself off after it rang. Snooze rings again after 9 minutes.
-const ALARM_KEY = 'inex.alarms.v1';
 const ALARM_SNOOZE_MS = 9 * 60 * 1000;
-let alarms = [];
-try { const a = JSON.parse(localStorage.getItem(ALARM_KEY) || '[]'); if (Array.isArray(a)) alarms = a.filter((x) => x && Number.isFinite(x.h) && Number.isFinite(x.m)); } catch (_) {}
+let alarms = loadAlarms();
 let alarmPick = { h: 7, m: 30, daily: false };
 let alarmSnoozeAt = 0;          // ms timestamp, 0 = no snooze pending
 let alarmLastFired = '';        // "<id>@<yyyy-mm-dd hh:mm>": never ring twice in one minute
@@ -8146,6 +8162,13 @@ function scheduleNextAlarm() {
   }
 }
 scheduleNextAlarm();
+
+// The Settings window edits alarms in the same localStorage: pick its changes up and re-arm the background timer
+subscribeAlarms((list) => {
+  alarms = list;
+  scheduleNextAlarm();
+  if (appState.currentView === 'view-alarm') renderAlarmList();
+});
 
 // Catch missed alarms if PC was sleeping/hibernating and wakes up
 onTauriEvent('system-resumed', () => {
