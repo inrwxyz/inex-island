@@ -206,6 +206,9 @@ export function applyTheme(s) {
   root.setProperty('--ear-overlap', a.notchOpacity >= 98 ? '1px' : '0px');
   root.setProperty('--notch-fg', notchLight ? '#050507' : '#f5f5f7');
   root.setProperty('--notch-fg-dim', notchLight ? 'rgba(5, 5, 7, 0.62)' : '#8e8e98');
+  // RGB triplet of the foreground (opposite of the island colour) so status UI can do rgba(var(--notch-fg-rgb), a)
+  root.setProperty('--notch-fg-rgb', notchLight ? '5, 5, 7' : '245, 245, 247');
+  document.documentElement.dataset.notchTone = notchLight ? 'light' : 'dark';
 
   root.setProperty('--menu-bg', `rgba(${mr}, ${mg}, ${mb}, ${ms.opacity / 100})`);
   root.setProperty('--menu-fg', menuLight ? '#050507' : '#f5f5f7');
