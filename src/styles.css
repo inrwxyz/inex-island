@@ -3245,6 +3245,8 @@ body {
 
 /* Media mini-card */
 .mx-media { flex: 1; min-height: 0; padding: 8px 10px; display: flex; flex-direction: column; justify-content: space-between; }
+.mx-media.expanded { padding: 12px 12px; }
+.mx-media.expanded .mx-art { width: 50px; height: 50px; }
 .mx-media-top { display: flex; align-items: center; gap: 9px; min-width: 0; }
 .mx-art {
   position: relative;
@@ -3798,6 +3800,7 @@ body {
    478px = 500px island - 2px border - 2 x 10px padding. No animation added. */
 #view-control-mac > .mx-top,
 #view-control-mac > .mx-body,
+#view-control-mac > #mx-widgets-body,
 #view-control-mac #view-tray-mac.in-mac-tray.view.active {
   width: 478px; min-width: 478px; max-width: none; margin-left: calc(50% - 239px);
 }
@@ -4024,3 +4027,168 @@ body {
 :root[data-notch-tone="light"] .island:not([data-mode="ghost"]) #c-clock .c-stat-chip.is-warn svg { color: #d97706; }
 :root[data-notch-tone="light"] .island:not([data-mode="ghost"]) #c-clock .c-stat-chip.is-crit,
 :root[data-notch-tone="light"] .island:not([data-mode="ghost"]) #c-clock .c-stat-chip.is-crit svg { color: #dc2626; }
+
+
+/* ==================== CONTROL DECK: WIDGETS TAB ==================== */
+.mx-top-right { gap: 4px; }
+.mx-time { min-width: 0; }
+.mx-time span { overflow: hidden; text-overflow: ellipsis; }
+
+/* 2-segment sliding pill */
+.mx-view-switcher {
+  position: relative; display: inline-grid; grid-template-columns: 1fr 1fr; height: 20px; padding: 1.5px;
+  box-sizing: border-box; border-radius: 10px; isolation: isolate;
+  background: color-mix(in srgb, var(--menu-fg) 9%, transparent);
+}
+.mx-view-switcher.hidden { display: none !important; }
+.mx-view-switcher::before {
+  content: ""; position: absolute; top: 1.5px; bottom: 1.5px; left: 1.5px; width: calc(50% - 1.5px); z-index: -1;
+  border-radius: 8.5px; background: color-mix(in srgb, var(--menu-fg) 20%, transparent);
+  transition: transform 0.15s ease;
+}
+.mx-view-switcher[data-active="widgets"]::before { transform: translateX(100%); }
+.mx-view-switcher button {
+  display: grid; place-items: center; width: 22px; padding: 0; height: 17px;
+  color: var(--menu-fg-dim) !important; transition: color 0.15s ease;
+}
+.mx-view-switcher button.active { color: var(--menu-fg) !important; }
+
+/* Show / hide */
+#mx-widgets-body { display: none; }
+#view-control-mac.widgets-open > .mx-body { display: none !important; }
+#view-control-mac.widgets-open > #mx-widgets-body { display: grid !important; }
+#view-control-mac.tray-open > #mx-widgets-body { display: none !important; }
+
+/* 2x2 grid: 478 wide, matching .mx-body */
+#mx-widgets-body {
+  flex: 1; min-height: 0; max-height: 174px; width: 478px; margin-left: calc(50% - 239px);
+  box-sizing: border-box; padding: 0; gap: 8px;
+  grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr;
+}
+.mx-widget-card {
+  position: relative; min-width: 0; min-height: 0; box-sizing: border-box; overflow: hidden;
+  padding: 7px 9px; display: flex; flex-direction: column; gap: 5px; border-radius: 16px;
+  background: #000;                                   /* true black */
+  border: 1px solid rgba(255,255,255,.09);
+  box-shadow: none;                                   /* no glow, no inner highlight */
+}
+/* widgets are always a dark surface with fixed Apple text colours (also in the light menu style) */
+#mx-widgets-body { --menu-fg: #f5f5f7; --menu-fg-dim: #9a9aa6; }
+.mx-widget-card.wg-click { cursor: pointer; }
+.wg-head { flex: none; height: 14px; gap: 5px; display: flex; align-items: center; justify-content: space-between; font-size: 10px; color: var(--menu-fg-dim); }
+.wg-head > b { flex: none; font-weight: 600; letter-spacing: 0.01em; }
+.wg-live { font-size: 9px; font-weight: 600; color: #30d158; }
+.wg-pill {
+  height: 16px; padding: 0 9px; border-radius: 8px; font-size: 9.5px; font-weight: 700;
+  color: var(--menu-fg) !important; background: rgba(255,255,255,.10) !important;
+}
+.wg-pill:hover { background: rgba(255,255,255,.18) !important; }
+.wg-pill-ico { width: 22px; padding: 0; font-size: 11px; }
+
+/* Micro-interactions: ONLY when Settings > Micro-Interactions is on (island has no .no-anim) */
+.island:not(.no-anim) .mx-widget-card { transition: transform 0.15s ease, border-color 0.15s ease; }
+.island:not(.no-anim) .mx-widget-card.wg-click:hover { transform: scale(1.012); border-color: rgba(255,255,255,.18); }
+.island:not(.no-anim) .mx-widget-card.wg-click:active { transform: scale(0.99); }
+.island:not(.no-anim) .wg-go:hover { transform: scale(1.06); }
+.island:not(.no-anim) .wg-go:active { transform: scale(0.95); }
+.island:not(.no-anim) .wg-ring-fg { transition: stroke-dashoffset 0.6s cubic-bezier(.2,.8,.2,1); }
+.island:not(.no-anim) #wg-cur-swap { transition: transform 0.3s ease; }
+
+/* ---- Screen Time: one ring per top app + top 3 list ---- */
+.wg-st { flex: 1; min-height: 0; display: flex; align-items: center; gap: 12px; }
+.wg-ring { position: relative; flex: none; width: 54px; height: 54px; }
+.wg-ring svg { width: 100%; height: 100%; display: block; }
+.wg-ring-bg { fill: none; stroke: rgba(255,255,255,.08); stroke-width: 4; }
+.wg-ring-fg { fill: none; stroke-width: 4; stroke-linecap: round; }
+.wg-st-list { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.wg-st-app { display: flex; align-items: center; gap: 6px; height: 14px; font-size: 10px; line-height: 14px; }
+.wg-st-app i { flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--dc, #8e8e98); }
+.wg-st-app img { flex: none; width: 14px; height: 14px; border-radius: 4px; display: block; }
+.wg-st-app span { flex: 1; min-width: 0; color: var(--menu-fg); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wg-st-app em { flex: none; font-style: normal; color: var(--menu-fg-dim); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.wg-tip {
+  position: absolute; z-index: 5; display: none; pointer-events: none; padding: 2px 7px; border-radius: 6px;
+  font-size: 9.5px; font-weight: 600; white-space: nowrap; color: #f5f5f7;
+  background: #1c1c1e; border: 1px solid rgba(255,255,255,.14);
+}
+
+/* Screen Time switched off in Settings: it disappears and the other 3 cards expand */
+#mx-widgets-body.wg-3 #wg-screentime { display: none; }
+#mx-widgets-body.wg-3 #wg-speed { grid-column: 1 / -1; }
+#mx-widgets-body.wg-3 .wg-speed-grid strong { font-size: 17px; }
+#mx-widgets-body.wg-3 .wg-speed-grid small, #mx-widgets-body.wg-3 .wg-speed-grid em { font-size: 10px; }
+
+/* ---- Speed Test: flat button, flat arc, no glow ---- */
+.wg-phase { margin-left: auto; font-size: 9px; font-weight: 600; color: var(--menu-fg-dim); white-space: nowrap; }
+#wg-speed.done .wg-phase { color: #30d158; }
+.wg-sp { flex: 1; min-height: 0; display: flex; align-items: center; gap: 10px; }
+.wg-go {
+  position: relative; flex: none; width: 42px; height: 42px; margin-left: 3px; border-radius: 50%; padding: 0;
+  display: grid; place-items: center; cursor: pointer;
+  background: #0a84ff !important; color: #fff !important; box-shadow: none; border: 0;
+}
+.wg-go svg { position: absolute; inset: -3px; width: 48px; height: 48px; pointer-events: none; }
+.wg-go-track { fill: none; stroke: transparent; stroke-width: 2.5; }
+.wg-go-arc { fill: none; stroke: #0a84ff; stroke-width: 2.5; stroke-linecap: round; stroke-dasharray: 138.23; stroke-dashoffset: 138.23; opacity: 0; transition: stroke-dashoffset 0.25s linear, opacity 0.2s ease; }
+.wg-go > span { position: relative; font-size: 14px; font-weight: 700; letter-spacing: 0.04em; font-variant-numeric: tabular-nums; }
+#wg-speed.testing .wg-go { background: #1c1c1e !important; }
+#wg-speed.testing .wg-go > span { font-size: 12px; color: #f5f5f7; }
+#wg-speed.testing .wg-go-track { stroke: rgba(255,255,255,.10); }
+#wg-speed.testing .wg-go-arc, #wg-speed.done .wg-go-arc { opacity: 1; }
+.wg-speed-grid { flex: 1; min-width: 0; min-height: 0; display: grid; grid-template-columns: repeat(3, 1fr); align-items: center; }
+.wg-speed-grid > div { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.wg-speed-grid small { font-size: 8.5px; color: var(--menu-fg-dim); white-space: nowrap; }
+.wg-speed-grid strong { font-size: 15px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.1; color: var(--menu-fg); font-variant-numeric: tabular-nums; }
+.wg-speed-grid em { font-style: normal; font-size: 8.5px; color: var(--menu-fg-dim); }
+
+/* ---- Currency: plain black card, neutral native-style fields ---- */
+.wg-rate {
+  margin-left: auto; min-width: 0; max-width: 112px; padding: 1px 6px; border-radius: 7px; font-size: 8.5px; font-weight: 600;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums;
+  color: var(--menu-fg-dim); background: rgba(255,255,255,.07);
+}
+.wg-cur-row { flex: none; display: flex; gap: 4px; height: 21px; }
+.wg-cur-row input {
+  height: 21px; box-sizing: border-box; border-radius: 8px; outline: none; font: inherit; font-size: 11.5px; font-weight: 600;
+  color: var(--menu-fg); background-color: #111113; border: 1px solid rgba(255,255,255,.10); box-shadow: none;
+}
+.wg-cur-amt { flex: 1; min-width: 0; padding: 0 8px; font-variant-numeric: tabular-nums; }
+.wg-cur-code {
+  flex: none; width: 48px; text-align: center; text-transform: uppercase; font-weight: 700; font-size: 11px;
+  padding: 0 2px; letter-spacing: 0.04em; cursor: text;
+}
+.wg-cur-row input:focus { border-color: rgba(255,255,255,.28); box-shadow: none; }
+
+/* ---- Markets ---- */
+.wg-mk-row { flex: none; height: 21px; display: flex; align-items: center; gap: 5px; font-size: 11px; font-variant-numeric: tabular-nums; }
+.wg-sym {
+  flex: none; width: 56px; height: 19px; line-height: 19px; box-sizing: border-box; padding: 0 2px;
+  font-size: 11px; font-weight: 700; letter-spacing: -0.01em; color: var(--menu-fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.wg-sym-sel, .wg-sym-input {
+  flex: none; width: 52px; height: 19px; box-sizing: border-box; padding: 0 2px; border-radius: 6px; outline: none; font: inherit; font-size: 11px; font-weight: 600;
+  color: var(--menu-fg); background: transparent; border: 1px solid transparent; cursor: pointer; appearance: none; -webkit-appearance: none;
+}
+.wg-sym-sel:hover, .wg-sym-sel:focus { background: rgba(255,255,255,.08); border-color: rgba(255,255,255,.12); }
+.wg-sym-sel option, .wg-sym-sel optgroup { background: #1c1c1e; color: #f5f5f7; }
+.wg-sym-input { cursor: text; padding: 0 4px; text-transform: uppercase; background: rgba(255,255,255,.08); border-color: rgba(255,255,255,.25); }
+.wg-sym-input.bad { border-color: #ff453a; }
+.wg-spark { flex: none; width: 44px; height: 16px; overflow: visible; }
+.wg-spark path.l { fill: none; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+.wg-px { flex: 1; min-width: 0; color: var(--menu-fg); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: right; }
+.wg-chg { flex: none; min-width: 46px; text-align: center; font-size: 9.5px; font-weight: 600; padding: 1px 5px; border-radius: 7px; white-space: nowrap; color: var(--menu-fg-dim); }
+.wg-chg.up { color: #30d158; background: transparent; }      /* green = up   */
+.wg-chg.down { color: #ff453a; background: transparent; }    /* red   = down */
+
+/* Widgets tab robustness: no entrance animation on the grid, and the global
+   "input/select { background: #0c0c10 !important }" rule must not recolour the controls */
+#view-control-mac > #mx-widgets-body, #mx-widgets-body > .mx-widget-card { animation: none !important; }
+#mx-widgets-body .wg-cur-row input { background-color: #111113 !important; color: #f5f5f7 !important; }
+#mx-widgets-body .wg-sym-sel { background-color: transparent !important; color: #f5f5f7 !important; }
+#mx-widgets-body .wg-sym-sel:hover, #mx-widgets-body .wg-sym-sel:focus { background-color: rgba(255,255,255,.08) !important; }
+#mx-widgets-body .wg-sym-input { background-color: rgba(255,255,255,.08) !important; color: #f5f5f7 !important; }
+#mx-widgets-body .wg-sym-sel option, #mx-widgets-body .wg-cur-row option { background-color: #1c1c1e !important; color: #f5f5f7 !important; }
+
+@media (prefers-reduced-motion: reduce) {
+  .wg-ring-fg, #wg-cur-swap { transition: none !important; }
+}

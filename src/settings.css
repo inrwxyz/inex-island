@@ -456,3 +456,6 @@ main > * { max-width: 760px; margin-left: auto; margin-right: auto; }
 .alarm-row .ctl { display: flex; align-items: center; gap: 10px; }
 .alarm-del { width: 26px; height: 26px; padding: 0; display: grid; place-items: center; font-size: 11px; }
 .alarm-del:hover { color: var(--red); border-color: var(--red); }
+
+
+

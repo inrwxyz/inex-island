@@ -245,6 +245,10 @@
           <b id="mac-clock">11:19</b><span id="mac-date">Thu, Nov 12</span>
         </div>
         <div class="mx-top-right">
+          <div class="mx-view-switcher" data-active="controls">
+            <button id="mx-tab-controls" class="active" title="Controls" aria-label="Controls"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg></button>
+            <button id="mx-tab-widgets" title="Widgets" aria-label="Widgets"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><rect x="3.5" y="3.5" width="7" height="7" rx="1.8"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.8"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.8"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.8"/></svg></button>
+          </div>
           <span id="mac-weather" class="mx-weather" data-mac="weather">
             <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32l1.41 1.41M2 12h2m16 0h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
             <span id="mac-weather-temp">28°C</span>
@@ -406,7 +410,63 @@
         </div>
       </div>
     </div>
-  </div>
+
+      <!-- WIDGETS DASHBOARD (only active while the Widgets tab is open) -->
+      <div id="mx-widgets-body">
+        <div id="wg-screentime" class="mx-widget-card">
+          <div class="wg-head"><b>Screen Time</b><span><strong id="wg-st-total" style="color:#f5f5f7;font-weight:600">0m</strong> session</span></div>
+          <div class="wg-st">
+            <div class="wg-ring"><svg id="wg-st-svg" viewBox="0 0 56 56" aria-hidden="true"></svg></div>
+            <div class="wg-st-list" id="wg-st-list"><div class="wg-st-app"><span>No data yet</span><em></em></div></div>
+          </div>
+          <div id="wg-st-tip" class="wg-tip"></div>
+        </div>
+
+        <div id="wg-speed" class="mx-widget-card">
+          <div class="wg-head"><b>Speed Test</b><span id="wg-speed-phase" class="wg-phase">Ready</span></div>
+          <div class="wg-sp">
+            <button id="wg-speed-btn" class="wg-go" title="Start speed test">
+              <svg viewBox="0 0 48 48" aria-hidden="true">
+                <circle class="wg-go-track" cx="24" cy="24" r="22"/>
+                <circle id="wg-go-arc" class="wg-go-arc" cx="24" cy="24" r="22" transform="rotate(-90 24 24)"/>
+              </svg>
+              <span id="wg-go-label">GO</span>
+            </button>
+            <div class="wg-speed-grid">
+              <div class="wg-m-ping"><small>Ping</small><strong id="wg-ping">--</strong><em>ms</em></div>
+              <div class="wg-m-down"><small>&#8595; Download</small><strong id="wg-down">--</strong><em>Mbps</em></div>
+              <div class="wg-m-up"><small>&#8593; Upload</small><strong id="wg-up">--</strong><em>Mbps</em></div>
+            </div>
+          </div>
+        </div>
+
+        <div id="wg-currency" class="mx-widget-card">
+          <div class="wg-head"><b>Currency</b><span id="wg-cur-rate" class="wg-rate">Loading rate&hellip;</span><button id="wg-cur-swap" class="wg-pill wg-pill-ico" title="Swap">&#8644;</button></div>
+          <div class="wg-cur-row" id="wg-cur-row-a">
+            <input id="wg-cur-a" class="wg-cur-amt" type="text" inputmode="decimal" value="1" />
+            <input id="wg-cur-a-code" class="wg-cur-code" type="text" value="USD" spellcheck="false" title="Currency or Country (e.g. USD, BDT, Pakistan, India)" />
+          </div>
+          <div class="wg-cur-row" id="wg-cur-row-b">
+            <input id="wg-cur-b" class="wg-cur-amt" type="text" inputmode="decimal" value="--" />
+            <input id="wg-cur-b-code" class="wg-cur-code" type="text" value="INR" spellcheck="false" title="Currency or Country (e.g. USD, BDT, Pakistan, India)" />
+          </div>
+        </div>
+
+        <div id="wg-markets" class="mx-widget-card">
+          <div class="wg-head"><b>Markets</b><span class="wg-live">Live</span></div>
+          <div class="wg-mk-row" data-i="0">
+            <span class="wg-sym">--</span>
+            <svg class="wg-spark" viewBox="0 0 44 16" preserveAspectRatio="none" aria-hidden="true"></svg>
+            <span class="wg-px">--</span><span class="wg-chg">--</span>
+          </div>
+          <div class="wg-mk-row" data-i="1">
+            <span class="wg-sym">--</span>
+            <svg class="wg-spark" viewBox="0 0 44 16" preserveAspectRatio="none" aria-hidden="true"></svg>
+            <span class="wg-px">--</span><span class="wg-chg">--</span>
+          </div>
+        </div>
+      </div>
+    </div>
 
   <!-- ==================== 4. IN-ISLAND WI-FI SUB-MENU ==================== -->
     <div id="view-wifi" class="view">

@@ -63,6 +63,13 @@ async function syncMacStatsUI() {
   // 2. Mini Stats Card: CPU & RAM OR Connected Bluetooth Device Card OR Laptop Battery
   const mode = SET.macMenu?.statsMode || 'sys';
   const macStatsCard = document.getElementById('mac-stats');
+  const mediaEl = document.getElementById('mac-media');
+  if (mode === 'none') {
+    if (macStatsCard) macStatsCard.classList.add('hidden');
+    if (mediaEl) mediaEl.classList.add('expanded');
+    return;
+  }
+  if (mediaEl) mediaEl.classList.remove('expanded');
   const cpuStat = document.getElementById('mac-stat-cpu');
   const ramStat = document.getElementById('mac-stat-ram');
   const extraStat = document.getElementById('mac-stat-extra');

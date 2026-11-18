@@ -65,6 +65,30 @@ const ICON = {
 
 // ---------- settings schema ----------
 const WIDGET_OPTS = [['none', 'None'], ['weather', 'Weather'], ['ram', 'RAM'], ['cpu', 'CPU'], ['gpu', 'GPU'], ['battery', 'Battery'], ['disk', 'Disk'], ['net', 'Net Speed']];
+const MARKET_OPTIONS = [
+  ['BTC-USD', 'Bitcoin (BTC)'],
+  ['ETH-USD', 'Ethereum (ETH)'],
+  ['SOL-USD', 'Solana (SOL)'],
+  ['^NSEI', 'NIFTY 50'],
+  ['^BSESN', 'SENSEX'],
+  ['^GSPC', 'S&P 500'],
+  ['^IXIC', 'NASDAQ'],
+  ['^DJI', 'Dow Jones'],
+  ['AAPL', 'Apple (AAPL)'],
+  ['TSLA', 'Tesla (TSLA)'],
+  ['NVDA', 'NVIDIA (NVDA)'],
+  ['MSFT', 'Microsoft (MSFT)'],
+  ['GOOGL', 'Alphabet (GOOGL)'],
+  ['AMZN', 'Amazon (AMZN)'],
+  ['GC=F', 'Gold (GC=F)']
+];
+const STAT_MODE_OPTIONS = [
+  ['sys', 'CPU & RAM (Default)'],
+  ['none', 'None (Expand Media Card)'],
+  ['bt', 'Bluetooth Device'],
+  ['battery', 'Laptop Battery'],
+  ['disk', 'Disk']
+];
 const PET_ON = (s) => !!s.companion.enabled;
 // Companion Pet only shows up here once Enable Companion is on (Settings > Notch > Companion Pet)
 const COMPACT_CONTENT_OPTS = (s) => [
@@ -166,12 +190,10 @@ const PAGES = [
         { path: 'appearance.menuStyle', type: 'seg', icon: 'layers', t: 'Glass Style', d: 'Transparent blurred glass or solid contrast color', options: [['transparent', 'Transparent Glass'], ['color', 'Solid Color']] }
       ] },
       { id: 'menu-mac-widgets', title: 'Control Deck Widgets', defaultOpen: true, showIf: menuIs('mac'), rows: [
-        { path: 'macMenu.showClock', type: 'toggle', icon: 'clock', t: 'Clock & Date Card', d: 'Show time and weekday header inside the Control Deck' },
-        { path: 'macMenu.showBattery', type: 'toggle', icon: 'battery', t: 'Laptop Battery in Header', d: 'Display battery percentage and charging indicator in the top right' },
-        { path: 'macMenu.showWeather', type: 'toggle', icon: 'cloud', t: 'Weather Widget', d: 'Live temperature card in the expanded Control Deck' },
-        { path: 'macMenu.showStats', type: 'toggle', icon: 'monitor', t: 'System Stats Card', d: 'Compact live performance meters inside the Control Deck' },
-        { path: 'macMenu.statsMode', type: 'select', icon: 'monitor', t: 'Stat Card Mode', d: 'What to display in the mini status card', options: [['sys', 'CPU & RAM'], ['bt', 'Bluetooth Device'], ['battery', 'Laptop Battery'], ['disk', 'Disk']], showIf: (s) => s.macMenu.showStats !== false },
-        { path: 'macMenu.showMedia', type: 'toggle', icon: 'music', t: 'Media Quick Card', d: 'Music card in the Control Deck, shown whether or not music is playing' }
+        { path: 'macMenu.widgetsEnabled', type: 'toggle', icon: 'widgets', t: 'Widgets Dashboard Tab', d: 'Show the Widgets switcher pill inside the Control Deck' },
+        { path: 'macMenu.statsMode', type: 'select', icon: 'monitor', t: 'Stat Card Mode', d: 'Choose system meter, or None to expand the Spotify/media card', options: STAT_MODE_OPTIONS },
+        { path: 'macMenu.market1', type: 'market', icon: 'spark', t: 'Market Ticker 1', d: 'First symbol in Markets widget. Pick a preset or type any custom ticker', options: MARKET_OPTIONS, showIf: (s) => s.macMenu?.widgetsEnabled !== false },
+        { path: 'macMenu.market2', type: 'market', icon: 'spark', t: 'Market Ticker 2', d: 'Second symbol in Markets widget. Pick a preset or type any custom ticker', options: MARKET_OPTIONS, showIf: (s) => s.macMenu?.widgetsEnabled !== false }
       ] },
       { id: 'menu-motion', title: 'Motion & Feel', defaultOpen: false, rows: [
         { path: 'appearance.animations', type: 'toggle', icon: 'spark', t: 'Micro-Interactions', d: 'Haptic button scaling, spring transitions & glass highlights' }
@@ -496,6 +518,89 @@ function control(row) {
       grid.append(tile);
     });
     wrap.append(grid);
+  } else if (row.type === 'market') {
+    // ONE dropdown. Pick a preset, or pick "Custom..." and the dropdown itself turns into a text field:
+    // type a symbol (AAPL, ^NSEI, BTC-USD) or paste a Yahoo Finance link, press Enter.
+    const selOpts = optsOf(row);
+    const customSel = el('div', 'c-sel');
+    let cur = v || '';
+    const presetOf = (sym) => selOpts.find(([val]) => val === sym);
+    const normalize = (raw) => {
+      let t = String(raw || '').trim();
+      const m = t.match(/\/quote\/([^/?#\s]+)/i);   // finance.yahoo.com/quote/AAPL/...
+      if (m) { try { t = decodeURIComponent(m[1]); } catch (_) { t = m[1]; } }
+      return t.replace(/\s+/g, '').toUpperCase().slice(0, 15);
+    };
+    const chev = '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>';
+    const trigger = el('button', 'c-sel-trigger', `<span></span>${chev}`);
+    trigger.type = 'button';
+    trigger.style.minWidth = '130px';
+    const label = trigger.querySelector('span');
+
+    const customBox = el('div', 'c-sel-trigger');
+    customBox.style.minWidth = '130px';
+    customBox.style.padding = '0 4px 0 10px';
+    customBox.style.cursor = 'text';
+    const inp = el('input', 'txtin');
+    inp.type = 'text'; inp.maxLength = 120; inp.placeholder = 'Symbol or link, then Enter';
+    inp.style.cssText = 'flex:1;min-width:0;width:130px;height:100%;background:transparent;border:0;outline:0;box-shadow:none;padding:0;font-weight:700;color:inherit;text-transform:uppercase;';
+    const arrow = el('button', '', chev);
+    arrow.type = 'button'; arrow.title = 'Presets';
+    arrow.style.cssText = 'background:transparent;border:0;color:inherit;display:grid;place-items:center;padding:4px;cursor:pointer;';
+    customBox.append(inp, arrow);
+
+    const showPreset = () => {
+      const m = presetOf(cur);
+      label.textContent = m ? m[1] : (cur || 'Pick');
+      trigger.style.display = ''; customBox.style.display = 'none';
+    };
+    const showCustom = () => {
+      inp.value = presetOf(cur) ? '' : cur;
+      trigger.style.display = 'none'; customBox.style.display = 'flex';
+      inp.focus(); inp.select();
+    };
+    const menu = el('div', 'c-sel-menu hidden');
+    const closeMenu = () => { menu.classList.add('hidden'); trigger.classList.remove('open'); };
+    const openMenu = (anchor) => {
+      document.querySelectorAll('.c-sel-menu:not(.hidden)').forEach((m) => {
+        if (m !== menu) { m.classList.add('hidden'); m.previousElementSibling?.classList.remove('open'); }
+      });
+      const isOpen = !menu.classList.contains('hidden');
+      menu.classList.toggle('hidden', isOpen);
+      trigger.classList.toggle('open', !isOpen);
+      if (!isOpen) placeSelMenu(anchor, menu);
+    };
+    selOpts.forEach(([val, lab]) => {
+      const item = el('button', 'c-sel-item' + (val === v ? ' active' : ''), lab);
+      item.type = 'button';
+      item.addEventListener('click', (e) => {
+        e.stopPropagation(); closeMenu();
+        cur = val; showPreset(); change(val, true);
+      });
+      menu.append(item);
+    });
+    const customItem = el('button', 'c-sel-item' + (v && !presetOf(v) ? ' active' : ''), 'Custom\u2026');
+    customItem.type = 'button';
+    customItem.addEventListener('click', (e) => { e.stopPropagation(); closeMenu(); showCustom(); });
+    menu.append(customItem);
+
+    const commitCustom = () => {
+      const sym = normalize(inp.value);
+      if (!sym) { showPreset(); return; }
+      if (sym !== cur) { cur = sym; commit(row.path, sym, row.onChange); }
+      showPreset();
+    };
+    inp.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); inp.blur(); }
+      else if (e.key === 'Escape') { e.preventDefault(); inp.value = ''; inp.blur(); }
+    });
+    inp.addEventListener('blur', () => setTimeout(() => { if (document.activeElement !== arrow) commitCustom(); }, 0));
+    arrow.addEventListener('click', (e) => { e.stopPropagation(); openMenu(customBox); });
+    trigger.addEventListener('click', (e) => { e.stopPropagation(); openMenu(trigger); });
+
+    showPreset();
+    customSel.append(trigger, customBox, menu);
+    wrap.append(customSel);
   } else if (row.type === 'select') {
     const customSel = el('div', 'c-sel');
     const selOpts = optsOf(row);
@@ -939,6 +1044,16 @@ function renderQuickActionTilesGroup(main) {
 }
 
 // ---------- main page renderer ----------
+// The island can open Settings straight on a page (Widgets > Screen Time card)
+function applySettingsGoto() {
+  try {
+    const g = localStorage.getItem('inex.settings.goto');
+    if (!g) return;
+    localStorage.removeItem('inex.settings.goto');
+    if (PAGES.some((p) => p.id === g)) { current = g; renderNav(); renderPage(true); }
+  } catch (_) {}
+}
+
 function renderPage(resetScroll) {
   const main = document.getElementById('page');
   const keep = main.scrollTop;
@@ -1074,6 +1189,7 @@ try {
   window.__TAURI__?.event?.listen('settings-opened', () => {
     S = load();
     renderPage(true);
+    applySettingsGoto();
   });
 } catch (_) {}
 document.getElementById('btn-reset-header')?.addEventListener('click', resetAll);
@@ -1106,3 +1222,4 @@ subscribeAlarms(() => { if (current === 'sounds') renderPage(); });
 window.addEventListener('focus', () => renderPage());
 renderNav();
 renderPage(true);
+applySettingsGoto();

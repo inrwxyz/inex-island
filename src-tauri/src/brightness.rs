@@ -124,6 +124,61 @@ fn apply_hardware_brightness(level: u32) {
 }
 
 #[cfg(target_os = "windows")]
+fn apply_desktop_monitor_brightness(level: u32) {
+    use windows::Win32::Devices::Display::{
+        DestroyPhysicalMonitors, GetNumberOfPhysicalMonitorsFromHMONITOR,
+        GetPhysicalMonitorsFromHMONITOR, SetMonitorBrightness, PHYSICAL_MONITOR,
+    };
+    use windows::Win32::Graphics::Gdi::{MonitorFromWindow, MONITOR_DEFAULTTOPRIMARY};
+    use windows::Win32::UI::WindowsAndMessaging::GetDesktopWindow;
+
+    unsafe {
+        let hwnd = GetDesktopWindow();
+        let hmonitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTOPRIMARY);
+        let mut count = 0u32;
+        if GetNumberOfPhysicalMonitorsFromHMONITOR(hmonitor, &mut count).is_ok() && count > 0 {
+            let mut monitors = vec![PHYSICAL_MONITOR::default(); count as usize];
+            if GetPhysicalMonitorsFromHMONITOR(hmonitor, &mut monitors).is_ok() {
+                for mon in &monitors {
+                    let _ = SetMonitorBrightness(mon.hPhysicalMonitor, level);
+                }
+                let _ = DestroyPhysicalMonitors(&monitors);
+            }
+        }
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn get_desktop_monitor_brightness() -> Option<u32> {
+    use windows::Win32::Devices::Display::{
+        DestroyPhysicalMonitors, GetMonitorBrightness, GetNumberOfPhysicalMonitorsFromHMONITOR,
+        GetPhysicalMonitorsFromHMONITOR, PHYSICAL_MONITOR,
+    };
+    use windows::Win32::Graphics::Gdi::{MonitorFromWindow, MONITOR_DEFAULTTOPRIMARY};
+    use windows::Win32::UI::WindowsAndMessaging::GetDesktopWindow;
+
+    unsafe {
+        let hwnd = GetDesktopWindow();
+        let hmonitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTOPRIMARY);
+        let mut count = 0u32;
+        if GetNumberOfPhysicalMonitorsFromHMONITOR(hmonitor, &mut count).is_ok() && count > 0 {
+            let mut monitors = vec![PHYSICAL_MONITOR::default(); count as usize];
+            if GetPhysicalMonitorsFromHMONITOR(hmonitor, &mut monitors).is_ok() {
+                let mut min = 0u32;
+                let mut cur = 0u32;
+                let mut max = 0u32;
+                let res = GetMonitorBrightness(monitors[0].hPhysicalMonitor, &mut min, &mut cur, &mut max);
+                let _ = DestroyPhysicalMonitors(&monitors);
+                if res != 0 {
+                    return Some(cur);
+                }
+            }
+        }
+    }
+    None
+}
+
+#[cfg(target_os = "windows")]
 fn worker(rx: mpsc::Receiver<u32>) {
     let mut con: Option<wmi::WMIConnection> = None;
     while let Ok(first) = rx.recv() {
@@ -134,10 +189,13 @@ fn worker(rx: mpsc::Receiver<u32>) {
             level = v;
         }
 
-        // 1. Direct hardware display gamma ramp (works on 100% laptops & desktop monitors)
+        // 1. Physical desktop monitor hardware brightness via DDC/CI
+        apply_desktop_monitor_brightness(level);
+
+        // 2. Direct hardware display gamma ramp (works on 100% laptops & desktop monitors)
         apply_hardware_brightness(level);
 
-        // 2. Also try WMI for native laptop panel firmware brightness
+        // 3. Also try WMI for native laptop panel firmware brightness
         if con.is_none() {
             con = connect();
         }
@@ -158,13 +216,34 @@ fn worker(rx: mpsc::Receiver<u32>) {
 
 #[cfg(target_os = "windows")]
 fn event_thread(app: AppHandle) {
-    let Some(c) = connect() else { return };
-    if let Ok(list) = c.query::<MonitorBrightness>() {
-        if let Some(b) = list.first() {
-            CURRENT.store(b.current_brightness as u32, Ordering::Relaxed);
-            let _ = app.emit("brightness-changed", b.current_brightness as u32);
+    let mut initialized = false;
+
+    // 1. Try native desktop monitor DDC/CI first
+    if let Some(cur) = get_desktop_monitor_brightness() {
+        CURRENT.store(cur, Ordering::Relaxed);
+        let _ = app.emit("brightness-changed", cur);
+        initialized = true;
+    }
+
+    // 2. Try WMI for laptop panel
+    let con = connect();
+    if let Some(c) = con.as_ref() {
+        if let Ok(list) = c.query::<MonitorBrightness>() {
+            if let Some(b) = list.first() {
+                CURRENT.store(b.current_brightness as u32, Ordering::Relaxed);
+                let _ = app.emit("brightness-changed", b.current_brightness as u32);
+                initialized = true;
+            }
         }
     }
+
+    // If neither returned a value, default to 100 so slider is initialized
+    if !initialized && CURRENT.load(Ordering::Relaxed) == UNKNOWN {
+        CURRENT.store(100, Ordering::Relaxed);
+        let _ = app.emit("brightness-changed", 100u32);
+    }
+
+    let Some(c) = con else { return };
     loop {
         match c.raw_notification::<BrightnessEvent>("SELECT * FROM WmiMonitorBrightnessEvent") {
             Ok(events) => {

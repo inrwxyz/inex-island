@@ -12,6 +12,8 @@ mod privacy;
 mod shelf;
 mod visualizer;
 mod wifi;
+mod screentime;
+mod webget;
 pub mod quick_share;
 pub use quick_share::{console, crypto, events, mdns, protos};
 #[cfg(target_os = "windows")]
@@ -1884,11 +1886,13 @@ fn drag_settings(window: WebviewWindow) {
 
 #[tauri::command]
 fn quit_app(app: AppHandle) {
+    screentime::save();
     app.exit(0);
 }
 
 #[tauri::command]
 fn restart_app(app: AppHandle) {
+    screentime::save();
     app.restart();
 }
 
@@ -2112,6 +2116,7 @@ fn main() {
             locker_bridge::start(app.handle().clone());
             nexus_bridge::start(app.handle().clone());
             clipboard::start_screenshot_watch(app.handle().clone());
+            screentime::start();
 
             #[cfg(target_os = "windows")]
             {
@@ -2296,7 +2301,13 @@ fn main() {
             quick_share::respond_inex_transfer,
             check_update,
             get_app_version,
-            apply_update
+            apply_update,
+            screentime::get_screen_time_today,
+            screentime::get_screen_time_history,
+            screentime::set_screen_time_enabled,
+            screentime::clear_screen_time,
+            screentime::get_app_icons,
+            webget::http_get
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

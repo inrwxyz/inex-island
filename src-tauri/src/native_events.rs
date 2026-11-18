@@ -252,6 +252,7 @@ unsafe extern "system" fn win_event_proc(
     // EVENT_SYSTEM_FOREGROUND: another window became active
     rehook_location(hwnd);
     recheck_fullscreen();
+    crate::screentime::on_foreground(hwnd.0 as isize); // Screen Time: switch the app that is being timed
 
     if hwnd == HWND::default() {
         return;

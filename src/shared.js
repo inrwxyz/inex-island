@@ -28,9 +28,11 @@ export const DEFAULTS = {
     showClock: true,
     showWeather: true,
     showStats: true,
-    showMedia: true,
     showBattery: true,
-    statsMode: 'sys'
+    statsMode: 'sys',
+    widgetsEnabled: true,
+    market1: 'BTC-USD',
+    market2: '^NSEI'
   },
   weather: { enabled: true, unit: 'C', city: '' },
   widgets: { enabled: true, left: 'weather', right: 'ram' },

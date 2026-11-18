@@ -111,6 +111,7 @@ function cancelCloseEase() {
 }
 function switchView(viewId, stateClass, winWidth, winHeight) {
   appState.keepOpen = false;
+  if (typeof macWidgetsReset === 'function') macWidgetsReset();
   if (typeof closeMacSub === 'function') closeMacSub();
   if (typeof closeMacTrayPane === 'function') closeMacTrayPane();
   if (appState.currentView === 'view-bt' && viewId !== 'view-bt') {
@@ -169,28 +170,38 @@ function switchView(viewId, stateClass, winWidth, winHeight) {
 
 function applyMacMenuConfig() {
   const cfg = (SET.macMenu && typeof SET.macMenu === 'object') ? SET.macMenu : {};
+  const statsMode = cfg.statsMode || 'sys';
+  const showStatsCard = statsMode !== 'none';
   const map = {
-    clock: cfg.showClock !== false,
-    weather: cfg.showWeather !== false && (!SET.weather || SET.weather.enabled !== false),
-    stats: cfg.showStats !== false,
-    media: cfg.showMedia !== false && (!SET.notch || SET.notch.musicMode !== false),
+    clock: true,
+    weather: !SET.weather || SET.weather.enabled !== false,
+    stats: showStatsCard,
+    media: (!SET.notch || SET.notch.musicMode !== false),
   };
   Object.keys(map).forEach((k) => {
     const el = document.querySelector(`#view-control-mac [data-mac="${k}"]`);
     if (el) el.classList.toggle('hidden', !map[k]);
   });
+  const mediaEl = document.getElementById('mac-media');
+  if (mediaEl) mediaEl.classList.toggle('expanded', !showStatsCard);
   const batEl = document.getElementById('mac-stat-bat');
   if (batEl && appState.stats) {
     batEl.classList.toggle('hidden', !(appState.stats.battery_pct >= 0));
   }
   const topBat = document.getElementById('mac-battery');
   if (topBat && appState.stats) {
-    topBat.classList.toggle('hidden', !(appState.stats.battery_pct >= 0 && cfg.showBattery !== false));
+    topBat.classList.toggle('hidden', !(appState.stats.battery_pct >= 0));
   }
   const mxLeft = document.querySelector('#view-control-mac .mx-left');
   if (mxLeft) {
     const hasVisibleChild = [...mxLeft.children].some((c) => !c.classList.contains('hidden'));
     mxLeft.classList.toggle('hidden', !hasVisibleChild);
+  }
+  const switcher = document.querySelector('.mx-view-switcher');
+  if (switcher) {
+    const enabled = cfg.widgetsEnabled !== false;
+    switcher.classList.toggle('hidden', !enabled);
+    if (!enabled && typeof macWidgetsReset === 'function') macWidgetsReset();
   }
 }
 

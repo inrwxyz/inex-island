@@ -66,7 +66,7 @@ function renderMediaProgress(pos) {
 // The timer only exists while the media panel is open and a track is playing.
 var mediaTickT; // var + no initializer: switchView() may call syncMediaTick() early
 function syncMediaTick() {
-  const macWantsMedia = appState.currentView === 'view-control-mac' && (!SET.macMenu || SET.macMenu.showMedia !== false);
+  const macWantsMedia = appState.currentView === 'view-control-mac';
   const want = (appState.currentView === 'view-media' || macWantsMedia) && appState.mediaPlaying && appState.mediaDuration > 0;
   if (want && !mediaTickT) {
     mediaTickT = setInterval(() => {
