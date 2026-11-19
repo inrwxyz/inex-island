@@ -8,6 +8,7 @@ const W_ICONS = {
   cloud_moon: W_SVG('<path d="M13.5 3.8a4.5 4.5 0 0 1 4.8 4.8 4.5 4.5 0 0 1-.5 2A4 4 0 0 0 12 7a4 4 0 0 0-.2-1.7 4.5 4.5 0 0 1 1.7-1.5z" fill="#FBBF24"/><path d="M19.5 18H8a4.5 4.5 0 0 1-.4-8.98A5.5 5.5 0 0 1 18.8 11.5 3.5 3.5 0 0 1 19.5 18z" fill="#F1F5F9"/>'),
   cloud: W_SVG('<path d="M16 13a3.5 3.5 0 0 0-3.5-3.5 3.5 3.5 0 0 0-.6.05 4.8 4.8 0 0 0-7.4 2.45A3.5 3.5 0 0 0 6 17h10a3.5 3.5 0 0 0 0-7z" fill="#94A3B8" opacity="0.75"/><path d="M19.5 19H8a4.5 4.5 0 0 1-.4-8.98 5.5 5.5 0 0 1 10.7 2.48A3.5 3.5 0 0 1 19.5 19z" fill="#F8FAFC"/>'),
   rain: W_SVG('<path d="M19 14H7.5a4 4 0 0 1-.4-7.98 5 5 0 0 1 9.7 2.2A3.2 3.2 0 0 1 19 14z" fill="#64748B"/><g stroke="#38BDF8" stroke-width="1.8" stroke-linecap="round"><line x1="8" y1="16" x2="6.5" y2="20.5"/><line x1="12" y1="16" x2="10.5" y2="20.5"/><line x1="16" y1="16" x2="14.5" y2="20.5"/></g>'),
+  rain_light: W_SVG('<path d="M19 13.5H7.5a4 4 0 0 1-.4-7.98 5 5 0 0 1 9.7 2.2A3.2 3.2 0 0 1 19 13.5z" fill="#94A3B8"/><g stroke="#38BDF8" stroke-width="1.6" stroke-linecap="round"><line x1="9.5" y1="16" x2="8.7" y2="18.6"/><line x1="14" y1="16" x2="13.2" y2="18.6"/><line x1="11.8" y1="19.4" x2="11" y2="22"/></g>'),
   storm: W_SVG('<path d="M19 13.5H7.5a4 4 0 0 1-.4-7.98 5 5 0 0 1 9.7 2.2A3.2 3.2 0 0 1 19 13.5z" fill="#475569"/><polygon points="12,12.5 8.5,17.5 11.5,17.5 10,22.5 15.5,16 12.5,16" fill="#FACC15" stroke="#EAB308" stroke-width="0.5"/>'),
   snow: W_SVG('<path d="M19 14H7.5a4 4 0 0 1-.4-7.98 5 5 0 0 1 9.7 2.2A3.2 3.2 0 0 1 19 14z" fill="#94A3B8"/><circle cx="8" cy="18" r="1.2" fill="#BAE6FD"/><circle cx="12.5" cy="19.5" r="1.2" fill="#E0F2FE"/><circle cx="16.5" cy="18" r="1.2" fill="#BAE6FD"/>')
 };
@@ -19,11 +20,11 @@ const WMO_CODES = {
   3: { day: W_ICONS.cloud, night: W_ICONS.cloud, text: 'Mostly Cloudy' },
   45: { day: W_ICONS.cloud, night: W_ICONS.cloud, text: 'Fog' },
   48: { day: W_ICONS.cloud, night: W_ICONS.cloud, text: 'Haze' },
-  51: { day: W_ICONS.cloud, night: W_ICONS.cloud, text: 'Light Drizzle' },
-  53: { day: W_ICONS.cloud, night: W_ICONS.cloud, text: 'Drizzle' },
-  55: { day: W_ICONS.cloud, night: W_ICONS.cloud, text: 'Drizzle' },
-  56: { day: W_ICONS.cloud, night: W_ICONS.cloud, text: 'Freezing Drizzle' },
-  57: { day: W_ICONS.cloud, night: W_ICONS.cloud, text: 'Freezing Drizzle' },
+  51: { day: W_ICONS.rain_light, night: W_ICONS.rain_light, text: 'Light Drizzle' },
+  53: { day: W_ICONS.rain_light, night: W_ICONS.rain_light, text: 'Drizzle' },
+  55: { day: W_ICONS.rain_light, night: W_ICONS.rain_light, text: 'Drizzle' },
+  56: { day: W_ICONS.rain_light, night: W_ICONS.rain_light, text: 'Freezing Drizzle' },
+  57: { day: W_ICONS.rain_light, night: W_ICONS.rain_light, text: 'Freezing Drizzle' },
   61: { day: W_ICONS.rain, night: W_ICONS.rain, text: 'Light Rain' },
   63: { day: W_ICONS.rain, night: W_ICONS.rain, text: 'Rain' },
   65: { day: W_ICONS.rain, night: W_ICONS.rain, text: 'Heavy Rain' },
@@ -43,6 +44,28 @@ const WMO_CODES = {
   99: { day: W_ICONS.storm, night: W_ICONS.storm, text: 'Thunderstorm with Hail' }
 };
 
+// Real-time condition resolver (MSN / Windows 11 Weather parity).
+// Measured precipitation wins over the forecast code: a "Light Drizzle" code or even an "Overcast"
+// code with precipitation > 0 shows rain drops; only DRY overcast / fog / haze shows a bare cloud.
+const WX_RAIN_CODES = (c) => (c >= 51 && c <= 67) || (c >= 80 && c <= 82);
+const WX_SNOW_CODES = (c) => (c >= 71 && c <= 77) || c === 85 || c === 86;
+function wxResolve(code, isDay, precip, rain) {
+  code = +code || 0; isDay = isDay !== false;
+  const mm = Math.max(+precip || 0, +rain || 0);
+  const base = WMO_CODES[code] || WMO_CODES[0];
+  const pick = (o) => (isDay ? o.day : o.night);
+  // snow and thunderstorms keep their own icons
+  if (WX_SNOW_CODES(code) || code >= 95) return { kind: code >= 95 ? 'storm' : 'snow', svg: pick(base), text: base.text };
+  if (WX_RAIN_CODES(code) || mm > 0) {
+    const wetCode = WX_RAIN_CODES(code);
+    const light = (code >= 51 && code <= 57) || code === 61 || (!wetCode && mm < 2.5);
+    const text = wetCode ? base.text : (mm >= 7.6 ? 'Heavy Rain' : mm >= 2.5 ? 'Rain' : 'Light Rain');
+    const heavy = !light || mm >= 2.5;
+    return { kind: 'rain', svg: heavy ? W_ICONS.rain : W_ICONS.rain_light, text };
+  }
+  return { kind: code <= 2 ? 'sky' : 'cloud', svg: pick(base), text: base.text };
+}
+
 const W_DOT_SVG = (inner) => `<svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor" style="display:inline-block;vertical-align:-1px;margin-right:2px;flex-shrink:0;">${inner}</svg>`;
 
 const W_DOT_ICONS = {
@@ -59,13 +82,13 @@ function getActiveWeatherIcon() {
   if (SET?.appearance?.themeStyle === 'matrix') {
     const code = weather.code || 0;
     const isDay = weather.isDay !== false;
+    const r = wxResolve(code, isDay, weather.precip, weather.rain);
+    if (r.kind === 'rain') return W_DOT_ICONS.rain;
+    if (r.kind === 'snow') return W_DOT_ICONS.snow;
+    if (r.kind === 'storm') return W_DOT_ICONS.storm;
+    if (r.kind === 'cloud') return W_DOT_ICONS.cloud;
     if (code === 0) return isDay ? W_DOT_ICONS.sun : W_DOT_ICONS.moon;
-    if (code === 1 || code === 2) return isDay ? W_DOT_ICONS.cloud_sun : W_DOT_ICONS.cloud;
-    if (code === 3 || code === 45 || code === 48) return W_DOT_ICONS.cloud;
-    if ((code >= 51 && code <= 67) || (code >= 80 && code <= 82)) return W_DOT_ICONS.rain;
-    if ((code >= 71 && code <= 77) || code === 85 || code === 86) return W_DOT_ICONS.snow;
-    if (code >= 95) return W_DOT_ICONS.storm;
-    return isDay ? W_DOT_ICONS.sun : W_DOT_ICONS.moon;
+    return isDay ? W_DOT_ICONS.cloud_sun : W_DOT_ICONS.cloud;
   }
   return weather.iconSvg || W_ICONS.sun;
 }
@@ -89,9 +112,40 @@ function wxFetch(url, ms = 7000) {
   return fetch(url, { signal: ctl.signal }).finally(() => clearTimeout(t));
 }
 
+// Country (ISO-2, upper case) of the user's IP location: used to prefer local namesakes when geocoding.
+async function homeCountryCode() {
+  if (weather.loc && weather.loc.cc) return weather.loc.cc;
+  try {
+    const sv = JSON.parse(localStorage.getItem('inex.loc') || 'null');
+    if (sv && sv.loc && sv.loc.cc) return sv.loc.cc;
+  } catch (_) {}
+  try {
+    const l = await detectIpLocation();
+    if (l && l.cc) return l.cc;
+  } catch (_) {}
+  return '';
+}
+
+// Pick the right Open-Meteo hit: an explicit "City, Region/Country" suffix wins, then the user's own country
+// (so "Sagardighi" in India does not resolve to the Bangladesh namesake), then the top-ranked result.
+function wxPickGeoHit(list, rest, cc) {
+  if (!list.length) return null;
+  const hay = (x) => [x.country, x.country_code, x.admin1, x.admin2].filter(Boolean).join(' ').toLowerCase();
+  if (rest) {
+    const hit = list.find((x) => hay(x).includes(rest));
+    if (hit) return hit;
+  }
+  if (cc) {
+    const local = list.find((x) => String(x.country_code || '').toUpperCase() === cc);
+    if (local) return local;
+  }
+  return list[0];
+}
+
 // City typed in Settings -> lat/lon through Open-Meteo's free geocoding (no key). Runs only when the city changes.
 async function geocodeCity(name) {
-  const q = name.toLowerCase().trim();
+  const cc = await homeCountryCode();
+  const q = name.toLowerCase().trim() + (cc ? '|' + cc : '');
   try {
     const sv = JSON.parse(localStorage.getItem('inex.geo') || 'null');
     if (sv && sv.q === q && sv.loc) return sv.loc;
@@ -102,17 +156,10 @@ async function geocodeCity(name) {
   const rest = parts.slice(1).join(' ').toLowerCase();
 
   try {
-    const res = await wxFetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(searchName)}&count=10&language=en&format=json`);
+    const res = await wxFetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(searchName)}&count=20&language=en&format=json`);
     if (res.ok) {
       const d = await res.json();
-      const list = (d && d.results) || [];
-      if (list.length) {
-        r = list[0];
-        if (rest) {
-          const hit = list.find((x) => [x.country, x.country_code, x.admin1, x.admin2].filter(Boolean).join(' ').toLowerCase().includes(rest));
-          if (hit) r = hit;
-        }
-      }
+      r = wxPickGeoHit((d && d.results) || [], rest, cc);
     }
   } catch (_) {}
 
@@ -122,20 +169,18 @@ async function geocodeCity(name) {
     for (const w of words) {
       if (/^(depz|epz|zone|road|sector|block|area|thana|upazila)$/i.test(w)) continue;
       try {
-        const subRes = await wxFetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(w)}&count=5&language=en&format=json`);
+        const subRes = await wxFetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(w)}&count=10&language=en&format=json`);
         if (subRes.ok) {
           const subD = await subRes.json();
-          if (subD && subD.results && subD.results[0]) {
-            r = subD.results[0];
-            break;
-          }
+          const hit = wxPickGeoHit((subD && subD.results) || [], '', cc);
+          if (hit) { r = hit; break; }
         }
       } catch (_) {}
     }
   }
 
   if (!r || !isFinite(+r.latitude) || !isFinite(+r.longitude)) return null;
-  const loc = { lat: +r.latitude, lon: +r.longitude, city: r.name || name };
+  const loc = { lat: +r.latitude, lon: +r.longitude, city: r.name || name, cc: String(r.country_code || '').toUpperCase() };
   try { localStorage.setItem('inex.geo', JSON.stringify({ q, loc })); } catch (_) {}
   return loc;
 }
@@ -151,14 +196,19 @@ async function detectLocation() {
     } catch (_) {}
     // city not found / offline: fall back to the automatic IP location below
   }
+  return detectIpLocation();
+}
+
+// IP-based location (cached 6 h in inex.loc, with country code); shared by weather and the geocoder.
+async function detectIpLocation() {
   const LOC_TTL = 6 * 60 * 60 * 1000, FAIL_TTL = 5 * 60 * 1000;
   if (!weather.loc) {
     try {
       const sv = JSON.parse(localStorage.getItem('inex.loc') || 'null');
-      if (sv && sv.loc && Date.now() - sv.at < LOC_TTL) { weather.loc = sv.loc; weather.locAt = sv.at; }
+      if (sv && sv.loc && sv.loc.cc && Date.now() - sv.at < LOC_TTL) { weather.loc = sv.loc; weather.locAt = sv.at; }
     } catch (_) {}
   }
-  if (weather.loc && Date.now() - weather.locAt < LOC_TTL) return weather.loc;
+  if (weather.loc && weather.loc.cc && Date.now() - weather.locAt < LOC_TTL) return weather.loc;
   if (weather.locFailAt && Date.now() - weather.locFailAt < FAIL_TTL) return weather.loc;
 
   let loc = null;
@@ -168,7 +218,7 @@ async function detectLocation() {
       if (res.ok) {
         const d = await res.json();
         const lat = d.latitude || d.lat, lon = d.longitude || d.lon;
-        if (lat && lon) return { lat: +lat, lon: +lon, city: d.city || '' };
+        if (lat && lon) return { lat: +lat, lon: +lon, city: d.city || '', cc: String(d.country_code || d.country || '').toUpperCase().slice(0, 2) };
       }
       return null;
     },
@@ -176,15 +226,15 @@ async function detectLocation() {
       const res = await wxFetch('https://ipwho.is/');
       if (res.ok) {
         const d = await res.json();
-        if (d && d.success !== false) return { lat: +d.latitude, lon: +d.longitude, city: d.city || '' };
+        if (d && d.success !== false) return { lat: +d.latitude, lon: +d.longitude, city: d.city || '', cc: String(d.country_code || '').toUpperCase() };
       }
       return null;
     },
     async () => {
-      const res = await wxFetch('http://ip-api.com/json/?fields=status,lat,lon,city');
+      const res = await wxFetch('http://ip-api.com/json/?fields=status,lat,lon,city,countryCode');
       if (res.ok) {
         const d = await res.json();
-        if (d && d.status === 'success') return { lat: +d.lat, lon: +d.lon, city: d.city || '' };
+        if (d && d.status === 'success') return { lat: +d.lat, lon: +d.lon, city: d.city || '', cc: String(d.countryCode || '').toUpperCase() };
       }
       return null;
     },
@@ -192,7 +242,7 @@ async function detectLocation() {
       const res = await wxFetch('https://freeipapi.com/api/json');
       if (res.ok) {
         const d = await res.json();
-        if (d && d.latitude && d.longitude) return { lat: +d.latitude, lon: +d.longitude, city: d.cityName || '' };
+        if (d && d.latitude && d.longitude) return { lat: +d.latitude, lon: +d.longitude, city: d.cityName || '', cc: String(d.countryCode || '').toUpperCase() };
       }
       return null;
     }
@@ -253,9 +303,10 @@ async function refreshWeather() {
     weather.at = Date.now();
 
     let tempStr = '', code = 0, isDay = true;
+    weather.precip = 0; weather.rain = 0;
     try {
       const unitParam = unit === 'F' ? '&temperature_unit=fahrenheit' : '';
-      const wRes = await wxFetch(`https://api.open-meteo.com/v1/forecast?latitude=${loc.lat}&longitude=${loc.lon}&current=temperature_2m,weather_code,is_day&timezone=auto${unitParam}`);
+      const wRes = await wxFetch(`https://api.open-meteo.com/v1/forecast?latitude=${loc.lat}&longitude=${loc.lon}&current=temperature_2m,weather_code,is_day,precipitation,rain,showers&timezone=auto${unitParam}`);
       if (wRes.ok) {
         const wData = await wRes.json();
         const tVal = wData?.current?.temperature_2m;
@@ -263,6 +314,7 @@ async function refreshWeather() {
           tempStr = `${Math.round(tVal)}°${unit}`;
           code = wData.current.weather_code ?? 0; weather.code = code;
           isDay = wData.current.is_day === 1; weather.isDay = isDay;
+          weather.precip = +wData.current.precipitation || 0; weather.rain = (+wData.current.rain || 0) + (+wData.current.showers || 0);
         }
       }
     } catch (_) {}
@@ -278,10 +330,10 @@ async function refreshWeather() {
       } catch (_) {}
     }
 
-    const wmo = WMO_CODES[code] || { day: W_ICONS.sun, night: W_ICONS.moon, text: 'Clear' };
+    const wx = wxResolve(code, isDay, weather.precip, weather.rain);
     weather.text = tempStr;
-    weather.iconSvg = isDay ? wmo.day : wmo.night;
-    weather.condition = wmo.text;
+    weather.iconSvg = wx.svg;
+    weather.condition = wx.text;
     weather.place = loc.city || '';
     if (!weather.text) weather.at = 0;
     try { localStorage.setItem('inex.weather.cached', JSON.stringify({ text: weather.text, iconSvg: weather.iconSvg, condition: weather.condition, place: weather.place, at: Date.now() })); } catch (_) {}

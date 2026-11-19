@@ -56,3 +56,64 @@
 .wxd-row span { flex: 1; font-weight: 500; color: var(--menu-fg-dim); }
 .wxd-row b { font-weight: 650; color: var(--menu-fg); }
 .wxd-row b em { font-style: normal; font-size: 9px; font-weight: 500; color: var(--menu-fg-dim); margin-left: 2px; }
+
+
+/* ---- Sun card weather background (light, pure CSS: transform + opacity only, no blur/filter, <= 12 tiny elements) ----
+   Layer sits BEHIND the card content; the card keeps its true-black base and hairline border. The card's own
+   "animation: none" does not reach these children. Closed deck = display:none = nothing runs. */
+#mx-weather-body > .mx-widget-card:nth-child(2) > :not(.wxd-bg) { position: relative; z-index: 1; }
+.wxd-bg { position: absolute; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; border-radius: inherit;
+  background: linear-gradient(180deg, var(--a, #000), var(--b, #000)); }
+.wxd-bg > i { position: absolute; display: block; }
+/* sky tints (true weather colours, dark) */
+.wxd-bg.k-rain.is-day   { --a: #1c2736; --b: #0b1017; }
+.wxd-bg.k-rain.is-night { --a: #121a28; --b: #06080c; }
+.wxd-bg.k-cloud.is-day   { --a: #232c3a; --b: #0e1218; }
+.wxd-bg.k-cloud.is-night { --a: #131824; --b: #06080c; }
+.wxd-bg.k-clear { --a: #11213c; --b: #070b12; }
+.wxd-bg.k-stars { --a: #0b1530; --b: #05070d; }
+.wxd-bg.k-fog   { --a: #2b2f36; --b: #121418; }
+.wxd-bg.k-snow.is-day   { --a: #1e2735; --b: #0b0e14; }
+.wxd-bg.k-snow.is-night { --a: #131a26; --b: #06080c; }
+/* rain */
+.wxd-bg.k-rain > i { top: 0; width: 1px; height: 9px; opacity: 0; border-radius: 1px;
+  background: linear-gradient(180deg, rgba(150,185,235,0), rgba(150,185,235,.7));
+  animation: wxdDrop var(--t, 1s) linear var(--d, 0s) infinite; }
+@keyframes wxdDrop {
+  0%   { transform: translate(0, -12px) rotate(10deg); opacity: 0; }
+  12%  { opacity: .8; }
+  100% { transform: translate(-26px, 180px) rotate(10deg); opacity: .35; }
+}
+/* snow */
+.wxd-bg.k-snow > i { top: 0; width: var(--s, 2px); height: var(--s, 2px); border-radius: 50%; background: rgba(255,255,255,.8); opacity: 0;
+  animation: wxdFlake var(--t, 10s) linear var(--d, 0s) infinite; }
+@keyframes wxdFlake {
+  0%   { transform: translate(0, -6px); opacity: 0; }
+  10%  { opacity: .85; }
+  50%  { transform: translate(7px, 88px); }
+  100% { transform: translate(-3px, 182px); opacity: .4; }
+}
+/* clouds: 3 soft puffs drifting a few px, very slowly */
+.wxd-bg.k-cloud > i { width: 74px; height: 20px; border-radius: 20px; background: rgba(150,165,190,.2);
+  animation: wxdCloud var(--t, 40s) ease-in-out var(--d, 0s) infinite alternate; }
+.wxd-bg.k-cloud > i::before, .wxd-bg.k-cloud > i::after { content: ""; position: absolute; border-radius: 50%; background: inherit; }
+.wxd-bg.k-cloud > i::before { width: 30px; height: 30px; left: 12px; top: -13px; }
+.wxd-bg.k-cloud > i::after  { width: 22px; height: 22px; left: 38px; top: -8px; }
+.wxd-bg.k-cloud.is-night > i { background: rgba(110,125,155,.12); }
+@keyframes wxdCloud { from { transform: translateX(-16px); } to { transform: translateX(22px); } }
+/* clear day: soft sun glow in the top-right corner */
+.wxd-bg.k-clear > i.glow { right: -46px; top: -56px; width: 150px; height: 150px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(255,190,60,.36) 0%, rgba(255,190,60,.13) 45%, rgba(255,190,60,0) 70%);
+  animation: wxdGlow 7s ease-in-out infinite alternate; }
+@keyframes wxdGlow { from { opacity: .7; } to { opacity: 1; } }
+/* clear night: a few stars, gentle twinkle */
+.wxd-bg.k-stars > i { width: 2px; height: 2px; border-radius: 50%; background: #dfe7ff; opacity: .6;
+  animation: wxdTwinkle var(--t, 4s) ease-in-out var(--d, 0s) infinite alternate; }
+@keyframes wxdTwinkle { from { opacity: .22; } to { opacity: .95; } }
+/* fog: soft hazy veil (two wide translucent bands) */
+.wxd-bg.k-fog > i { left: -20%; width: 140%; height: 34%; background: linear-gradient(90deg, rgba(190,198,210,0), rgba(190,198,210,.16), rgba(190,198,210,0));
+  animation: wxdFog 16s ease-in-out var(--d, 0s) infinite alternate; }
+@keyframes wxdFog { from { transform: translateX(-9%); } to { transform: translateX(9%); } }
+/* no animation: static tint only */
+@media (prefers-reduced-motion: reduce) { .wxd-bg > i, .wxd-bg > i::before, .wxd-bg > i::after { animation: none !important; } }
+.island.no-anim .wxd-bg > i { animation: none !important; }

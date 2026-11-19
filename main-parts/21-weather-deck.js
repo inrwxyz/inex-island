@@ -50,6 +50,7 @@ function wxdBuild() {
       '<div class="wxd-scale"><u id="wxd-aqi-mark" style="left:0%;display:none"></u></div>' +
     '</div>' +
     '<div class="mx-widget-card">' +
+      '<div class="wxd-bg" id="wxd-bg" aria-hidden="true"></div>' +
       '<div class="wg-head"><b>Sun</b><span id="wxd-daylen"></span></div>' +
       '<svg id="wxd-arc" viewBox="0 0 200 100" aria-hidden="true">' +
         '<line class="wxd-horizon" x1="8" y1="84" x2="192" y2="84"/>' +
@@ -107,7 +108,7 @@ async function wxdFetch(force) {
     const f = unit === 'F';
     const uf = f ? '&temperature_unit=fahrenheit&wind_speed_unit=mph' : '&wind_speed_unit=kmh';
     const u1 = 'https://api.open-meteo.com/v1/forecast?latitude=' + loc.lat + '&longitude=' + loc.lon +
-      '&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,is_day,surface_pressure,wind_speed_10m,wind_direction_10m,visibility,uv_index' +
+      '&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,is_day,precipitation,rain,showers,surface_pressure,wind_speed_10m,wind_direction_10m,visibility,uv_index' +
       '&daily=sunrise,sunset,temperature_2m_max,temperature_2m_min&timezone=auto&past_days=1&forecast_days=2' + uf;
     const u2 = 'https://air-quality-api.open-meteo.com/v1/air-quality?latitude=' + loc.lat + '&longitude=' + loc.lon + '&current=us_aqi&timezone=auto';
     const [r1, r2] = await Promise.allSettled([wxFetch(u1), wxFetch(u2)]);
@@ -123,7 +124,7 @@ async function wxdFetch(force) {
     wxd.data = {
       unit, place: loc.city || (typeof weather !== 'undefined' ? weather.place : '') || '',
       temp: num(c.temperature_2m), feels: num(c.apparent_temperature), hum: num(c.relative_humidity_2m),
-      code: c.weather_code || 0, isDay: c.is_day === 1, pres: num(c.surface_pressure),
+      code: c.weather_code || 0, isDay: c.is_day === 1, precip: num(c.precipitation) || 0, rain: (num(c.rain) || 0) + (num(c.showers) || 0), pres: num(c.surface_pressure),
       wind: num(c.wind_speed_10m), wdir: num(c.wind_direction_10m), vis: num(c.visibility), uv: num(c.uv_index),
       hi: d.temperature_2m_max ? num(d.temperature_2m_max[ti]) : null, lo: d.temperature_2m_min ? num(d.temperature_2m_min[ti]) : null,
       ti, rises: msOf(riseA), sets: msOf(setA), riseT: riseA.map(wxdFmt12), setT: setA.map(wxdFmt12),
@@ -135,6 +136,44 @@ async function wxdFetch(force) {
   } finally {
     wxd.busy = false;
   }
+}
+
+// ---- Sun-card weather background: ONE static-DOM layer, pure CSS animation (transform/opacity only) ----
+// Built lazily; its children are replaced ONLY when the condition kind changes (not every render, not every tick).
+// Closed deck = display:none = CSS animations do not run = zero cost. Max 12 small elements.
+const WXD_BG_X = [8, 19, 31, 42, 53, 64, 75, 86, 14, 47, 70, 92];     // fixed spread (no randomness)
+function wxdBgSpec(v) {
+  const code = +v.code || 0, day = v.isDay !== false, mm = Math.max(+v.precip || 0, +v.rain || 0);
+  const r = (typeof wxResolve === 'function') ? wxResolve(code, day, v.precip, v.rain) : null;
+  if (r && (r.kind === 'rain' || r.kind === 'storm')) {
+    const heavy = [65, 67, 82, 95, 96, 99].indexOf(code) >= 0 || mm >= 2.5;
+    const light = !heavy && ([51, 53, 55, 56, 57, 61].indexOf(code) >= 0 || (!WX_RAIN_CODES(code) && mm < 2.5));
+    return { kind: 'rain', n: heavy ? 12 : light ? 5 : 8 };
+  }
+  if (code >= 71 && code <= 77 || code === 85 || code === 86) return { kind: 'snow', n: 8 };
+  if (code === 45 || code === 48) return { kind: 'fog', n: 2 };
+  if (code === 2 || code === 3) return { kind: 'cloud', n: code === 3 ? 3 : 2 };
+  return { kind: day ? 'clear' : 'stars', n: day ? 1 : 7 };
+}
+function wxdApplyBg() {
+  const bg = wxdEl('wxd-bg'), v = wxd.data;
+  if (!bg || !v) return;
+  const sp = wxdBgSpec(v), day = v.isDay !== false;
+  const key = sp.kind + (day ? 'd' : 'n') + sp.n;
+  if (wxd.bgKey === key) return;                                    // same look: touch nothing
+  wxd.bgKey = key;
+  bg.className = 'wxd-bg k-' + sp.kind + (day ? ' is-day' : ' is-night');
+  let h = '';
+  for (let i = 0; i < sp.n; i++) {
+    const x = WXD_BG_X[i % WXD_BG_X.length], d = ((i * 37) % 11) / 10;   // 0..1 stagger
+    if (sp.kind === 'rain') h += '<i style="left:' + x + '%;--d:-' + (d * 1.1).toFixed(2) + 's;--t:' + (0.85 + (i % 3) * 0.12).toFixed(2) + 's"></i>';
+    else if (sp.kind === 'snow') h += '<i style="left:' + x + '%;--d:-' + (d * 9).toFixed(1) + 's;--t:' + (9 + (i % 4)) + 's;--s:' + (2 + (i % 2)) + 'px"></i>';
+    else if (sp.kind === 'stars') h += '<i style="left:' + [12, 27, 44, 58, 71, 85, 36][i] + '%;top:' + [14, 52, 24, 62, 18, 46, 78][i] + '%;--d:-' + (d * 4).toFixed(1) + 's;--t:' + (3 + (i % 3)) + 's"></i>';
+    else if (sp.kind === 'cloud') h += '<i style="left:' + [-6, 38, 14][i] + '%;top:' + [10, 34, 60][i] + '%;--d:-' + (i * 11) + 's;--t:' + (34 + i * 9) + 's"></i>';
+    else if (sp.kind === 'fog') h += '<i style="top:' + (i ? 52 : 18) + '%;--d:-' + (i * 7) + 's"></i>';
+    else h += '<i class="glow"></i>';
+  }
+  bg.innerHTML = h;
 }
 
 function wxdSet(id, txt) { const e = wxdEl(id); if (e) e.textContent = txt; }
@@ -175,11 +214,12 @@ function wxdRender() {
   const v = wxd.data;
   if (!v) return;
   const deg = (n) => (n === null || n === undefined ? '--' : Math.round(n) + '\u00b0');
-  const wmo = (typeof WMO_CODES !== 'undefined' && WMO_CODES[v.code]) || null;
-  const ico = wxdEl('wxd-ico'); if (ico && wmo) ico.innerHTML = v.isDay ? wmo.day : wmo.night;
+  const wmo = (typeof wxResolve === 'function') ? wxResolve(v.code, v.isDay, v.precip, v.rain) : null;
+  const ico = wxdEl('wxd-ico'); if (ico && wmo) ico.innerHTML = wmo.svg;
   wxdSet('wxd-place', v.place || '--');
   wxdSet('wxd-temp', deg(v.temp) + (v.temp === null ? '' : v.unit));
   wxdSet('wxd-cond', wmo ? wmo.text : '--');
+  wxdApplyBg();
   wxdSet('wxd-sub', 'Feels ' + deg(v.feels) + ' \u00b7 H' + deg(v.hi) + ' L' + deg(v.lo));
   // AQI
   const aqiEl = wxdEl('wxd-aqi'), aqiT = wxdEl('wxd-aqit'), mark = wxdEl('wxd-aqi-mark');

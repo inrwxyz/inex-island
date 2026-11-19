@@ -375,19 +375,25 @@
 .pr-badge { margin-right: 7px; padding: 1px 6px; border-radius: 6px; font-size: 8px; font-weight: 700; letter-spacing: .07em; color: var(--pr-calm); background: rgba(156,202,174,.14); }
 
 /* Adhan island alert: re-uses the timer-end card, calmer and slightly wider */
-.island.state-compact.alarm-active.alarm-prayer { width: 262px !important; box-shadow: 0 0 0 1px rgba(255,255,255,.12) !important; }
+.island.state-compact.alarm-active.alarm-prayer { width: 262px !important; box-shadow: 0 0 0 1px rgba(var(--notch-fg-rgb, 245, 245, 247), .12) !important; }
 .c-alarm-hud .pr-icon, .c-alarm-hud .pr-bars { display: none; }
-.c-alarm-hud.pr-alert .alarm-icon-wrap { background: rgba(255,255,255,.08); color: #e6dfc4; }
+.c-alarm-hud.pr-alert .alarm-icon-wrap { background: rgba(var(--notch-fg-rgb, 245, 245, 247), .08); color: var(--notch-fg, #f5f5f7); }
 .c-alarm-hud.pr-alert .alarm-icon-wrap > svg:not(.pr-icon) { display: none; }
 .c-alarm-hud.pr-alert .alarm-icon-wrap > .pr-icon { display: block; filter: none; animation: none; }
-.c-alarm-hud.pr-alert .alarm-pulse { border-color: rgba(255,255,255,.32); animation-duration: 3.4s; }
+.c-alarm-hud.pr-alert .alarm-pulse { border-color: rgba(var(--notch-fg-rgb, 245, 245, 247), .32); animation-duration: 3.4s; }
 .c-alarm-hud.pr-alert .alarm-pulse.p2 { animation-delay: 1.9s; }
 .c-alarm-hud.pr-alert .pr-bars { display: flex; align-items: center; gap: 2px; height: 14px; flex: none; }
-.pr-bars i { display: block; width: 2px; height: 14px; border-radius: 1px; background: rgba(255,255,255,.6); transform-origin: 50% 50%; animation: prBar 1.5s ease-in-out infinite; }
+.pr-bars i { display: block; width: 2px; height: 14px; border-radius: 1px; background: rgba(var(--notch-fg-rgb, 245, 245, 247), .6); background: var(--notch-fg-dim, rgba(var(--notch-fg-rgb, 245, 245, 247), .6)); transform-origin: 50% 50%; animation: prBar 1.5s ease-in-out infinite; }
 .pr-bars i:nth-child(2) { animation-delay: .25s; }
 .pr-bars i:nth-child(3) { animation-delay: .5s; }
 .pr-bars i:nth-child(4) { animation-delay: .75s; }
 @keyframes prBar { 0%, 100% { transform: scaleY(.3); } 50% { transform: scaleY(1); } }
 .c-alarm-hud.pr-alert.pr-quiet .pr-bars i { animation-play-state: paused; opacity: .25; }
-.c-alarm-hud.pr-alert .alarm-stop-btn { padding: 0 9px; font-size: 10px; background: rgba(255,255,255,.10); color: #f5f5f7; }
-.c-alarm-hud.pr-alert .alarm-stop-btn:hover { background: rgba(255,255,255,.18); }
+.c-alarm-hud.pr-alert .alarm-stop-btn { padding: 0 9px; font-size: 10px; background: rgba(var(--notch-fg-rgb, 245, 245, 247), .10); color: var(--notch-fg, #f5f5f7); }
+.c-alarm-hud.pr-alert .alarm-stop-btn:hover { background: rgba(var(--notch-fg-rgb, 245, 245, 247), .18); }
+
+/* Adhan alert on a white / light island: guarantee dark, readable controls even if a variable is overridden */
+:root[data-notch-tone="light"] .island:not([data-mode="ghost"]) .c-alarm-hud.pr-alert { --notch-fg: #111; --notch-fg-dim: rgba(0, 0, 0, 0.75); --notch-fg-rgb: 17, 17, 17; }
+:root[data-notch-tone="light"] .island:not([data-mode="ghost"]) .c-alarm-hud.pr-alert .alarm-stop-btn { background: rgba(0, 0, 0, 0.08); color: #111; }
+:root[data-notch-tone="light"] .island:not([data-mode="ghost"]) .c-alarm-hud.pr-alert .alarm-stop-btn:hover { background: rgba(0, 0, 0, 0.16); }
+:root[data-notch-tone="light"] .island:not([data-mode="ghost"]) .c-alarm-hud.pr-alert .pr-bars i { background: rgba(0, 0, 0, 0.75); }
