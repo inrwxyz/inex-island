@@ -292,7 +292,7 @@ fn get_clipboard_text() -> String {
 }
 
 #[tauri::command]
-fn set_clipboard_text(text: String) -> bool {
+fn set_clipboard_text(window: tauri::WebviewWindow, text: String) -> bool {
     #[cfg(windows)]
     unsafe {
         use windows::Win32::System::DataExchange::{CloseClipboard, EmptyClipboard, OpenClipboard, SetClipboardData};
@@ -300,6 +300,11 @@ fn set_clipboard_text(text: String) -> bool {
         use windows::Win32::Foundation::{GlobalFree, HANDLE, HWND};
         const CF_UNICODETEXT: u32 = 13;
 
+        // Use our own window as the clipboard owner (a NULL owner can make some apps' right-click Paste ignore the text).
+        let owner = match window.hwnd() {
+            Ok(h) => HWND(h.0 as *mut core::ffi::c_void),
+            Err(_) => HWND::default(),
+        };
         let wide: Vec<u16> = text.encode_utf16().chain(std::iter::once(0)).collect();
         let bytes_len = wide.len() * 2;
         let hg = match GlobalAlloc(GMEM_MOVEABLE, bytes_len) {
@@ -315,7 +320,7 @@ fn set_clipboard_text(text: String) -> bool {
         let _ = GlobalUnlock(hg);
 
         for _ in 0..5 {
-            if OpenClipboard(HWND::default()).is_ok() {
+            if OpenClipboard(owner).is_ok() {
                 let _ = EmptyClipboard();
                 let res = SetClipboardData(CF_UNICODETEXT, HANDLE(hg.0));
                 let _ = CloseClipboard();
@@ -328,7 +333,7 @@ fn set_clipboard_text(text: String) -> bool {
     }
     #[cfg(not(windows))]
     {
-        let _ = text;
+        let _ = (window, text);
         false
     }
 }

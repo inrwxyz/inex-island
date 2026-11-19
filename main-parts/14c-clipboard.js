@@ -119,7 +119,13 @@ function isClipboardViewOpen() {
          (typeof currentMacSubTarget !== 'undefined' && currentMacSubTarget?.id === 'view-clipboard');
 }
 
+// When the user clicks an item in the list we put it on the system clipboard ourselves. That triggers a
+// "clipboard changed" event; this guard makes us ignore that echo so the item does NOT jump to the top.
+let clipSelfSkip = { kind: null, hash: null, until: 0 };
+
 function pushClipboardItem(item) {
+  if (clipSelfSkip.hash && Date.now() < clipSelfSkip.until &&
+      item.kind === clipSelfSkip.kind && item.hash === clipSelfSkip.hash) return false;
   const idx = clipboardItems.findIndex((it) => it.kind === item.kind && it.hash === item.hash);
   if (idx === 0) return false;
   if (idx > 0) clipboardItems.splice(idx, 1);
@@ -335,7 +341,8 @@ function renderClipboardList() {
 
       if (ok) {
         lastCopiedId = item.id;
-        pushClipboardItem(item);
+        // keep the item where it is (no move to top) and ignore the clipboard-changed echo of our own copy
+        clipSelfSkip = { kind: item.kind, hash: item.hash, until: Date.now() + 4000 };
         if (lastCopiedTimer) clearTimeout(lastCopiedTimer);
         lastCopiedTimer = setTimeout(() => {
           lastCopiedId = null;
@@ -423,7 +430,7 @@ document.getElementById('btn-clipboard-clear')?.addEventListener('click', () => 
   revokeClipPreviews();
   saveClipboardHistory();
   renderClipboardList();
-  showToast('unlock', 'Clipboard cleared', 1200);
+  showToast('done', 'Clipboard cleared', 1200);
 });
 
 window.addEventListener('focus', checkSystemClipboard);
