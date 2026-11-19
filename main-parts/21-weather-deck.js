@@ -150,30 +150,89 @@ async function wxdFetch(force) {
 }
 
 // ---- Sun-card weather background: ONE static-DOM layer, pure CSS animation (transform/opacity only) ----
-// Like a weather channel: rain = dark clouds drifting + drops, sun = glowing sun, clear night = moonlight + stars,
-// cloudy = slow clouds, snow, fog. Built lazily; its children are replaced ONLY when the look changes (not every
-// render, not every tick). Closed deck = display:none = CSS animations do not run = zero cost. Max ~16 tiny elements.
+// Like a real weather app: realistic textured clouds (procedural fractal noise painted ONCE into a tiny tileable
+// sprite, then only slid sideways by the GPU), falling rain, a bright sun, a moon with silver glow + stars.
+// Built lazily; children are replaced ONLY when the look changes. Closed deck = display:none = nothing runs.
 const WXD_BG_X = [8, 19, 31, 42, 53, 64, 75, 86, 14, 47, 70, 92];     // fixed spread (no randomness)
+
+// ---- cloud sprite: tileable-in-x fractal noise -> soft wispy cloud bank (alpha + 2-tone shading) ----
+const WXD_TONES = {                       // [shadow rgb, light rgb, max alpha]
+  night:     [[34, 47, 80],  [104, 124, 170], 0.85],
+  nightrain: [[24, 33, 58],  [78, 96, 136],   0.92],
+  day:       [[148, 170, 202], [255, 255, 255], 0.94],
+  dayrain:   [[78, 92, 114],  [168, 180, 198], 0.92],
+  snow:      [[138, 152, 178], [226, 233, 246], 0.88]
+};
+const wxdTexCache = {};
+function wxdMakeFbm(seed, oct, gx0, gy0) {                          // value-noise fbm, wraps horizontally (seamless loop)
+  let a = seed >>> 0;
+  const rnd = () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  const L = [];
+  for (let o = 0; o < oct; o++) { const gx = gx0 << o, gy = gy0 << o, arr = new Float32Array(gx * (gy + 1)); for (let i = 0; i < arr.length; i++) arr[i] = rnd(); L.push(arr); }
+  const sm = (t) => t * t * (3 - 2 * t);
+  return function (x, y) {                                          // x wraps in [0,1), y in [0,1]
+    let sum = 0, amp = 1, norm = 0;
+    for (let o = 0; o < oct; o++) {
+      const gx = gx0 << o, gy = gy0 << o, fx = x * gx, fy = y * gy;
+      const ix = Math.floor(fx), iy = Math.min(gy - 1, Math.floor(fy)), tx = sm(fx - ix), ty = sm(fy - iy);
+      const x0 = ((ix % gx) + gx) % gx, x1 = (x0 + 1) % gx, arr = L[o];
+      const v0 = arr[iy * gx + x0] * (1 - tx) + arr[iy * gx + x1] * tx;
+      const v1 = arr[(iy + 1) * gx + x0] * (1 - tx) + arr[(iy + 1) * gx + x1] * tx;
+      sum += (v0 * (1 - ty) + v1 * ty) * amp; norm += amp; amp *= 0.54;
+    }
+    return sum / norm;
+  };
+}
+function wxdCloudTex(tone, thr, seed) {
+  const key = tone + '|' + thr + '|' + seed;
+  if (wxdTexCache[key]) return wxdTexCache[key];
+  const T = WXD_TONES[tone] || WXD_TONES.night, W = 320, H = 120;
+  const c = document.createElement('canvas'); c.width = W; c.height = H;
+  const ctx = c.getContext('2d'); if (!ctx) return '';
+  const img = ctx.createImageData(W, H), d = img.data;
+  const main = wxdMakeFbm(seed, 5, 4, 3), warp = wxdMakeFbm(seed + 77, 3, 3, 2), lit = wxdMakeFbm(seed + 191, 4, 5, 3);
+  const ss = (e0, e1, v) => { const t = Math.max(0, Math.min(1, (v - e0) / (e1 - e0))); return t * t * (3 - 2 * t); };
+  for (let py = 0; py < H; py++) {
+    const y = py / (H - 1), env = 1 - ss(0.5, 1, y);                // bank fades out softly toward the bottom
+    for (let px = 0; px < W; px++) {
+      const x = px / W, w = warp(x, y) - 0.5;
+      const n = main((x + 0.10 * w + 1) % 1, Math.max(0, Math.min(1, y + 0.14 * w)));
+      const al = ss(thr, thr + 0.26, n) * env * T[2];
+      const sh = Math.max(0, Math.min(1, lit(x, y) * 1.25 - 0.1));  // 0 = shadowed belly, 1 = lit top
+      const i = (py * W + px) * 4;
+      d[i]     = T[0][0] + (T[1][0] - T[0][0]) * sh;
+      d[i + 1] = T[0][1] + (T[1][1] - T[0][1]) * sh;
+      d[i + 2] = T[0][2] + (T[1][2] - T[0][2]) * sh;
+      d[i + 3] = al * 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  let url = ''; try { url = c.toDataURL('image/webp', 0.82); } catch (_) {}
+  wxdTexCache[key] = url; return url;
+}
+
 function wxdBgSpec(v) {
   const code = +v.code || 0, day = v.isDay !== false, mm = Math.max(+v.precip || 0, +v.rain || 0);
   const r = (typeof wxResolve === 'function') ? wxResolve(code, day, v.precip, v.rain) : null;
   if (r && (r.kind === 'rain' || r.kind === 'storm')) {
     const heavy = [65, 67, 82, 95, 96, 99].indexOf(code) >= 0 || mm >= 2.5;
     const light = !heavy && ([51, 53, 55, 56, 57, 61].indexOf(code) >= 0 || (!WX_RAIN_CODES(code) && mm < 2.5));
-    return { kind: 'rain', n: heavy ? 12 : light ? 6 : 9, clouds: 3 };
+    return { kind: 'rain', n: heavy ? 12 : light ? 6 : 9, cl: { thr: heavy ? 0.28 : 0.32, tone: day ? 'dayrain' : 'nightrain', layers: 2 } };
   }
-  if (code >= 71 && code <= 77 || code === 85 || code === 86) return { kind: 'snow', n: 8, clouds: 2 };
-  if (code === 45 || code === 48) return { kind: 'fog', n: 2, clouds: 0 };
-  if (code === 3) return { kind: 'cloud', n: 0, clouds: 4 };
-  if (code === 2) return { kind: 'cloud', n: 0, clouds: 3, sun: day, moon: !day };       // partly cloudy: sun/moon peeking
-  if (day) return { kind: 'clear', n: 0, clouds: code === 1 ? 1 : 0, sun: true };         // sunny
-  return { kind: 'stars', n: 7, clouds: code === 1 ? 1 : 0, moon: true };                  // moonlit clear night
+  if (code >= 71 && code <= 77 || code === 85 || code === 86) return { kind: 'snow', n: 8, cl: { thr: 0.42, tone: 'snow', layers: 2 } };
+  if (code === 45 || code === 48) return { kind: 'fog', n: 2 };
+  if (code === 3) return { kind: 'cloud', n: 0, cl: { thr: 0.34, tone: day ? 'dayrain' : 'night', layers: 2 } };     // overcast
+  if (code === 2) return { kind: 'cloud', n: 0, cl: { thr: 0.5, tone: day ? 'day' : 'night', layers: 2 }, sun: day, moon: !day };   // partly cloudy
+  const few = code === 1 ? { thr: 0.6, tone: day ? 'day' : 'night', layers: 1 } : null;
+  if (day) return { kind: 'clear', n: 0, cl: few, sun: true };                                                      // sunny
+  return { kind: 'stars', n: 7, cl: few, moon: true };                                                              // clear night
 }
 function wxdApplyBg() {
   const bg = wxdEl('wxd-bg'), v = wxd.data;
   if (!bg || !v) return;
   const sp = wxdBgSpec(v), day = v.isDay !== false;
-  const key = [sp.kind, day ? 'd' : 'n', sp.n, sp.clouds, sp.sun ? 's' : '', sp.moon ? 'm' : ''].join('-');
+  const cl = sp.cl || null;
+  const key = [sp.kind, day ? 'd' : 'n', sp.n, cl ? cl.tone + cl.thr + cl.layers : '', sp.sun ? 's' : '', sp.moon ? 'm' : ''].join('-');
   const body = wxdEl('mx-weather-body');
   if (body) {
     body.className = 'wxd-theme k-' + sp.kind + (day ? ' is-day' : ' is-night');
@@ -182,19 +241,24 @@ function wxdApplyBg() {
   wxd.bgKey = key;
   bg.className = 'wxd-bg k-' + sp.kind + (day ? ' is-day' : ' is-night');
   let h = '';
-  if (sp.sun) h += '<i class="sunbody"></i><i class="glow"></i>';             // behind the clouds
+  if (sp.sun) h += '<i class="sunglow"></i><i class="rays"></i><i class="sunbody"></i>';       // behind the clouds
   if (sp.moon) h += '<i class="moonglow"></i><i class="moonbody"></i>';
   if (sp.kind === 'fog') { for (let i = 0; i < sp.n; i++) h += '<i style="top:' + (i ? 52 : 18) + '%;--d:-' + (i * 7) + 's"></i>'; }
-  for (let i = 0; i < sp.n; i++) {
-    if (sp.kind === 'fog') break;
+  else for (let i = 0; i < sp.n; i++) {
     const x = WXD_BG_X[i % WXD_BG_X.length], d = ((i * 37) % 11) / 10;   // 0..1 stagger
     if (sp.kind === 'rain') h += '<i class="drop" style="left:' + x + '%;--d:-' + (d * 1.1).toFixed(2) + 's;--t:' + (0.85 + (i % 3) * 0.12).toFixed(2) + 's"></i>';
     else if (sp.kind === 'snow') h += '<i class="flake" style="left:' + x + '%;--d:-' + (d * 9).toFixed(1) + 's;--t:' + (9 + (i % 4)) + 's;--s:' + (2 + (i % 2)) + 'px"></i>';
     else if (sp.kind === 'stars') h += '<i class="star" style="left:' + [12, 27, 44, 58, 71, 85, 36][i] + '%;top:' + [14, 52, 24, 62, 18, 46, 78][i] + '%;--d:-' + (d * 4).toFixed(1) + 's;--t:' + (3 + (i % 3)) + 's"></i>';
   }
-  for (let i = 0; i < sp.clouds; i++)                               // clouds drift OVER the drops, like a real sky
-    h += '<i class="cloud" style="left:' + [-8, 40, 14, 62][i] + '%;top:' + [-2, 6, 22, 14][i] + '%;--d:-' + (i * 11) + 's;--t:' + (34 + i * 9) + 's"></i>';
+  if (cl) for (let i = 0; i < cl.layers; i++) h += '<i class="cl cl' + i + '"></i>';   // cloud banks drift OVER the sun/moon and rain
   bg.innerHTML = h;
+  if (cl) {
+    const els = bg.querySelectorAll('i.cl');
+    for (let i = 0; i < els.length; i++) {
+      const tex = wxdCloudTex(cl.tone, +(cl.thr + i * 0.04).toFixed(2), 1000 + i * 313);
+      if (tex) els[i].style.backgroundImage = 'url(' + tex + ')';
+    }
+  }
 }
 
 function wxdSet(id, txt) { const e = wxdEl(id); if (e) e.textContent = txt; }

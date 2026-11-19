@@ -144,27 +144,24 @@
 }
 .wxd-bg > i { position: absolute; display: block; }
 /* sky tints (true weather colours, dark) */
-.wxd-bg.k-rain.is-day   { --a: #1c2736; --b: #0b1017; }
-.wxd-bg.k-rain.is-night { --a: #121a28; --b: #06080c; }
-.wxd-bg.k-cloud.is-day   { --a: #232c3a; --b: #0e1218; }
-.wxd-bg.k-cloud.is-night { --a: #131824; --b: #06080c; }
-.wxd-bg.k-clear { --a: #11213c; --b: #070b12; }
-.wxd-bg.k-stars { --a: #0b1530; --b: #05070d; }
+.wxd-bg.k-rain.is-day   { --a: #4a5a74; --b: #232d3f; }
+.wxd-bg.k-rain.is-night { --a: #1a2440; --b: #0a1020; }
+.wxd-bg.k-cloud.is-day   { --a: #7389a8; --b: #3f4e68; }
+.wxd-bg.k-cloud.is-night { --a: #19233f; --b: #0a0f1d; }
+.wxd-bg.k-clear { --a: #2f7fd8; --b: #78b7ef; }
+.wxd-bg.k-clear::before { display: none; }
+.wxd-bg.k-stars { --a: #0a1430; --b: #04060c; }
 .wxd-bg.k-fog   { --a: #2b2f36; --b: #121418; }
-.wxd-bg.k-snow.is-day   { --a: #1e2735; --b: #0b0e14; }
+.wxd-bg.k-snow.is-day   { --a: #5d6d86; --b: #2a3445; }
 .wxd-bg.k-snow.is-night { --a: #131a26; --b: #06080c; }
-/* clouds: soft puffs drifting slowly (shared by rain / snow / cloudy / partly cloudy) */
-.wxd-bg > i.cloud { width: 74px; height: 20px; border-radius: 20px; background: rgba(150,165,190,.2);
-  animation: wxdCloud var(--t, 40s) ease-in-out var(--d, 0s) infinite alternate; }
-.wxd-bg > i.cloud::before, .wxd-bg > i.cloud::after { content: ""; position: absolute; border-radius: 50%; background: inherit; }
-.wxd-bg > i.cloud::before { width: 30px; height: 30px; left: 12px; top: -13px; }
-.wxd-bg > i.cloud::after  { width: 22px; height: 22px; left: 38px; top: -8px; }
-.wxd-bg.is-night > i.cloud { background: rgba(110,125,155,.14); }
-.wxd-bg.k-rain > i.cloud { width: 92px; height: 24px; background: rgba(105,120,148,.34); }
-.wxd-bg.k-rain.is-night > i.cloud { background: rgba(80,95,125,.3); }
-.wxd-bg.k-rain > i.cloud::before { width: 36px; height: 36px; left: 14px; top: -16px; }
-.wxd-bg.k-rain > i.cloud::after  { width: 28px; height: 28px; left: 48px; top: -10px; }
-@keyframes wxdCloud { from { transform: translateX(-26px); } to { transform: translateX(46px); } }
+/* clouds: realistic textured banks (sprite painted once by JS), two layers sliding at different speeds = parallax.
+   Seamless loop: the element is 2 tiles wide and slides exactly one tile. transform only, GPU-composited. */
+.wxd-bg > i.cl { left: 0; top: -6px; width: calc(var(--w, 320px) * 2); height: 124px;
+  background-repeat: repeat-x; background-size: var(--w, 320px) 100%; background-position: 0 0;
+  will-change: transform; animation: wxdDrift var(--t, 80s) linear infinite; }
+.wxd-bg > i.cl0 { --w: 330px; --t: 85s; }
+.wxd-bg > i.cl1 { --w: 250px; --t: 140s; top: 18px; height: 100px; opacity: .85; animation-direction: normal; }
+@keyframes wxdDrift { from { transform: translate3d(0, 0, 0); } to { transform: translate3d(calc(var(--w, 320px) * -1), 0, 0); } }
 /* rain: drops fall from under the clouds */
 .wxd-bg > i.drop { top: 6px; width: 1px; height: 9px; opacity: 0; border-radius: 1px;
   background: linear-gradient(180deg, rgba(150,185,235,0), rgba(150,185,235,.75));
@@ -183,19 +180,25 @@
   50%  { transform: translate(7px, 88px); }
   100% { transform: translate(-3px, 182px); opacity: .4; }
 }
-/* sunny day: a warm sun in the top-right with a soft breathing glow */
-.wxd-bg > i.sunbody { right: 16px; top: 10px; width: 20px; height: 20px; border-radius: 50%; background: #FFC53D;
-  box-shadow: 0 0 14px 5px rgba(255,185,50,.55); }
-.wxd-bg > i.glow { right: -46px; top: -56px; width: 150px; height: 150px; border-radius: 50%;
-  background: radial-gradient(circle, rgba(255,190,60,.34) 0%, rgba(255,190,60,.12) 45%, rgba(255,190,60,0) 70%);
+/* sunny day: bright sun with a white-hot core, warm halo and slowly turning soft rays (weather-channel style) */
+.wxd-bg > i.sunbody { right: 20px; top: 12px; width: 24px; height: 24px; border-radius: 50%;
+  background: radial-gradient(circle, #fffbe6 0%, #ffe27a 45%, #ffbf2e 100%);
+  box-shadow: 0 0 10px 3px rgba(255,236,160,.9), 0 0 26px 10px rgba(255,200,70,.55); }
+.wxd-bg > i.sunglow { right: -52px; top: -64px; width: 170px; height: 170px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(255,236,170,.55) 0%, rgba(255,214,110,.22) 40%, rgba(255,200,80,0) 70%);
   animation: wxdGlow 7s ease-in-out infinite alternate; }
-@keyframes wxdGlow { from { opacity: .65; } to { opacity: 1; } }
-/* moonlit night: pale moon (crescent) with a cool silver glow + twinkling stars */
-.wxd-bg > i.moonglow { right: -40px; top: -50px; width: 140px; height: 140px; border-radius: 50%;
-  background: radial-gradient(circle, rgba(190,210,255,.3) 0%, rgba(160,185,240,.1) 45%, rgba(160,185,240,0) 70%);
+.wxd-bg > i.rays { right: -38px; top: -50px; width: 140px; height: 140px; border-radius: 50%;
+  background: repeating-conic-gradient(rgba(255,244,190,.30) 0deg 5deg, rgba(255,244,190,0) 5deg 20deg);
+  -webkit-mask-image: radial-gradient(circle, #000 12%, transparent 68%); mask-image: radial-gradient(circle, #000 12%, transparent 68%);
+  animation: wxdSpin 160s linear infinite; }
+@keyframes wxdSpin { to { transform: rotate(360deg); } }
+@keyframes wxdGlow { from { opacity: .7; } to { opacity: 1; } }
+/* moonlit night: bright moon with a cool silver halo (+ twinkling stars on a clear night) */
+.wxd-bg > i.moonglow { right: -44px; top: -56px; width: 160px; height: 160px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(205,222,255,.38) 0%, rgba(165,190,245,.13) 42%, rgba(165,190,245,0) 70%);
   animation: wxdGlow 8s ease-in-out infinite alternate; }
-.wxd-bg > i.moonbody { right: 18px; top: 10px; width: 17px; height: 17px; border-radius: 50%; background: transparent;
-  box-shadow: inset -5px -1px 0 0 #E6EAF5, 0 0 10px 1px rgba(200,215,255,.35); transform: rotate(-20deg); }
+.wxd-bg > i.moonbody { right: 22px; top: 12px; width: 20px; height: 20px; border-radius: 50%; background: transparent;
+  box-shadow: inset -6px -1px 0 0 #F2F3EA, 0 0 12px 2px rgba(215,226,255,.55); transform: rotate(-20deg); }
 .wxd-bg > i.star { width: 2px; height: 2px; border-radius: 50%; background: #dfe7ff; opacity: .6;
   animation: wxdTwinkle var(--t, 4s) ease-in-out var(--d, 0s) infinite alternate; }
 @keyframes wxdTwinkle { from { opacity: .22; } to { opacity: .95; } }
@@ -206,3 +209,7 @@
 /* no animation: static tint only */
 @media (prefers-reduced-motion: reduce) { .wxd-bg > i, .wxd-bg > i::before, .wxd-bg > i::after { animation: none !important; } }
 .island.no-anim .wxd-bg > i { animation: none !important; }
+/* sunny day = bright blue sky: keep the Sun card text readable */
+#mx-weather-body.k-clear.is-day > .mx-widget-card:nth-child(2) .wg-head b,
+#mx-weather-body.k-clear.is-day > .mx-widget-card:nth-child(2) .wg-head span { color: #f2f8ff; text-shadow: 0 1px 3px rgba(10,40,90,.55); }
+#mx-weather-body.k-clear.is-day .wxd-sun-times b { text-shadow: 0 1px 3px rgba(10,40,90,.55); }
