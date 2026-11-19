@@ -8,7 +8,7 @@ Built with Tauri 2 and Rust.
 ![Platform](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D6?style=flat-square&logo=windows)
 ![Tauri](https://img.shields.io/badge/Tauri-2-FFC131?style=flat-square&logo=tauri)
 ![Rust](https://img.shields.io/badge/Rust-2021-DEA584?style=flat-square&logo=rust)
-![Version](https://img.shields.io/badge/version-0.4.5-brightgreen?style=flat-square)
+![Version](https://img.shields.io/badge/version-0.4.7-brightgreen?style=flat-square)
 ![License](https://img.shields.io/badge/license-GPLv3-blue?style=flat-square)
 
 <br/>
@@ -26,6 +26,8 @@ Built with Tauri 2 and Rust.
 ## Features
 
 - **Mac Menu option**: new features with seamless control center subviews and sleek navigation.
+- **Weather Deck**: Live atmospheric weather panel with procedural cloud banks, 2-layer parallax depth, real-time precipitation detection, linear horizontal solar timeline (sunrise / sunset), and complete weather telemetry (AQI, UV, humidity, wind, pressure, visibility).
+- **Widgets & Prayer Deck**: Customizable live widget slots (weather, system monitors, quick tools) and optional offline solar & prayer time companion with configurable adhan alerts.
 - **Island or notch**: sits flush with the top bezel, or floats as a pill. Hides itself in fullscreen apps and games.
 - **Notch Companion & Wellness**: optional subtle companion pet and helpful reminders (water, screen break, stretch).
 - **Inex Drop**: send and receive files with Android and Windows Quick Share (Nearby protocol written in Rust, no phone app needed), or use P2P Link between PCs.
