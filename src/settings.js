@@ -705,16 +705,14 @@ function control(row) {
     const chev = '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>';
     const trigger = el('button', 'c-sel-trigger', `<span></span>${chev}`);
     trigger.type = 'button';
-    trigger.style.minWidth = '130px';
     const label = trigger.querySelector('span');
 
     const customBox = el('div', 'c-sel-trigger');
-    customBox.style.minWidth = '130px';
     customBox.style.padding = '0 4px 0 10px';
     customBox.style.cursor = 'text';
     const inp = el('input', 'txtin');
     inp.type = 'text'; inp.maxLength = 120; inp.placeholder = 'Symbol or link, then Enter';
-    inp.style.cssText = 'flex:1;min-width:0;width:130px;height:100%;background:transparent;border:0;outline:0;box-shadow:none;padding:0;font-weight:700;color:inherit;text-transform:uppercase;';
+    inp.style.cssText = 'flex:1;min-width:0;width:100%;height:100%;background:transparent;border:0;outline:0;box-shadow:none;padding:0;font-weight:700;color:inherit;text-transform:uppercase;';
     const arrow = el('button', '', chev);
     arrow.type = 'button'; arrow.title = 'Presets';
     arrow.style.cssText = 'background:transparent;border:0;color:inherit;display:grid;place-items:center;padding:4px;cursor:pointer;';
@@ -832,12 +830,11 @@ function control(row) {
         resetMasjidToCalculated();
       }
     });
-    wrap.append(inp);
     if (row.refreshBtn) {
+      const group = el('div', 'txtin-group');
       const refBtn = el('button', 'btn btn-outline', '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13" style="display:inline-block;vertical-align:-1px;"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>');
       refBtn.type = 'button';
       refBtn.title = 'Re-detect location via live IP';
-      refBtn.style.marginLeft = '6px';
       refBtn.addEventListener('click', async (e) => {
         e.stopPropagation();
         refBtn.disabled = true;
@@ -884,7 +881,10 @@ function control(row) {
           renderPage();
         }
       });
-      wrap.append(refBtn);
+      group.append(inp, refBtn);
+      wrap.append(group);
+    } else {
+      wrap.append(inp);
     }
   } else if (row.type === 'color') {
     const box = el('div', 'color');
