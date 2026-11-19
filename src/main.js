@@ -10231,19 +10231,34 @@ function wxdBuild() {
     '<div class="mx-widget-card">' +
       '<div class="wxd-bg" id="wxd-bg" aria-hidden="true"></div>' +
       '<div class="wg-head"><b>Sun</b><span id="wxd-daylen"></span></div>' +
-      '<svg id="wxd-arc" viewBox="0 0 200 100" aria-hidden="true">' +
-        '<line class="wxd-horizon" x1="8" y1="84" x2="192" y2="84"/>' +
-        '<path class="wxd-base" d="M22 84A78 78 0 0 1 178 84" pathLength="100"/>' +
-        '<path id="wxd-prog" class="wxd-prog" d="M22 84A78 78 0 0 1 178 84" pathLength="100" stroke-dasharray="0 100"/>' +
-        '<g id="wxd-body" transform="translate(22 84)">' +
-          '<circle id="wxd-halo" class="wxd-halo" r="13"/>' +
-          '<g id="wxd-sun" transform="scale(1.1) translate(-12 -12)">' + WXD_SUN_SVG + '</g>' +
-          '<g id="wxd-moon" style="display:none" transform="scale(1.1) translate(-12 -12)">' + WXD_MOON_SVG + '</g>' +
-        '</g>' +
-      '</svg>' +
-      '<div class="wxd-times">' +
-        '<div><small id="wxd-l-lab"></small><b id="wxd-l-time">--</b></div>' +
-        '<div><small id="wxd-r-lab"></small><b id="wxd-r-time">--</b></div>' +
+      '<div class="wxd-sun-box">' +
+        '<div class="wxd-sun-labels">' +
+          '<small id="wxd-l-lab"></small>' +
+          '<small id="wxd-r-lab"></small>' +
+        '</div>' +
+        '<svg id="wxd-bar" viewBox="0 0 200 32" aria-hidden="true">' +
+          '<defs>' +
+            '<linearGradient id="wxd-p-day" x1="0" y1="0" x2="1" y2="0">' +
+              '<stop offset="0%" stop-color="#f5a623"/>' +
+              '<stop offset="100%" stop-color="#ffcc4d"/>' +
+            '</linearGradient>' +
+            '<linearGradient id="wxd-p-night" x1="0" y1="0" x2="1" y2="0">' +
+              '<stop offset="0%" stop-color="#4a7bdc"/>' +
+              '<stop offset="100%" stop-color="#8baaff"/>' +
+            '</linearGradient>' +
+          '</defs>' +
+          '<line class="wxd-bar-base" x1="12" y1="16" x2="188" y2="16"/>' +
+          '<line id="wxd-prog" class="wxd-bar-prog" x1="12" y1="16" x2="12" y2="16"/>' +
+          '<g id="wxd-body" transform="translate(12 16)">' +
+            '<circle id="wxd-halo" class="wxd-halo" r="13"/>' +
+            '<g id="wxd-sun" transform="scale(1.05) translate(-12 -12)">' + WXD_SUN_SVG + '</g>' +
+            '<g id="wxd-moon" style="display:none" transform="scale(1.05) translate(-12 -12)">' + WXD_MOON_SVG + '</g>' +
+          '</g>' +
+        '</svg>' +
+        '<div class="wxd-sun-times">' +
+          '<b id="wxd-l-time">--</b>' +
+          '<b id="wxd-r-time">--</b>' +
+        '</div>' +
       '</div>' +
     '</div>' +
     '<div class="mx-widget-card">' +
@@ -10339,6 +10354,10 @@ function wxdApplyBg() {
   if (!bg || !v) return;
   const sp = wxdBgSpec(v), day = v.isDay !== false;
   const key = sp.kind + (day ? 'd' : 'n') + sp.n;
+  const body = wxdEl('mx-weather-body');
+  if (body) {
+    body.className = 'wxd-theme k-' + sp.kind + (day ? ' is-day' : ' is-night');
+  }
   if (wxd.bgKey === key) return;                                    // same look: touch nothing
   wxd.bgKey = key;
   bg.className = 'wxd-bg k-' + sp.kind + (day ? ' is-day' : ' is-night');
@@ -10372,18 +10391,26 @@ function wxdRenderSun() {
   }
   if (!(b > a)) return;
   const t = Math.max(0, Math.min(1, (now - a) / (b - a)));
-  const x = 100 - 78 * Math.cos(Math.PI * t), y = 84 - 78 * Math.sin(Math.PI * t);
+  const x = 12 + 176 * t;
   const prog = wxdEl('wxd-prog');
-  if (prog) { prog.setAttribute('stroke-dasharray', (t * 100) + ' 100'); prog.setAttribute('stroke', mode === 'day' ? '#f5b73b' : '#8fa2cc'); }
-  const body = wxdEl('wxd-body'); if (body) body.setAttribute('transform', 'translate(' + x.toFixed(1) + ' ' + y.toFixed(1) + ')');
+  if (prog) {
+    prog.setAttribute('x2', x.toFixed(1));
+    prog.setAttribute('stroke', mode === 'day' ? 'url(#wxd-p-day)' : 'url(#wxd-p-night)');
+  }
+  const body = wxdEl('wxd-body');
+  if (body) body.setAttribute('transform', 'translate(' + x.toFixed(1) + ' 16)');
   const sun = wxdEl('wxd-sun'), moon = wxdEl('wxd-moon'), halo = wxdEl('wxd-halo');
   if (sun) sun.style.display = mode === 'day' ? '' : 'none';
   if (moon) moon.style.display = mode === 'day' ? 'none' : '';
-  if (halo) halo.style.display = mode === 'day' ? '' : 'none';
+  if (halo) {
+    halo.style.display = '';
+    halo.setAttribute('fill', mode === 'day' ? '#f5b73b' : '#8fa2cc');
+    halo.setAttribute('fill-opacity', mode === 'day' ? '0.22' : '0.18');
+  }
   // labels: day = Sunrise (left) -> Sunset (right); night = Sunset (left) -> Sunrise (right), like the phone
   const l = wxdEl('wxd-l-lab'), r = wxdEl('wxd-r-lab');
-  if (l) l.innerHTML = mode === 'day' ? WXD_SUNRISE + 'Sunrise' : WXD_SUNSET + 'Sunset';
-  if (r) r.innerHTML = mode === 'day' ? 'Sunset' + WXD_SUNSET : 'Sunrise' + WXD_SUNRISE;
+  if (l) l.innerHTML = mode === 'day' ? WXD_SUNRISE + ' Sunrise' : WXD_SUNSET + ' Sunset';
+  if (r) r.innerHTML = mode === 'day' ? 'Sunset ' + WXD_SUNSET : 'Sunrise ' + WXD_SUNRISE;
   wxdSet('wxd-l-time', lt); wxdSet('wxd-r-time', rt);
 }
 
