@@ -53,10 +53,6 @@ function wxdBuild() {
       '<div class="wxd-bg" id="wxd-bg" aria-hidden="true"></div>' +
       '<div class="wg-head"><b>Sun</b><span id="wxd-daylen"></span></div>' +
       '<div class="wxd-sun-box">' +
-        '<div class="wxd-sun-labels">' +
-          '<small id="wxd-l-lab"></small>' +
-          '<small id="wxd-r-lab"></small>' +
-        '</div>' +
         '<svg id="wxd-bar" viewBox="0 0 200 32" aria-hidden="true">' +
           '<defs>' +
             '<linearGradient id="wxd-p-day" x1="0" y1="0" x2="1" y2="0">' +
@@ -154,8 +150,9 @@ async function wxdFetch(force) {
 }
 
 // ---- Sun-card weather background: ONE static-DOM layer, pure CSS animation (transform/opacity only) ----
-// Built lazily; its children are replaced ONLY when the condition kind changes (not every render, not every tick).
-// Closed deck = display:none = CSS animations do not run = zero cost. Max 12 small elements.
+// Like a weather channel: rain = dark clouds drifting + drops, sun = glowing sun, clear night = moonlight + stars,
+// cloudy = slow clouds, snow, fog. Built lazily; its children are replaced ONLY when the look changes (not every
+// render, not every tick). Closed deck = display:none = CSS animations do not run = zero cost. Max ~16 tiny elements.
 const WXD_BG_X = [8, 19, 31, 42, 53, 64, 75, 86, 14, 47, 70, 92];     // fixed spread (no randomness)
 function wxdBgSpec(v) {
   const code = +v.code || 0, day = v.isDay !== false, mm = Math.max(+v.precip || 0, +v.rain || 0);
@@ -163,18 +160,20 @@ function wxdBgSpec(v) {
   if (r && (r.kind === 'rain' || r.kind === 'storm')) {
     const heavy = [65, 67, 82, 95, 96, 99].indexOf(code) >= 0 || mm >= 2.5;
     const light = !heavy && ([51, 53, 55, 56, 57, 61].indexOf(code) >= 0 || (!WX_RAIN_CODES(code) && mm < 2.5));
-    return { kind: 'rain', n: heavy ? 12 : light ? 5 : 8 };
+    return { kind: 'rain', n: heavy ? 12 : light ? 6 : 9, clouds: 3 };
   }
-  if (code >= 71 && code <= 77 || code === 85 || code === 86) return { kind: 'snow', n: 8 };
-  if (code === 45 || code === 48) return { kind: 'fog', n: 2 };
-  if (code === 2 || code === 3) return { kind: 'cloud', n: code === 3 ? 3 : 2 };
-  return { kind: day ? 'clear' : 'stars', n: day ? 1 : 7 };
+  if (code >= 71 && code <= 77 || code === 85 || code === 86) return { kind: 'snow', n: 8, clouds: 2 };
+  if (code === 45 || code === 48) return { kind: 'fog', n: 2, clouds: 0 };
+  if (code === 3) return { kind: 'cloud', n: 0, clouds: 4 };
+  if (code === 2) return { kind: 'cloud', n: 0, clouds: 3, sun: day, moon: !day };       // partly cloudy: sun/moon peeking
+  if (day) return { kind: 'clear', n: 0, clouds: code === 1 ? 1 : 0, sun: true };         // sunny
+  return { kind: 'stars', n: 7, clouds: code === 1 ? 1 : 0, moon: true };                  // moonlit clear night
 }
 function wxdApplyBg() {
   const bg = wxdEl('wxd-bg'), v = wxd.data;
   if (!bg || !v) return;
   const sp = wxdBgSpec(v), day = v.isDay !== false;
-  const key = sp.kind + (day ? 'd' : 'n') + sp.n;
+  const key = [sp.kind, day ? 'd' : 'n', sp.n, sp.clouds, sp.sun ? 's' : '', sp.moon ? 'm' : ''].join('-');
   const body = wxdEl('mx-weather-body');
   if (body) {
     body.className = 'wxd-theme k-' + sp.kind + (day ? ' is-day' : ' is-night');
@@ -183,15 +182,18 @@ function wxdApplyBg() {
   wxd.bgKey = key;
   bg.className = 'wxd-bg k-' + sp.kind + (day ? ' is-day' : ' is-night');
   let h = '';
+  if (sp.sun) h += '<i class="sunbody"></i><i class="glow"></i>';             // behind the clouds
+  if (sp.moon) h += '<i class="moonglow"></i><i class="moonbody"></i>';
+  if (sp.kind === 'fog') { for (let i = 0; i < sp.n; i++) h += '<i style="top:' + (i ? 52 : 18) + '%;--d:-' + (i * 7) + 's"></i>'; }
   for (let i = 0; i < sp.n; i++) {
+    if (sp.kind === 'fog') break;
     const x = WXD_BG_X[i % WXD_BG_X.length], d = ((i * 37) % 11) / 10;   // 0..1 stagger
-    if (sp.kind === 'rain') h += '<i style="left:' + x + '%;--d:-' + (d * 1.1).toFixed(2) + 's;--t:' + (0.85 + (i % 3) * 0.12).toFixed(2) + 's"></i>';
-    else if (sp.kind === 'snow') h += '<i style="left:' + x + '%;--d:-' + (d * 9).toFixed(1) + 's;--t:' + (9 + (i % 4)) + 's;--s:' + (2 + (i % 2)) + 'px"></i>';
-    else if (sp.kind === 'stars') h += '<i style="left:' + [12, 27, 44, 58, 71, 85, 36][i] + '%;top:' + [14, 52, 24, 62, 18, 46, 78][i] + '%;--d:-' + (d * 4).toFixed(1) + 's;--t:' + (3 + (i % 3)) + 's"></i>';
-    else if (sp.kind === 'cloud') h += '<i style="left:' + [-6, 38, 14][i] + '%;top:' + [10, 34, 60][i] + '%;--d:-' + (i * 11) + 's;--t:' + (34 + i * 9) + 's"></i>';
-    else if (sp.kind === 'fog') h += '<i style="top:' + (i ? 52 : 18) + '%;--d:-' + (i * 7) + 's"></i>';
-    else h += '<i class="glow"></i>';
+    if (sp.kind === 'rain') h += '<i class="drop" style="left:' + x + '%;--d:-' + (d * 1.1).toFixed(2) + 's;--t:' + (0.85 + (i % 3) * 0.12).toFixed(2) + 's"></i>';
+    else if (sp.kind === 'snow') h += '<i class="flake" style="left:' + x + '%;--d:-' + (d * 9).toFixed(1) + 's;--t:' + (9 + (i % 4)) + 's;--s:' + (2 + (i % 2)) + 'px"></i>';
+    else if (sp.kind === 'stars') h += '<i class="star" style="left:' + [12, 27, 44, 58, 71, 85, 36][i] + '%;top:' + [14, 52, 24, 62, 18, 46, 78][i] + '%;--d:-' + (d * 4).toFixed(1) + 's;--t:' + (3 + (i % 3)) + 's"></i>';
   }
+  for (let i = 0; i < sp.clouds; i++)                               // clouds drift OVER the drops, like a real sky
+    h += '<i class="cloud" style="left:' + [-8, 40, 14, 62][i] + '%;top:' + [-2, 6, 22, 14][i] + '%;--d:-' + (i * 11) + 's;--t:' + (34 + i * 9) + 's"></i>';
   bg.innerHTML = h;
 }
 
@@ -228,10 +230,6 @@ function wxdRenderSun() {
     halo.setAttribute('fill', mode === 'day' ? '#f5b73b' : '#8fa2cc');
     halo.setAttribute('fill-opacity', mode === 'day' ? '0.22' : '0.18');
   }
-  // labels: day = Sunrise (left) -> Sunset (right); night = Sunset (left) -> Sunrise (right), like the phone
-  const l = wxdEl('wxd-l-lab'), r = wxdEl('wxd-r-lab');
-  if (l) l.innerHTML = mode === 'day' ? WXD_SUNRISE + ' Sunrise' : WXD_SUNSET + ' Sunset';
-  if (r) r.innerHTML = mode === 'day' ? 'Sunset ' + WXD_SUNSET : 'Sunrise ' + WXD_SUNRISE;
   wxdSet('wxd-l-time', lt); wxdSet('wxd-r-time', rt);
 }
 
