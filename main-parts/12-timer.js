@@ -419,7 +419,8 @@ document.getElementById('btn-notepad-copy')?.addEventListener('click', async () 
     return;
   }
   try {
-    await navigator.clipboard.writeText(noteArea.value);
+    const res = await tryInvoke('set_clipboard_text', { text: noteArea.value });
+    if (!res) await navigator.clipboard.writeText(noteArea.value);
     showToast('snip', 'Copied to clipboard', 1200);
   } catch (_) {
     showToast('snip', 'Select all & Ctrl+C', 1500);

@@ -170,6 +170,9 @@ async function prGeocode(query) {
   if (rest) {   // "Sagardighi, India": pick the hit whose country / state matches the second part
     const hit = list.find((x) => [x.country, x.country_code, x.admin1, x.admin2].filter(Boolean).join(' ').toLowerCase().includes(rest));
     if (hit) r = hit;
+  } else {
+    const inHit = list.find((x) => x.country_code === 'IN' || x.timezone === 'Asia/Kolkata');
+    if (inHit) r = inHit;
   }
   if (!isFinite(+r.latitude) || !isFinite(+r.longitude)) return null;
   return { lat: +r.latitude, lon: +r.longitude, city: r.name || name, tz: r.timezone || '' };

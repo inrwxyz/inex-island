@@ -291,6 +291,48 @@ fn get_clipboard_text() -> String {
     String::new()
 }
 
+#[tauri::command]
+fn set_clipboard_text(text: String) -> bool {
+    #[cfg(windows)]
+    unsafe {
+        use windows::Win32::System::DataExchange::{CloseClipboard, EmptyClipboard, OpenClipboard, SetClipboardData};
+        use windows::Win32::System::Memory::{GlobalAlloc, GlobalLock, GlobalUnlock, GMEM_MOVEABLE};
+        use windows::Win32::Foundation::{GlobalFree, HANDLE, HWND};
+        const CF_UNICODETEXT: u32 = 13;
+
+        let wide: Vec<u16> = text.encode_utf16().chain(std::iter::once(0)).collect();
+        let bytes_len = wide.len() * 2;
+        let hg = match GlobalAlloc(GMEM_MOVEABLE, bytes_len) {
+            Ok(h) => h,
+            Err(_) => return false,
+        };
+        let dst = GlobalLock(hg) as *mut u16;
+        if dst.is_null() {
+            let _ = GlobalFree(hg);
+            return false;
+        }
+        std::ptr::copy_nonoverlapping(wide.as_ptr(), dst, wide.len());
+        let _ = GlobalUnlock(hg);
+
+        for _ in 0..5 {
+            if OpenClipboard(HWND::default()).is_ok() {
+                let _ = EmptyClipboard();
+                let res = SetClipboardData(CF_UNICODETEXT, HANDLE(hg.0));
+                let _ = CloseClipboard();
+                return res.is_ok();
+            }
+            std::thread::sleep(std::time::Duration::from_millis(25));
+        }
+        let _ = GlobalFree(hg);
+        false
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = text;
+        false
+    }
+}
+
 // ---- Fixed window ---------------------------------------------------------------------------------
 // The OS window is sized ONCE (big and transparent) at startup and never resized again, so it can not get
 // out of step with the CSS animation (that mismatch was the shaking). Clicks outside the island must still
@@ -2338,6 +2380,7 @@ fn main() {
             trigger_companion_demo,
             clipboard_seq,
             get_clipboard_text,
+            set_clipboard_text,
             clipboard::get_clipboard_files,
             clipboard::set_clipboard_files,
             clipboard::filter_screenshot_paths,

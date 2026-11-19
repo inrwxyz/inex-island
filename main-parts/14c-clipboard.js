@@ -320,8 +320,13 @@ function renderClipboardList() {
             return;
           }
         } else {
-          await navigator.clipboard.writeText(item.text);
-          ok = true;
+          const res = await tryInvoke('set_clipboard_text', { text: item.text });
+          if (res) {
+            ok = true;
+          } else {
+            await navigator.clipboard.writeText(item.text);
+            ok = true;
+          }
         }
       } catch (_) { ok = false; }
 
