@@ -35,7 +35,7 @@ export const DEFAULTS = {
     market2: '^NSEI'
   },
   weather: { enabled: true, unit: 'C', city: '' },
-  prayer: { enabled: false, locationMode: 'auto', city: '', asrMethod: 'standard', masjidOverride: false,
+  prayer: { enabled: false, city: '', asrMethod: 'standard', masjidOverride: false,
     masjid: { fajr: '', dhuhr: '', asr: '', maghrib: '', isha: '' }, adhanSound: 'madinah', fullAdhan: true, alertLead: '0', alertRepeat: '0' },
   widgets: { enabled: true, left: 'weather', right: 'ram' },
   menu: {

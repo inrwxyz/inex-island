@@ -348,7 +348,7 @@ if (compactBarEl) {
       return;
     }
     if (island.classList.contains('alarm-active')) {
-      if (typeof dismissTimerAlarm === 'function') dismissTimerAlarm();
+      openControlMenu();
       return;
     }
     if (typeof currentOffer !== 'undefined' && currentOffer) {
@@ -365,7 +365,7 @@ if (compactBarEl) {
 document.getElementById('c-center-trigger')?.addEventListener('click', (e) => {
   if (e.target.closest('#c-incoming-alert')) return;
   if (island.classList.contains('alarm-active')) {
-    if (typeof dismissTimerAlarm === 'function') dismissTimerAlarm();
+    openControlMenu();
     return;
   }
   if (typeof currentOffer !== 'undefined' && currentOffer) {
@@ -379,8 +379,9 @@ document.getElementById('c-center-trigger')?.addEventListener('click', (e) => {
   openControlMenu();
 });
 document.getElementById('c-alarm-box')?.addEventListener('click', (e) => {
+  if (e.target.closest('#btn-alarm-snooze, #btn-alarm-dismiss')) return;
   e.stopPropagation();
-  if (typeof dismissTimerAlarm === 'function') dismissTimerAlarm();
+  openControlMenu();
 });
 document.getElementById('btn-alarm-snooze')?.addEventListener('click', (e) => {
   e.stopPropagation();

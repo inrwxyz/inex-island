@@ -217,10 +217,10 @@ const PAGES = [
       ] },
       { id: 'sounds-prayer', title: 'Prayer & Solar Deck', defaultOpen: true, rows: [
         { path: 'prayer.enabled', type: 'toggle', icon: 'moon', t: 'Prayer & Solar Deck', d: 'Adds a mosque button to the Control Deck with prayer times, the sun\'s path and Adhan alerts. Off = nothing shown, nothing running', onChange: (v) => { if (!v) prayerEditOpen = false; } },
-        { path: 'prayer.locationMode', type: 'seg', icon: 'pin', t: 'Location', d: 'Found once and kept on this PC. No background network use', options: [['auto', 'Auto (GPS/IP)'], ['manual', 'Custom City']], showIf: (s) => PRAYER_ON(s) && prayerEditOpen },
-        { path: 'prayer.city', type: 'text', icon: 'pin', t: 'City', d: 'City, Country. Press Enter to apply', placeholder: 'e.g. Sagardighi, India  or  Dhaka', showIf: (s) => PRAYER_ON(s) && prayerEditOpen && s.prayer.locationMode === 'manual' },
-        { path: 'prayer.asrMethod', type: 'seg', icon: 'sun', t: 'Asr Method', d: 'Shadow length used for Asr', options: [['standard', 'Standard (Shafi/Hanbali/Maliki)'], ['hanafi', 'Hanafi']], showIf: (s) => PRAYER_ON(s) && prayerEditOpen },
+        { path: 'prayer.city', type: 'text', icon: 'pin', t: 'City', d: 'Leave empty for automatic IP location. Press Enter to apply', placeholder: 'Auto (Network IP) or type City', refreshBtn: true, showIf: (s) => PRAYER_ON(s) && prayerEditOpen },
+        { path: 'prayer.asrMethod', type: 'seg', icon: 'sun', t: 'Asr Method', d: 'Shadow length used for Asr', options: [['standard', 'Standard'], ['hanafi', 'Hanafi']], showIf: (s) => PRAYER_ON(s) && prayerEditOpen },
         { path: 'prayer.masjidOverride', type: 'toggle', icon: 'clock', t: 'Custom Masjid Timings', d: 'Use your local mosque\'s clock instead of the calculated times. Empty fields stay calculated', showIf: (s) => PRAYER_ON(s) && prayerEditOpen },
+        { type: 'action', icon: 'refresh', t: 'Reset to Calculated Times', d: 'Fill all 5 custom fields with today\'s calculated prayer times for your city', run: resetMasjidToCalculated, showIf: (s) => PRAYER_MASJID_ON(s) && prayerEditOpen },
         { path: 'prayer.masjid.fajr', type: 'text', icon: 'clock', t: 'Fajr', d: 'e.g. 4:45 or 04:45 AM', placeholder: '04:45', showIf: (s) => PRAYER_MASJID_ON(s) && prayerEditOpen },
         { path: 'prayer.masjid.dhuhr', type: 'text', icon: 'clock', t: 'Dhuhr', d: 'e.g. 12:15 or 12:15 PM', placeholder: '12:15', showIf: (s) => PRAYER_MASJID_ON(s) && prayerEditOpen },
         { path: 'prayer.masjid.asr', type: 'text', icon: 'clock', t: 'Asr', d: 'e.g. 3:30 or 03:30 PM', placeholder: '03:30', showIf: (s) => PRAYER_MASJID_ON(s) && prayerEditOpen },
@@ -388,6 +388,90 @@ function debouncedCommit(path, value, onChange) {
 function previewSound(kind) {
   if (kind === 'alarm') invoke('play_alarm_sound').catch(() => {});
   else invoke('play_status_sound', { kind }).catch(() => {});
+}
+
+function getCalculatedPrayerTimes(loc, hanafi) {
+  try {
+    const now = new Date();
+    const y = now.getFullYear(), m = now.getMonth(), d = now.getDate();
+    const base = Date.UTC(y, m, d);
+    const tzH = -now.getTimezoneOffset() / 60;
+    const jdAt = (localH) => (base + (localH - tzH) * 3600000) / 86400000 + 2440587.5;
+    const R = Math.PI / 180;
+    const sunCalc = (jd) => {
+      const n = jd - 2451545.0;
+      const L = (((280.460 + 0.9856474 * n) % 360) + 360) % 360;
+      const g = (((357.528 + 0.9856003 * n) % 360) + 360) % 360 * R;
+      const lambda = (L + 1.915 * Math.sin(g) + 0.020 * Math.sin(2 * g)) * R;
+      const dec = Math.asin(Math.sin(23.439 * R) * Math.sin(lambda));
+      let ra = Math.atan2(Math.cos(23.439 * R) * Math.sin(lambda), Math.cos(lambda)) / R;
+      ra = (((ra % 360) + 360) % 360) / 15;
+      const eqMin = (L / 15 - ra) * 60;
+      return { dec, eqMin: eqMin > 20 ? eqMin - 1440 : eqMin < -20 ? eqMin + 1440 : eqMin };
+    };
+    const transit = (sp) => 12 + tzH - loc.lon / 15 - sp.eqMin / 60;
+    let T = transit(sunCalc(jdAt(12)));
+    T = transit(sunCalc(jdAt(T)));
+    const ev = (alt, sign) => {
+      let g = T;
+      for (let k = 0; k < 3; k++) {
+        const sp = sunCalc(jdAt(g));
+        const a = alt === 'asr'
+          ? Math.atan(1 / ((hanafi ? 2 : 1) + Math.tan(Math.abs(loc.lat - sp.dec / R) * R))) / R
+          : alt;
+        const cosH = (Math.sin(a * R) - Math.sin(loc.lat * R) * Math.sin(sp.dec)) / (Math.cos(loc.lat * R) * Math.cos(sp.dec));
+        if (cosH < -1 || cosH > 1) return NaN;
+        g = transit(sp) + sign * (Math.acos(cosH) / R / 15);
+      }
+      return g;
+    };
+    const pad = (n) => String(Math.floor(n)).padStart(2, '0');
+    const toClock = (hours) => {
+      if (isNaN(hours)) return '';
+      let totalM = Math.round(hours * 60);
+      let h = Math.floor(totalM / 60) % 24;
+      let min = totalM % 60;
+      return `${pad(h)}:${pad(min)}`;
+    };
+    return {
+      fajr: toClock(ev(-18, -1)),
+      dhuhr: toClock(T + 1 / 60),
+      asr: toClock(ev('asr', 1)),
+      maghrib: toClock(ev(-0.833, 1)),
+      isha: toClock(ev(-18, 1))
+    };
+  } catch (_) { return null; }
+}
+
+function resetMasjidToCalculated() {
+  if (!S.prayer) S.prayer = {};
+  let loc = null;
+  try {
+    const pl = JSON.parse(localStorage.getItem('inex.prayer.loc') || 'null');
+    if (pl && pl.loc) loc = pl.loc;
+    else {
+      const wl = JSON.parse(localStorage.getItem('inex.loc') || 'null');
+      if (wl && wl.loc) loc = wl.loc;
+    }
+  } catch (_) {}
+  if (loc && isFinite(loc.lat) && isFinite(loc.lon)) {
+    const calc = getCalculatedPrayerTimes(loc, S.prayer.asrMethod === 'hanafi');
+    if (calc) {
+      S.prayer.masjid = {
+        fajr: calc.fajr,
+        dhuhr: calc.dhuhr,
+        asr: calc.asr,
+        maghrib: calc.maghrib,
+        isha: calc.isha
+      };
+      save(S);
+      renderPage();
+      return;
+    }
+  }
+  S.prayer.masjid = { fajr: '', dhuhr: '', asr: '', maghrib: '', isha: '' };
+  save(S);
+  renderPage();
 }
 
 // ---------- row renderers ----------
@@ -668,7 +752,18 @@ function control(row) {
     customSel.append(trigger, menu);
     wrap.append(customSel);
   } else if (row.type === 'text') {
-    const inp = el('input', 'txtin'); inp.type = 'text'; inp.value = v || ''; inp.placeholder = row.placeholder || '';
+    let ph = row.placeholder || '';
+    if (row.path === 'prayer.city' && !v) {
+      try {
+        const pl = JSON.parse(localStorage.getItem('inex.prayer.loc') || 'null');
+        if (pl && pl.loc && pl.loc.city) ph = `Auto (${pl.loc.city}) or type City`;
+        else {
+          const wl = JSON.parse(localStorage.getItem('inex.loc') || 'null');
+          if (wl && wl.loc && wl.loc.city) ph = `Auto (${wl.loc.city}) or type City`;
+        }
+      } catch (_) {}
+    }
+    const inp = el('input', 'txtin'); inp.type = 'text'; inp.value = v || ''; inp.placeholder = ph;
     inp.addEventListener('input', () => {
       if (row.path === 'weather.city' || row.path === 'prayer.city') return;   // applied on Enter / blur only
       set(row.path, inp.value.trim());
@@ -680,6 +775,21 @@ function control(row) {
       change(inp.value.trim(), false);
     });
     wrap.append(inp);
+    if (row.refreshBtn) {
+      const refBtn = el('button', 'btn btn-outline', '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13" style="display:inline-block;vertical-align:-1px;"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>');
+      refBtn.type = 'button';
+      refBtn.title = 'Re-detect automatic IP location';
+      refBtn.style.marginLeft = '6px';
+      refBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        set(row.path, '');
+        try { localStorage.removeItem('inex.prayer.loc'); } catch (_) {}
+        try { localStorage.setItem('inex.prayer.refreshLoc', String(Date.now())); } catch (_) {}
+        save(S);
+        renderPage();
+      });
+      wrap.append(refBtn);
+    }
   } else if (row.type === 'color') {
     const box = el('div', 'color');
     if (row.swatches) {

@@ -190,8 +190,9 @@ async function prIpLocation() {
 // Returns true when prayer.loc is usable. Auto mode keeps the PC's own time zone (an IP lookup is near the PC).
 async function prEnsureLoc() {
   const c = prCfg();
-  const manual = c.locationMode === 'manual' && String(c.city || '').trim();
-  const q = manual ? String(c.city).trim().toLowerCase() : '';
+  const cityStr = String(c.city || '').trim();
+  const manual = !!cityStr;
+  const q = cityStr.toLowerCase();
   let cached = null;
   try { cached = JSON.parse(localStorage.getItem(PR_LOC_KEY) || 'null'); } catch (_) {}
   if (cached && cached.loc && (manual ? (cached.mode === 'manual' && cached.q === q) : cached.mode === 'auto')) {
@@ -202,7 +203,7 @@ async function prEnsureLoc() {
   if (prayer.locFailAt && Date.now() - prayer.locFailAt < 5 * 60000) return !!prayer.loc;   // do not hammer the network
   prayer.locBusy = true;
   let loc = null;
-  try { loc = manual ? await prGeocode(c.city.trim()) : await prIpLocation(); } catch (_) {}
+  try { loc = manual ? await prGeocode(cityStr) : await prIpLocation(); } catch (_) {}
   prayer.locBusy = false;
   if (loc) {
     prayer.loc = loc; prayer.locErr = ''; prayer.locFailAt = 0;
@@ -392,11 +393,18 @@ function prAnnounce(ev, preview) {
   const sub = prFmt(ev.prayerAt);
   const tok = ++prayer.cardTok;
 
-  // The visual banner card on the dynamic island:
-  // Preview: 12 seconds
-  // Prayer notification: 15 seconds
-  // After 12-15 seconds, the card folds back smoothly to the notch so it NEVER blocks the screen!
-  const cardMs = preview ? 12000 : 15000;
+  let cardMs = 12000;
+  if (sound) {
+    if (ev.lead || ev.repeat) {
+      cardMs = 14000;
+    } else if (soundName === 'short') {
+      cardMs = 46000;
+    } else if (soundName === 'beep') {
+      cardMs = 14000;
+    } else {
+      cardMs = preview ? 35000 : 230000;
+    }
+  }
 
   if (!appState.alarmActive && typeof triggerTimerAlarm === 'function') {
     triggerTimerAlarm({
@@ -416,20 +424,12 @@ function prAnnounce(ev, preview) {
 
   if (sound) {
     prPlay(soundName, tok, false);
-
-    // Audio cutoff timeout:
-    // If preview: stop audio when card closes at 12s.
-    // If real alert: audio continues in background (46s for short, 230s for full) then auto-stops,
-    // or stops immediately whenever user clicks Mute / Dismiss.
-    const audioMs = preview ? 12000 : ((soundName === 'short') ? 46000 : (soundName === 'beep' ? 14000 : 230000));
     setTimeout(() => {
-      if (tok === prayer.cardTok) {
+      if (tok === prayer.cardTok && appState.alarmActive && typeof dismissTimerAlarm === 'function') {
         prStopAudio();
-        if (preview && appState.alarmActive && typeof dismissTimerAlarm === 'function') {
-          dismissTimerAlarm();
-        }
+        dismissTimerAlarm();
       }
-    }, audioMs);
+    }, cardMs);
   }
 }
 function prFire(ev) {
@@ -508,6 +508,11 @@ window.addEventListener('storage', (e) => {
   if (e.key === 'inex.prayer.preview' && prOn()) {
     const st = prState(Date.now());
     prAnnounce({ name: st ? st.next : 'dhuhr', prayerAt: st ? st.nextAt : Date.now(), lead: false }, true);
+  }
+  if (e.key === 'inex.prayer.refreshLoc' && prOn()) {
+    try { localStorage.removeItem(PR_LOC_KEY); } catch (_) {}
+    prayer.loc = null; prayer.days = null;
+    prEnsureLoc().then(() => { prArm(); if (prayer.open) prRender(); });
   }
 });
 prayerApplySettings();
