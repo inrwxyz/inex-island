@@ -148,11 +148,13 @@
           <div class="alarm-icon-wrap" id="alarm-bell-wrap">
             <span class="alarm-pulse"></span><span class="alarm-pulse p2"></span>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13.5" r="7.5"/><path d="M12 9.5v4l2.5 2"/><path d="M9.5 2.5h5"/></svg>
+            <svg class="pr-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.3 6.3 0 0 0 10.5 10.5z"/></svg>
           </div>
           <div class="alarm-text-wrap">
             <span id="alarm-title" class="alarm-title">Time's Up</span>
             <span id="alarm-sub" class="alarm-sub">Timer</span>
           </div>
+          <span class="pr-bars" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
           <button id="btn-alarm-snooze" class="alarm-stop-btn alarm-snooze-btn hidden" title="Snooze 9 minutes">Snooze</button>
           <button id="btn-alarm-dismiss" class="alarm-stop-btn" title="Stop">Stop</button>
         </div>
@@ -246,7 +248,7 @@
         </div>
         <div class="mx-top-right">
           <span id="mac-weather" class="mx-weather" data-mac="weather">
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" style="display:inline-block;vertical-align:-2px;margin-right:2px;flex-shrink:0;"><circle cx="12" cy="12" r="5" fill="#FFB800"/><g stroke="#FF9800" stroke-width="1.8" stroke-linecap="round"><line x1="12" y1="2" x2="12" y2="4.5"/><line x1="12" y1="19.5" x2="12" y2="22"/><line x1="2" y1="12" x2="4.5" y2="12"/><line x1="19.5" y1="12" x2="22" y2="12"/><line x1="4.93" y1="4.93" x2="6.7" y2="6.7"/><line x1="17.3" y1="17.3" x2="19.07" y2="19.07"/><line x1="4.93" y1="19.07" x2="6.7" y2="17.3"/><line x1="17.3" y1="6.7" x2="19.07" y2="4.93"/></g></svg>
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" style="display:inline-block;vertical-align:middle;margin-right:2px;flex-shrink:0;"><circle cx="12" cy="12" r="5" fill="#FFB800"/><g stroke="#FF9800" stroke-width="1.8" stroke-linecap="round"><line x1="12" y1="2" x2="12" y2="4.5"/><line x1="12" y1="19.5" x2="12" y2="22"/><line x1="2" y1="12" x2="4.5" y2="12"/><line x1="19.5" y1="12" x2="22" y2="12"/><line x1="4.93" y1="4.93" x2="6.7" y2="6.7"/><line x1="17.3" y1="17.3" x2="19.07" y2="19.07"/><line x1="4.93" y1="19.07" x2="6.7" y2="17.3"/><line x1="17.3" y1="6.7" x2="19.07" y2="4.93"/></g></svg>
             <span id="mac-weather-temp">28°C</span>
           </span>
           <span id="mac-battery" class="mx-battery hidden" data-mac="battery" title="Laptop Battery">
@@ -264,6 +266,9 @@
             <button id="mx-tab-controls" class="active" title="Controls" aria-label="Controls"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg></button>
             <button id="mx-tab-widgets" title="Widgets" aria-label="Widgets"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><rect x="3.5" y="3.5" width="7" height="7" rx="1.8"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.8"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.8"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.8"/></svg></button>
           </div>
+          <button id="mac-prayer-btn" class="mx-icon-btn hidden" title="Prayer &amp; Solar Deck (সালাত ও সূর্যের অবস্থান)" aria-label="Prayer and Solar Deck">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 20v-6a6 6 0 0 1 12 0v6"/><path d="M12 8V5.2"/><path d="M3 20h18"/><path d="M10 20v-2.5a2 2 0 0 1 4 0V20"/></svg>
+          </button>
           <button id="mac-tray-btn" class="mx-icon-btn" title="File Tray">
             <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 13.5l2.4-7.2A2 2 0 0 1 7.8 5h8.4a2 2 0 0 1 1.9 1.3l2.4 7.2"/><path d="M3.5 13.5V17a3 3 0 0 0 3 3h11a3 3 0 0 0 3-3v-3.5h-4.6a1 1 0 0 0-.9.6 3.3 3.3 0 0 1-6 0 1 1 0 0 0-.9-.6z"/></svg>
             <b id="mac-tray-badge" class="mx-tray-badge hidden">0</b>
@@ -410,6 +415,29 @@
         </div>
       </div>
     </div>
+
+      <!-- PRAYER & SOLAR DECK (optional: Settings > Notch > Prayer Times; hidden and idle while off) -->
+      <div id="mx-prayer-body">
+        <div class="mx-widget-card pr-sun" title="সূর্যের গতিপথ">
+          <div class="wg-head"><b>Solar Path</b><span id="pr-loc">--</span></div>
+          <svg id="pr-arc" viewBox="0 0 217 68" aria-hidden="true">
+            <line class="pr-horizon" x1="4" y1="54" x2="213" y2="54"/>
+            <path class="pr-arc-base" d="M22 54Q108.5 -38 195 54" pathLength="100"/>
+            <path id="pr-prog" class="pr-arc-prog" d="M22 54Q108.5 -38 195 54" pathLength="100" stroke-dasharray="0 100"/>
+            <g id="pr-marks"></g>
+            <circle id="pr-halo" class="pr-sun-halo" r="8" cx="22" cy="54"/>
+            <circle id="pr-dot" class="pr-sun-dot night" r="4.5" cx="22" cy="54"/>
+            <text id="pr-t-rise" class="pr-tl" x="22" y="65" text-anchor="middle"></text>
+            <text id="pr-t-set" class="pr-tl" x="195" y="65" text-anchor="middle"></text>
+          </svg>
+          <div class="pr-now"><b id="pr-next-name">--</b><em id="pr-next-in"></em></div>
+          <div class="pr-sub" id="pr-next-sub">--</div>
+        </div>
+        <div class="mx-widget-card pr-times" title="সালাতের সময়">
+          <div class="wg-head"><b>Prayer Times</b><span>Today</span></div>
+          <div id="pr-list" class="pr-list"></div>
+        </div>
+      </div>
 
       <!-- WIDGETS DASHBOARD (only active while the Widgets tab is open) -->
       <div id="mx-widgets-body">

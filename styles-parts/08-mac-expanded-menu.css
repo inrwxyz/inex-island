@@ -1,0 +1,890 @@
+/* ===== Mac-Style Expanded Notch Menu: 500 x 210 ===== */
+.island.state-control-mac { width: 500px; height: 210px; }
+
+.island.state-control-mac {
+  transition: width 0.55s var(--spring-menu), height 0.55s var(--spring-menu),
+              border-radius 0.4s var(--ease-close), opacity 0.22s ease,
+              border-color 0.22s ease, background 0.25s ease, top 0.4s var(--ease-close);
+  border-radius: 0 0 var(--radius-menu) var(--radius-menu) !important;
+  border: 1px solid var(--line) !important;
+  border-top: none !important;
+  box-shadow: none;
+}
+/* Transparent glass */
+.island[data-menu="transparent"].state-control-mac {
+  background: rgba(6, 6, 9, 0.40) !important;
+  backdrop-filter: blur(24px) saturate(160%) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(160%) !important;
+  color: #f5f5f7 !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12) !important;
+}
+/* Solid colour (Light / Dark via --menu-bg / --menu-fg) */
+.island[data-menu="color"].state-control-mac {
+  background: var(--menu-bg) !important;
+  color: var(--menu-fg) !important;
+  backdrop-filter: blur(28px) saturate(180%) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.10) !important;
+}
+
+#view-control-mac.view.active {
+  display: flex !important; flex-direction: column; gap: 6px;
+  padding: 6px 10px 10px; font-family: var(--font-main); color: inherit;
+  box-sizing: border-box; overflow: hidden;
+}
+#view-control-mac button {
+  font-family: inherit; color: inherit; border: 0; background: none; cursor: pointer;
+}
+#view-control-mac .mx-card,
+#view-control-mac .mx-tile {
+  background: var(--color-tile-bg, color-mix(in srgb, var(--menu-fg) 9%, transparent));
+}
+#view-control-mac [data-mac].hidden { display: none !important; }
+
+/* Top strip (24px) */
+.mx-top { flex: none; height: 24px; display: flex; align-items: center; justify-content: space-between; padding: 0 2px; }
+.mx-time { display: flex; align-items: baseline; gap: 8px; }
+.mx-time b { font-size: 14px; font-weight: 700; letter-spacing: -0.02em; color: var(--menu-fg); font-variant-numeric: tabular-nums; }
+.mx-time span { font-size: 10.5px; font-weight: 500; color: var(--menu-fg-dim); }
+.mx-top-right { display: flex; align-items: center; gap: 6px; }
+.mx-weather {
+  display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 4px;
+  border-radius: 6px; font-size: 10.5px; font-weight: 600; color: var(--menu-fg-dim);
+  background: transparent; border: none; cursor: pointer;
+  line-height: 1; vertical-align: middle;
+}
+.mx-weather:hover { color: var(--menu-fg); background: color-mix(in srgb, var(--menu-fg) 8%, transparent); }
+.mx-battery {
+  display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 8px;
+  border-radius: 11px; font-size: 10px; font-weight: 700; color: var(--menu-fg);
+  background: color-mix(in srgb, var(--menu-fg) 9%, transparent);
+}
+.mx-battery #mac-bat-pct { font-variant-numeric: tabular-nums; }
+.mx-battery #mac-bat-ico { display: inline-flex; align-items: center; gap: 2px; }
+.mx-battery.charging { color: #30d158; }
+.mx-battery.low { color: #ff453a; }
+.mx-icon-btn {
+  width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center;
+  color: var(--menu-fg-dim) !important;
+  background: color-mix(in srgb, var(--menu-fg) 9%, transparent) !important;
+  transition: background 0.16s ease, color 0.16s ease;
+}
+.mx-icon-btn:hover { background: color-mix(in srgb, var(--menu-fg) 18%, transparent) !important; color: var(--menu-fg) !important; }
+
+/* Bento body (163px): 200 | gap 10 | 268 */
+.mx-body { flex: 1; min-height: 0; display: flex; gap: 10px; }
+.mx-left  { flex: none; width: 200px; display: flex; flex-direction: column; gap: 6px; }
+.mx-right { position: relative; flex: 1; min-width: 0; display: flex; flex-direction: column; height: 100%; }
+.mx-right-panel {
+  width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: space-between;
+  transition: opacity 0.16s ease, transform 0.18s ease;
+}
+.mx-right-panel.hidden { display: none !important; }
+
+/* In-place Sub-panel header & mount */
+.mx-sub-bar {
+  flex: none; height: 26px; display: flex; align-items: center; justify-content: space-between; padding: 0 2px 2px;
+  border-bottom: none !important;
+}
+.mx-sub-bar-left {
+  display: flex; align-items: center; gap: 6px; min-width: 0;
+}
+.mx-sub-actions {
+  display: flex; align-items: center; gap: 6px; margin-left: auto;
+}
+.mx-sub-actions .bt-header-right,
+.mx-sub-actions .panel-top-right,
+.mx-sub-actions .qs-header-right {
+  display: flex !important; align-items: center !important; gap: 6px !important; margin: 0 !important;
+}
+.mx-sub-actions button.icon-ghost-btn {
+  width: 22px !important; height: 22px !important; display: grid !important; place-items: center !important;
+  color: var(--menu-fg-dim) !important; background: color-mix(in srgb, var(--menu-fg) 8%, transparent) !important;
+  border-radius: 50% !important; border: none !important; padding: 0 !important; cursor: pointer;
+}
+.mx-sub-actions button.icon-ghost-btn:hover {
+  background: color-mix(in srgb, var(--menu-fg) 16%, transparent) !important;
+  color: var(--menu-fg) !important;
+}
+.mx-sub-actions .ios-switch {
+  transform: scale(0.78); transform-origin: right center; margin: 0 !important;
+}
+.mx-sub-actions .cal-nav-bar {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 3px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+.mx-sub-actions .cal-month-heading {
+  flex: none !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  color: var(--menu-fg) !important;
+  margin: 0 4px 0 0 !important;
+  white-space: nowrap !important;
+  order: 0 !important;
+}
+.mx-sub-actions .cal-month-heading .yr {
+  font-size: 10px !important;
+  font-weight: 500 !important;
+  opacity: 0.55 !important;
+  margin-left: 3px !important;
+}
+.mx-sub-actions .cal-nav-btn {
+  width: 18px !important;
+  height: 18px !important;
+  font-size: 13px !important;
+  line-height: 1 !important;
+  border-radius: 50% !important;
+  background: color-mix(in srgb, var(--menu-fg) 8%, transparent) !important;
+  color: var(--menu-fg) !important;
+  display: grid !important;
+  place-items: center !important;
+  padding: 0 !important;
+  cursor: pointer;
+  border: none !important;
+  order: 1 !important;
+}
+.mx-sub-actions #btn-cal-next {
+  order: 2 !important;
+}
+.mx-sub-actions .cal-nav-btn:hover {
+  background: color-mix(in srgb, var(--menu-fg) 18%, transparent) !important;
+}
+.mx-sub-actions .cal-today-btn {
+  font-size: 9.5px !important;
+  font-weight: 600 !important;
+  padding: 1px 6px !important;
+  height: 18px !important;
+  border-radius: 9px !important;
+  background: color-mix(in srgb, var(--mac-accent, #0a84ff) 18%, transparent) !important;
+  color: var(--mac-accent, #0a84ff) !important;
+  cursor: pointer;
+  margin-left: 2px !important;
+  border: none !important;
+  order: 3 !important;
+}
+.mx-sub-actions .cal-today-btn:hover {
+  background: var(--mac-accent, #0a84ff) !important;
+  color: #fff !important;
+}
+.mx-sub-actions .cal-today-btn.ghost {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+.mx-sub-actions .top-tool-btn {
+  font-size: 10px !important;
+  font-weight: 600 !important;
+  color: var(--menu-fg-dim) !important;
+  background: color-mix(in srgb, var(--menu-fg) 8%, transparent) !important;
+  border: none !important;
+  border-radius: 6px !important;
+  padding: 2px 7px !important;
+  height: 20px !important;
+  cursor: pointer;
+}
+.mx-sub-actions .top-tool-btn:hover {
+  background: color-mix(in srgb, var(--menu-fg) 16%, transparent) !important;
+  color: var(--menu-fg) !important;
+}
+.mx-sub-back-btn {
+  display: inline-flex; align-items: center; gap: 3px; font-size: 11px; font-weight: 600;
+  color: var(--mac-accent, #0a84ff) !important; padding: 2px 6px; border-radius: 6px;
+  transition: background 0.14s ease; cursor: pointer;
+}
+.mx-sub-back-btn:hover { background: color-mix(in srgb, var(--menu-fg) 10%, transparent); }
+.mx-sub-mount { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; display: flex; flex-direction: column; }
+
+/* In-place subview overrides inside Control Deck */
+.in-mac-sub {
+  display: flex !important; flex-direction: column !important; width: 100% !important; height: 100% !important;
+  background: transparent !important; border: none !important; border-radius: 0 !important;
+  box-shadow: none !important; padding: 0 !important;
+}
+.in-mac-sub .subview-header,
+.in-mac-sub .panel-top-bar {
+  display: none !important;
+}
+.in-mac-sub .smooth-scroll-list,
+.in-mac-sub .tray-files-grid,
+.in-mac-sub .notepad-body,
+.in-mac-sub .clipboard-body,
+.in-mac-sub .timer-box,
+.in-mac-sub .alarm-box,
+.in-mac-sub .drop-body {
+  max-height: 156px !important; flex: 1; min-height: 0; overflow-y: auto;
+}
+.in-mac-sub #drop-state-prompt {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+.in-mac-sub #drop-state-prompt.hidden {
+  display: none !important;
+}
+.in-mac-sub #drop-state-prompt .drop-prompt-card {
+  margin: 0 auto;
+  padding: 8px 12px;
+  width: 100%;
+  box-sizing: border-box;
+}
+.in-mac-sub .cal-container {
+  max-height: 172px !important;
+  flex: 1;
+  min-height: 0;
+  padding: 0 !important;
+  overflow: hidden !important;
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: flex-start !important;
+  gap: 2px !important;
+}
+.in-mac-sub .cal-weekdays {
+  padding-bottom: 2px !important;
+  margin-bottom: 1px !important;
+  font-size: 8.5px !important;
+  border-bottom: 1px solid color-mix(in srgb, var(--menu-fg) 8%, transparent) !important;
+}
+.in-mac-sub .cal-days-grid {
+  grid-auto-rows: 20px !important;
+  gap: 1px !important;
+  font-size: 10px !important;
+}
+.in-mac-sub .cal-day {
+  width: 20px !important;
+  height: 20px !important;
+  font-size: 10px !important;
+}
+.in-mac-sub .cal-nav-bar {
+  display: none !important; /* when mounted in subpanel, nav bar is in mac-sub-actions */
+}
+.in-mac-sub #notepad-textarea { height: 116px !important; font-size: 11px !important; }
+.in-mac-sub .timer-digits { font-size: 32px !important; }
+
+.mx-card { border-radius: 16px; }
+
+/* Media mini-card */
+.mx-media { flex: 1; min-height: 0; padding: 8px 10px; display: flex; flex-direction: column; justify-content: space-between; }
+.mx-media.expanded { padding: 12px 12px; }
+.mx-media.expanded .mx-art { width: 50px; height: 50px; }
+.mx-media-top { display: flex; align-items: center; gap: 9px; min-width: 0; }
+.mx-art {
+  position: relative;
+  flex: none; width: 44px; height: 44px; border-radius: 10px; overflow: visible; display: grid; place-items: center;
+  background: color-mix(in srgb, var(--menu-fg) 14%, transparent); color: var(--menu-fg-dim);
+}
+.mx-art img { width: 100%; height: 100%; object-fit: cover; display: block; border-radius: 10px; }
+.mx-meta { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.mx-meta strong { font-size: 12px; font-weight: 600; letter-spacing: -0.02em; color: var(--menu-fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mx-meta small  { font-size: 10px; color: var(--menu-fg-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mx-seek-wrap {
+  position: relative;
+  height: 11px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}
+.mx-prog {
+  display: block;
+  width: 100%;
+  height: 3.5px;
+  border-radius: 999px;
+  overflow: visible;
+  background: color-mix(in srgb, var(--menu-fg) 16%, transparent);
+  transition: height 0.14s ease;
+}
+.mx-seek-wrap:hover .mx-prog { height: 5px; }
+.mx-prog u {
+  position: relative;
+  display: block;
+  height: 100%;
+  width: calc(var(--v, 0) * 1%);
+  border-radius: inherit;
+  background: var(--mac-accent);
+  text-decoration: none;
+  transition: width 0.2s ease;
+}
+.mx-seek-wrap:hover .mx-prog u::after {
+  content: "";
+  position: absolute;
+  right: -4px;
+  top: 50%;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+  transform: translateY(-50%);
+}
+#mac-seek-slider {
+  position: absolute;
+  inset: -3px 0;
+  width: 100%;
+  height: 17px;
+  opacity: 0;
+  cursor: pointer;
+  margin: 0;
+  z-index: 2;
+}
+.mx-transport { display: flex; align-items: center; justify-content: center; gap: 14px; height: 28px; }
+.mx-m-btn { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; color: var(--menu-fg) !important; transition: transform 0.12s ease, background 0.16s ease; }
+.mx-m-btn:hover { background: color-mix(in srgb, var(--menu-fg) 12%, transparent) !important; }
+.mx-m-btn:active { transform: scale(0.92); }
+.mx-m-btn.mx-play { background: var(--menu-fg) !important; color: var(--menu-bg, #000) !important; }
+
+/* Stats card (52px) with clean vertical divider and subtle meter bars */
+.mx-stats { flex: none; height: 52px; padding: 7px 10px; display: flex; align-items: stretch; gap: 0; box-sizing: border-box; }
+.mx-stat {
+  position: relative;
+  flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 4px;
+  color: var(--mac-accent, #0a84ff);
+}
+.mx-stat:not(:first-child):not(.hidden) {
+  padding-left: 10px;
+  margin-left: 10px;
+}
+.mx-stat:not(:first-child):not(.hidden)::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 4px;
+  bottom: 4px;
+  width: 1px;
+  background: color-mix(in srgb, var(--menu-fg) 16%, transparent);
+  border-radius: 1px;
+}
+.mx-stat.warn { color: #ff9f0a; }
+.mx-stat.crit { color: #ff453a; }
+
+/* Connected Bluetooth Device Status Card in Control Deck */
+.mx-stat-bt {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+.mx-stat-bt.hidden { display: none !important; }
+.mx-bt-ico {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(48, 209, 88, 0.16);
+  color: #30d158;
+}
+.mx-bt-ico svg {
+  width: 20px;
+  height: 20px;
+  overflow: visible;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.45));
+}
+.mx-bt-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+.mx-bt-name {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--menu-fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mx-bt-tag {
+  font-size: 8.5px;
+  font-weight: 500;
+  color: var(--menu-fg-dim);
+}
+.mx-bt-batt {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.mx-bt-pct {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--menu-fg);
+  font-variant-numeric: tabular-nums;
+}
+.mx-stat-bt .bt-ring {
+  flex: none;
+  display: block;
+}
+.mx-stat-bt .bt-ring-bg {
+  fill: none;
+  stroke: color-mix(in srgb, var(--menu-fg) 18%, transparent);
+  stroke-width: 2.4;
+}
+.mx-stat-bt .bt-ring-fg {
+  fill: none;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.35s ease, stroke 0.25s ease;
+}
+
+/* 2x2 toggles (36px tiles) */
+.mx-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.mx-tile {
+  position: relative;
+  height: 36px; padding: 0 6px 0 8px; border-radius: 18px; display: flex; align-items: center; gap: 7px;
+  text-align: left; min-width: 0; transition: background 0.16s ease, transform 0.12s ease;
+  cursor: pointer;
+}
+.mx-tile:hover  { background: color-mix(in srgb, var(--menu-fg) 14%, transparent) !important; }
+.mx-tile:active { transform: scale(0.97); }
+.mx-ico {
+  flex: none; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center;
+  background: color-mix(in srgb, var(--menu-fg) 20%, transparent); transition: background 0.18s ease;
+}
+.mx-ico svg { width: 13px; height: 13px; }
+.mx-tile.active .mx-ico { background: var(--mac-accent); color: var(--mac-accent-fg, #fff); }
+.mx-txt { min-width: 0; display: flex; flex-direction: column; line-height: 1.2; flex: 1; }
+.mx-txt b     { font-size: 10.5px; font-weight: 600; letter-spacing: -0.02em; color: var(--menu-fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mx-txt small { font-size: 9px; font-weight: 500; color: var(--menu-fg-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mx-tile.active .mx-txt small { color: var(--mac-accent-text, var(--mac-accent)); }
+.mx-tile-chev {
+  flex: none; width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center;
+  color: var(--menu-fg-dim); transition: background 0.14s ease, color 0.14s ease;
+}
+.mx-tile-chev:hover {
+  background: color-mix(in srgb, var(--menu-fg) 18%, transparent);
+  color: var(--menu-fg);
+}
+
+/* Pill sliders (22px) */
+.mx-sliders { display: flex; flex-direction: column; gap: 5px; }
+.mx-slider { position: relative; display: flex; align-items: center; }
+.mx-slider input[type="range"] {
+  -webkit-appearance: none; appearance: none; flex: 1; height: 22px; margin: 0; overflow: hidden;
+  border-radius: 11px; background: color-mix(in srgb, var(--menu-fg) 16%, transparent) !important; cursor: pointer;
+}
+.mx-slider input[type="range"]::-webkit-slider-runnable-track { height: 22px; background: transparent; }
+.mx-slider input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none; width: 0; height: 22px; background: transparent;
+  box-shadow: -600px 0 0 600px var(--mac-accent);
+}
+.mx-s-ico { position: absolute; left: 8px; top: 50%; transform: translateY(-50%); z-index: 2; pointer-events: none; color: #fff; mix-blend-mode: difference; }
+.mx-s-val { position: absolute; right: 10px; z-index: 2; pointer-events: none; font-size: 9.5px; font-weight: 600; color: #fff; mix-blend-mode: difference; font-variant-numeric: tabular-nums; }
+
+/* Quick action strip (24px) */
+.mx-quick { display: flex; align-items: center; justify-content: space-between; height: 24px; }
+.mx-q {
+  width: 48px; height: 24px; border-radius: 12px; display: grid; place-items: center;
+  color: var(--menu-fg-dim) !important;
+  background: color-mix(in srgb, var(--menu-fg) 9%, transparent) !important;
+  transition: background 0.16s ease, color 0.16s ease, transform 0.12s ease;
+}
+.mx-q:hover  { background: color-mix(in srgb, var(--menu-fg) 18%, transparent) !important; color: var(--menu-fg) !important; }
+.mx-q:active { transform: scale(0.94); }
+
+/* ============================================================
+   Album thumbnail corner source badge (Spotify / YouTube / Browser)
+   ============================================================ */
+.src-corner {
+  position: absolute;
+  right: -3px;
+  bottom: -2px;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: #27272d;
+  color: #fff;
+  box-shadow: 0 0 0 1.6px #121216, 0 2px 5px rgba(0, 0, 0, 0.45);
+  z-index: 3;
+  pointer-events: none;
+}
+.mx-art .src-corner {
+  box-shadow: 0 0 0 1.6px var(--menu-bg, #16161b), 0 1px 4px rgba(0, 0, 0, 0.35);
+}
+.src-corner .src-ico { display: grid; place-items: center; width: 100%; height: 100%; }
+.src-corner .src-ico svg { width: 11px; height: 11px; display: block; }
+.src-corner.src-spotify { background: #121212; }
+.src-corner.src-spotify .src-ico svg { width: 15px; height: 15px; }
+.src-corner.src-youtube {
+  width: 17px;
+  height: 12px;
+  border-radius: 4px;
+  background: #ff0033;
+  color: #ffffff;
+}
+.src-corner.src-youtube .src-ico svg { width: 12px; height: 12px; }
+.src-corner.src-youtube-music { background: #ff0033; color: #ffffff; }
+.src-corner.src-youtube-music .src-ico svg { width: 13px; height: 13px; }
+.src-corner.src-apple   { background: #fa243c; color: #ffffff; }
+.src-corner.src-vlc     { background: #ff6b00; color: #ffffff; }
+.src-corner.src-browser { background: #1d6ef2; color: #ffffff; }
+.src-corner.hidden { display: none !important; }
+
+/* ============================================================
+   Resting compact pill: native macOS SF-style icon + metric
+   ============================================================ */
+#c-clock { font-variant-numeric: tabular-nums; }
+#c-clock .c-stat-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4.5px;
+  height: 18px;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+#c-clock .c-stat-chip svg {
+  width: 12.5px;
+  height: 12.5px;
+  flex: none;
+  display: block;
+}
+#c-clock .c-stat-chip.is-weather svg { color: #fbbf24; }
+#c-clock .c-stat-chip.is-night   svg { color: #7dd3fc; }
+#c-clock .c-stat-chip.is-cpu     svg { color: #38bdf8; }
+#c-clock .c-stat-chip.is-ram     svg { color: #a78bfa; }
+#c-clock .c-stat-chip.is-bat     svg { color: #4ade80; }
+#c-clock .c-stat-chip.is-warn,
+#c-clock .c-stat-chip.is-warn svg { color: #ff9f0a; }
+#c-clock .c-stat-chip.is-crit,
+#c-clock .c-stat-chip.is-crit svg { color: #ff453a; }
+#c-clock .c-stat-chip > span {
+  display: inline-block;
+  text-align: left;
+  transform: translateY(0.2px);
+}
+
+/* ---- Round gauges (CPU / RAM / BAT) ---- */
+.mx-stats { height: 56px; padding: 6px 10px; }
+.mx-gauge { flex-direction: row; align-items: center; justify-content: flex-start; gap: 7px; }
+.mx-gauge .mx-g-ring { position: relative; flex: none; width: 40px; height: 40px; display: grid; place-items: center; }
+.mx-gauge .mx-g-ring svg { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(135deg); overflow: visible; }
+.mx-gauge circle { fill: none; stroke-width: 4.5; stroke-linecap: round; stroke-dasharray: 80.1 106.8; }
+.mx-gauge .mx-g-bg { stroke: color-mix(in srgb, var(--menu-fg) 14%, transparent); }
+.mx-gauge .mx-g-fg { stroke: currentColor; stroke-dasharray: 0 106.8; transition: stroke-dasharray 0.45s cubic-bezier(0.2, 0.8, 0.2, 1), stroke 0.25s ease; filter: drop-shadow(0 0 3px color-mix(in srgb, currentColor 45%, transparent)); }
+.mx-gauge .mx-g-val { position: relative; font-size: 10px; font-weight: 700; letter-spacing: -0.03em; color: var(--menu-fg); font-variant-numeric: tabular-nums; }
+.mx-gauge .mx-g-txt { min-width: 0; display: flex; flex-direction: column; line-height: 1.25; }
+.mx-gauge .mx-g-txt span { font-size: 9.5px; font-weight: 700; letter-spacing: 0.04em; color: var(--menu-fg); }
+.mx-gauge .mx-g-txt small { font-size: 8.5px; font-weight: 500; color: var(--menu-fg-dim); white-space: nowrap; }
+.mx-gauge .mx-g-txt small:empty { display: none; }
+.mx-gauge:not(:first-child):not(.hidden) { padding-left: 8px; margin-left: 6px; }
+
+/* Bluetooth tile: shows the connected device's icon (earbuds etc.) */
+.mx-ico.has-dev svg { width: 18px; height: 18px; overflow: visible; filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.45)); }
+
+
+/* ---- Quick action row: always fits the menu (max 7 tiles) ----
+   312px menu - 2px border - 28px padding = 282px. 7 x 36px + 6 x 4px = 276px. If the menu is ever narrower
+   (UI scale, translated labels ...) the circles shrink together instead of the last one being cut off. */
+.island .quick-icons-row { gap: 4px; flex-wrap: nowrap; justify-content: space-between; }
+.island.island.island:not([data-theme="matrix"]) .q-icon-btn {
+  flex: 0 1 36px; min-width: 0; width: auto; height: auto; aspect-ratio: 1 / 1;
+}
+
+/* BT card icon: a neutral device icon with subtle depth, without green or animation. */
+.mx-stat-bt .mx-bt-ico {
+  background: color-mix(in srgb, var(--menu-fg) 10%, transparent);
+  color: var(--menu-fg);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14), 0 2px 5px rgba(0, 0, 0, 0.28);
+}
+.mx-stat-bt .mx-bt-ico svg {
+  animation: none;
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.5));
+  transform: perspective(80px) rotateY(-16deg) rotateX(8deg);
+}
+
+/* Mac media card: notch-player-like album-coloured glow. */
+#mac-media { position: relative; overflow: hidden; isolation: isolate; }
+#mac-media .mx-media-top, #mac-media .mx-seek-wrap, #mac-media .mx-transport { position: relative; z-index: 1; }
+#mac-media .media-ambient-wave { opacity: 0.5; }
+#mac-media.no-ambient .media-ambient-wave { display: none; }
+
+/* Notch-opened media: no edge, blend into the player. */
+.island.state-media {
+  border: none !important;
+  background: #060608 !important;
+  box-shadow: none !important;
+}
+
+/* Music note: always visible on both players. */
+#mac-media::after, #view-media::after {
+  content: ""; position: absolute; right: -6px; bottom: -10px; width: 66px; height: 66px;
+  z-index: 0; pointer-events: none; opacity: 0.09; transform: rotate(14deg);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 18V5l12-2v13'/%3E%3Ccircle cx='6' cy='18' r='3'/%3E%3Ccircle cx='18' cy='16' r='3'/%3E%3C/svg%3E") center / contain no-repeat;
+          mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 18V5l12-2v13'/%3E%3Ccircle cx='6' cy='18' r='3'/%3E%3Ccircle cx='18' cy='16' r='3'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+#mac-media::after { background: var(--menu-fg); }
+#view-media::after { background: #fff; }
+
+/* Show the album-coloured glow only when media is available. */
+#mac-media .media-ambient-wave { transition: opacity 0.4s ease; }
+#mac-media:not(.has-media) .media-ambient-wave { opacity: 0; }
+
+/* Album-coloured ears follow the media panel and overlap its borderless edge. */
+
+/* Notch player glow: as subtle as the Mac card. */
+#view-media .media-ambient-wave { opacity: 0.38; }
+
+/* ==================== NOTCH MEDIA POPUP: follows Island Color like the Control Deck media card ==================== */
+/* Surface, text and ears all come from the menu colour (= Island Color). The album glow stays, but fades out towards the top edge
+   so the bezel ears (plain menu colour) meet the panel without a visible seam. */
+.island.state-media {
+  background: var(--menu-bg) !important;
+  color: var(--menu-fg) !important;
+}
+.island.state-media .media-ambient-card,
+#view-media.media-ambient-card {
+  background: transparent !important;
+  color: var(--menu-fg) !important;
+}
+#view-media .media-ambient-wave {
+  opacity: 0.14;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, #000 55%);
+          mask-image: linear-gradient(to bottom, transparent 0%, #000 55%);
+}
+#view-media .media-cover { background: color-mix(in srgb, var(--menu-fg) 12%, transparent); border-color: color-mix(in srgb, var(--menu-fg) 18%, transparent); }
+#view-media .media-meta strong { color: var(--menu-fg); text-shadow: none; }
+#view-media .media-meta small  { color: var(--menu-fg-dim); }
+#view-media .m-eq span { background: var(--menu-fg) !important; }
+#view-media .media-timeline { color: var(--menu-fg-dim); }
+#view-media .t-bar  { background: color-mix(in srgb, var(--menu-fg) 20%, transparent); }
+#view-media .t-fill { background: var(--menu-fg); }
+#view-media .m-btn  { color: var(--menu-fg); }
+#view-media .media-vol-row { color: var(--menu-fg-dim); }
+#view-media .media-vol-row input[type="range"] { accent-color: var(--menu-fg); }
+#view-media::after { background: var(--menu-fg); }
+#m-art-fallback { stroke: currentColor; }
+
+/* The generic ".view.active > *" entrance ("rise") animated the glow layer's opacity 0 -> 1, so for a third of a second the album glow
+   was far stronger than its resting 0.32: the popup opened grey and then lightened (looked cut / not synced). The glow gets its own
+   entrance that ends exactly on its resting opacity. */
+@keyframes mediaWaveIn { from { opacity: 0; } to { opacity: 0.14; } }
+#view-media.view.active > .media-ambient-wave {
+  animation: mediaWaveIn 0.5s ease both;
+  animation-delay: 0s;
+}
+
+/* The thin light "line" that flashed when the island shrank back to the notch:
+   "border: none / 0" resets the border colour to currentColor (the light menu text colour), and the 0.22s border-color transition then
+   faded that colour out on the notch edge. Keep the border colour transparent in every popup state so there is nothing to fade. */
+.island.state-media,
+.island.island.island.island.island.island.island.state-compact:is(.bt-hud-active, .alarm-active, .transferring, .has-toast, .incoming-open, .biometric-active) {
+  border-color: transparent !important;
+}
+
+/* Keep-awake button in the Mac menu top bar: filled when ON */
+.mx-icon-btn.active { background: var(--menu-fg) !important; color: var(--menu-bg, #000) !important; }
+
+
+/* Mac menu: mic tile (slash shows when muted) + tray icon badge in the top bar */
+.mx-mic-slash { display: none; }
+#mac-tile-mic.muted .mx-mic-slash { display: block; }
+#mac-tile-mic.muted .mx-txt small { color: #ff453a; }
+/* Mic mute quick buttons (Classic quick row + Mac quick row): slash + red tint while muted */
+.q-mic-slash { display: none; }
+.q-icon-btn.muted .q-mic-slash, .mx-q.muted .mx-mic-slash { display: block; }
+.q-icon-btn.muted, .mx-q.muted { color: #ff453a !important; }
+.mx-icon-btn { position: relative; }
+.mx-tray-badge {
+  position: absolute; top: -4px; right: -4px; min-width: 12px; height: 12px; padding: 0 3px; border-radius: 6px;
+  font-size: 8px; font-weight: 700; line-height: 12px; text-align: center;
+  background: var(--mac-accent, #0a84ff); color: var(--mac-accent-fg, #fff);
+}
+.mx-tray-badge.hidden { display: none !important; }
+
+/* ===== Mac menu: Tray + Inex Drop two-panel view (500 x 172) ===== */
+.island.state-tray-mac { width: 500px; height: 172px; }
+.island.state-tray-mac {
+  transition: width 0.55s var(--spring-menu), height 0.55s var(--spring-menu),
+              border-radius 0.4s var(--ease-close), opacity 0.22s ease,
+              border-color 0.22s ease, background 0.25s ease, top 0.4s var(--ease-close);
+  border-radius: 0 0 var(--radius-menu) var(--radius-menu) !important;
+  border: 1px solid var(--line) !important;
+  border-top: none !important;
+  box-shadow: none;
+}
+.island[data-menu="transparent"].state-tray-mac {
+  background: rgba(6, 6, 9, 0.40) !important;
+  backdrop-filter: blur(24px) saturate(160%) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(160%) !important;
+  color: #f5f5f7 !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12) !important;
+}
+.island[data-menu="color"].state-tray-mac {
+  background: var(--menu-bg) !important;
+  color: var(--menu-fg) !important;
+  backdrop-filter: blur(28px) saturate(180%) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.10) !important;
+}
+#view-tray-mac.view.active {
+  display: flex !important; flex-direction: row; gap: 8px;
+  padding: 8px 10px 10px; box-sizing: border-box; overflow: hidden;
+  font-family: var(--font-main); color: inherit;
+}
+#view-tray-mac button { font-family: inherit; color: inherit; border: 0; background: none; cursor: pointer; }
+.mt-panel {
+  position: relative; min-width: 0; border-radius: 18px; box-sizing: border-box;
+  background: color-mix(in srgb, var(--menu-fg) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--menu-fg) 10%, transparent);
+  transition: background 0.16s ease, border-color 0.16s ease;
+}
+.mt-drop {
+  flex: 0 0 38%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+  cursor: pointer; color: var(--menu-fg);
+}
+.mt-drop b { font-size: 12px; font-weight: 600; letter-spacing: -0.01em; margin-top: 4px; }
+.mt-drop small { font-size: 10px; color: var(--menu-fg-dim); }
+.mt-drop:hover { background: color-mix(in srgb, var(--menu-fg) 14%, transparent); }
+.mt-tray { flex: 1; display: flex; flex-direction: column; color: var(--menu-fg); }
+.mt-empty {
+  flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+  font-size: 11.5px; font-weight: 600; color: var(--menu-fg-dim);
+}
+.mt-empty.hidden, .mt-filled.hidden { display: none !important; }
+.mt-filled { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 8px 10px 8px; gap: 6px; }
+.mt-head { flex: none; display: flex; align-items: center; justify-content: space-between; font-size: 11px; font-weight: 600; color: var(--menu-fg-dim); }
+.mt-files { flex: 1; min-height: 0; display: flex; gap: 8px; overflow-x: auto; overflow-y: hidden; align-items: stretch; scrollbar-width: none; }
+.mt-files::-webkit-scrollbar { display: none; }
+.mt-file {
+  position: relative; flex: none; width: 74px; border-radius: 12px; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 6px; padding: 6px 4px; box-sizing: border-box;
+  background: color-mix(in srgb, var(--menu-fg) 10%, transparent); cursor: grab; color: var(--menu-fg);
+}
+.mt-file:hover { background: color-mix(in srgb, var(--menu-fg) 16%, transparent); }
+.mt-fname { width: 100%; font-size: 9.5px; font-weight: 500; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mt-del {
+  position: absolute; top: 3px; right: 3px; width: 15px; height: 15px; border-radius: 50%; display: none;
+  place-items: center; font-size: 11px; line-height: 1; background: color-mix(in srgb, var(--menu-fg) 22%, transparent) !important;
+}
+.mt-file:hover .mt-del { display: grid; }
+/* while dragging a file over the island: calm, solid Mac-style cards (no animation), hovered one gets brighter */
+#view-tray-mac.dragging .mt-panel { border-color: color-mix(in srgb, var(--menu-fg) 16%, transparent); }
+#view-tray-mac .mt-panel.over {
+  background: color-mix(in srgb, var(--menu-fg) 20%, transparent);
+  border-color: color-mix(in srgb, var(--menu-fg) 38%, transparent);
+}
+
+
+/* ==================== CONTROL DECK (Mac menu) · tray pane, Inex Drop rail, P2P bar ==================== */
+/* Tray pane: fills the whole body, the top strip stays. No animation. */
+#view-control-mac.tray-open > .mx-body { visibility: hidden; flex: 0 0 0; height: 0; min-height: 0; margin-bottom: -6px; overflow: hidden; }
+#view-control-mac #view-tray-mac.in-mac-tray.view.active {
+  flex: 1; min-height: 0; width: 100%; height: auto; padding: 0; gap: 10px; animation: none !important;
+}
+#view-control-mac #view-tray-mac.in-mac-tray > * { animation: none !important; }
+#mac-tray-btn.on { background: color-mix(in srgb, var(--menu-fg) 22%, transparent) !important; color: var(--menu-fg) !important; }
+
+/* Tray cards: Mac look = hairline border, soft top highlight, drop well with a dashed border */
+.mt-panel {
+  border-radius: 16px;
+  background: var(--color-tile-bg, color-mix(in srgb, var(--menu-fg) 9%, transparent));
+  border: 1px solid color-mix(in srgb, var(--menu-fg) 13%, transparent);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--menu-fg) 8%, transparent);
+}
+.mt-empty { margin: 7px; border-radius: 11px; border: 1.5px dashed color-mix(in srgb, var(--menu-fg) 22%, transparent); }
+.mt-file { border: 1px solid color-mix(in srgb, var(--menu-fg) 12%, transparent); box-sizing: border-box; }
+
+/* Inex Drop side slider: smaller (Mac menu only) */
+.island.state-control-mac .drop-rail { width: 26px; padding: 2px; gap: 3px; border-radius: 13px; top: calc(50% - 25px); }
+.island.state-control-mac .drop-rail-ind { left: 2px; top: 2px; width: 22px; height: 22px; transform: translateY(calc(var(--i) * 25px)); }
+.island.state-control-mac .rail-btn { width: 22px; height: 22px; }
+.island.state-control-mac .rail-btn svg { width: 12px; height: 12px; }
+
+/* P2P: options live in the Back line; the body only keeps the join row + peers */
+.mx-p2p-actions { display: flex; align-items: center; gap: 5px; min-width: 0; }
+.mx-p2p-actions .p2p-exit-btn { height: 20px; padding: 0 7px; }
+.mx-p2p-actions .p2p-expiry-badge { font-size: 10px; padding: 0; }
+.mx-p2p-actions .status-tag { flex: none; max-width: 92px; padding: 2px 7px; font-size: 9px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.island.state-control-mac #view-p2p .p2p-body { flex: 1; min-height: 0; margin: 0; padding: 2px 36px 0 2px; gap: 6px; }
+.island.state-control-mac #view-p2p .p2p-top-actions { justify-content: center; }
+
+/* Mac menu: lay the content out at its FINAL width from the first frame of the opening, centred, and let the
+   island simply reveal it. Before, the content was 100% of the still-growing island, so the clock wrapped onto
+   two lines ("07:17 / am", "Sat, / 14 / Nov") and the tiles were squeezed until the island reached full width.
+   478px = 500px island - 2px border - 2 x 10px padding. No animation added. */
+#view-control-mac > .mx-top,
+#view-control-mac > .mx-body,
+#view-control-mac > #mx-widgets-body,
+#view-control-mac #view-tray-mac.in-mac-tray.view.active {
+  width: 478px; min-width: 478px; max-width: none; margin-left: calc(50% - 239px);
+}
+.mx-time, .mx-time b, .mx-time span, .mx-weather { white-space: nowrap; }
+
+/* ==================== NEXUS VOICE glyphs ==================== */
+/* The island itself is the Face ID / unlock card (.biometric-active, 92 x 92); only the glyph inside differs. */
+.nx-wave { display: flex; align-items: center; justify-content: center; gap: 3px; height: 38px; }
+.nx-wave i {
+  display: block; width: 3.5px; height: 34px; border-radius: 2px; flex: 0 0 3.5px;
+  background: linear-gradient(180deg, #8ff3ff 0%, #30d158 100%);
+  box-shadow: 0 0 7px rgba(90, 220, 230, 0.35);
+  transform-origin: center;
+  animation: nxBar var(--t, 1s) ease-in-out var(--dl, 0s) infinite alternate;
+}
+.nx-wave i:nth-child(1) { --h: 0.38; --t: 0.95s; --dl: -0.30s; }
+.nx-wave i:nth-child(2) { --h: 0.64; --t: 0.80s; --dl: -0.55s; }
+.nx-wave i:nth-child(3) { --h: 0.86; --t: 1.05s; --dl: -0.10s; }
+.nx-wave i:nth-child(4) { --h: 1.00; --t: 0.90s; --dl: -0.70s; }
+.nx-wave i:nth-child(5) { --h: 0.82; --t: 1.10s; --dl: -0.40s; }
+.nx-wave i:nth-child(6) { --h: 0.60; --t: 0.85s; --dl: -0.20s; }
+.nx-wave i:nth-child(7) { --h: 0.36; --t: 1.00s; --dl: -0.60s; }
+@keyframes nxBar { 0% { transform: scaleY(0.16); } 100% { transform: scaleY(var(--h, 1)); } }
+
+.nx-aurora { position: relative; width: 38px; height: 38px; animation: nxPop 0.55s cubic-bezier(0.34, 1.7, 0.64, 1) both; }
+.nx-aurora b { position: absolute; border-radius: 50%; }
+.nx-aurora b:nth-child(1) { inset: 0; opacity: 0.95; filter: blur(5px); background: conic-gradient(from 0deg, #5ac8fa, #30d158, #bf5af2, #5ac8fa); animation: nxSpin 2.2s linear infinite; }
+.nx-aurora b:nth-child(2) { inset: 5px; filter: blur(1.5px); mix-blend-mode: screen; background: conic-gradient(from 180deg, rgba(255,255,255,0), rgba(255,255,255,0.85), rgba(255,255,255,0) 60%); animation: nxSpin 1.4s linear infinite reverse; }
+.nx-aurora b:nth-child(3) { inset: 12px; background: radial-gradient(circle, #fff 0%, rgba(255,255,255,0) 70%); animation: nxPulse 1.3s ease-in-out infinite; }
+@keyframes nxSpin { to { transform: rotate(360deg); } }
+@keyframes nxPulse { 0%, 100% { transform: scale(0.7); opacity: 0.55; } 50% { transform: scale(1.15); opacity: 1; } }
+@keyframes nxPop { 0% { transform: scale(0.55); opacity: 0; filter: blur(4px); } 100% { transform: scale(1); opacity: 1; filter: blur(0); } }
+.nx-wave { animation: nxPop 0.5s cubic-bezier(0.34, 1.7, 0.64, 1) both; }
+
+
+/* ==================== MAC MENU: Inex Drop incoming offer (Accept / Decline) ==================== */
+/* The offer card has to fit the panel with no scrollbar: compact, nothing clipped, centred between the rail gap. */
+.in-mac-sub .drop-body.has-prompt,
+.mx-sub-mount.has-prompt {
+  overflow: hidden !important;
+}
+.island.has-rail #view-inexdrop.in-mac-sub.has-prompt .drop-body,
+.island.has-rail #view-inexdrop.in-mac-sub .drop-body.has-prompt {
+  max-height: none !important; min-height: 0; padding: 0 40px 4px; justify-content: center;
+}
+.in-mac-sub #drop-state-prompt .drop-prompt-card {
+  padding: 7px 10px 8px; gap: 0; border-radius: 14px; margin: 0 auto;
+}
+.in-mac-sub #drop-state-prompt .drop-prompt-dev {
+  width: 100%; font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.in-mac-sub #drop-state-prompt .drop-prompt-dev span { display: block; overflow: hidden; text-overflow: ellipsis; }
+.in-mac-sub #drop-state-prompt .drop-prompt-headline { font-size: 9.5px; margin: 0 0 3px; }
+.in-mac-sub #drop-state-prompt #prompt-pin { font-size: 16px !important; letter-spacing: 4px !important; margin: 0 0 5px !important; line-height: 1.15; }
+.in-mac-sub #drop-state-prompt .drop-prompt-filebox {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 4px 8px; margin-bottom: 6px; text-align: left;
+}
+.in-mac-sub #drop-state-prompt .prompt-fname { flex: 1; min-width: 0; max-width: none; margin: 0; font-size: 10.5px; }
+.in-mac-sub #drop-state-prompt .prompt-fsize { flex: none; margin: 0; font-size: 9px; }
+.in-mac-sub #drop-state-prompt .drop-prompt-actions { margin-bottom: 0; gap: 6px; }
+.in-mac-sub #drop-state-prompt .prompt-accept-btn,
+.in-mac-sub #drop-state-prompt .prompt-decline-btn { height: 24px !important; font-size: 10.5px !important; }
+
+

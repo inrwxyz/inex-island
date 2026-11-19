@@ -112,6 +112,7 @@ function cancelCloseEase() {
 function switchView(viewId, stateClass, winWidth, winHeight) {
   appState.keepOpen = false;
   if (typeof macWidgetsReset === 'function') macWidgetsReset();
+  if (typeof macPrayerReset === 'function') macPrayerReset();
   if (typeof closeMacSub === 'function') closeMacSub();
   if (typeof closeMacTrayPane === 'function') closeMacTrayPane();
   if (appState.currentView === 'view-bt' && viewId !== 'view-bt') {

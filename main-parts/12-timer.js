@@ -55,7 +55,16 @@ function triggerTimerAlarm(opts) {
   const ttl = document.getElementById('alarm-title');
   if (ttl) ttl.textContent = opts.title || "Time's Up";
   const snz = document.getElementById('btn-alarm-snooze');
-  if (snz) snz.classList.toggle('hidden', !opts.snooze);
+  if (snz) {
+    snz.classList.toggle('hidden', !opts.snooze);
+    snz.textContent = opts.snoozeLabel || 'Snooze';
+    snz.title = opts.snoozeTitle || 'Snooze 9 minutes';
+  }
+  const stopBtn = document.getElementById('btn-alarm-dismiss');
+  if (stopBtn) stopBtn.textContent = opts.dismissLabel || 'Stop';
+  alarmBox.classList.toggle('pr-alert', opts.kind === 'prayer');          // Prayer & Solar Deck: calm Adhan card
+  alarmBox.classList.remove('pr-quiet');
+  island.classList.toggle('alarm-prayer', opts.kind === 'prayer');
   appState.alarmSnoozable = !!opts.snooze;
   appState.alarmOpts = opts;
   alarmBox.classList.remove('hidden');
@@ -71,7 +80,7 @@ function triggerTimerAlarm(opts) {
     island.classList.add('alarm-active');
   }, 110);
 
-  if (SET.notch && SET.notch.timerSound !== false) {
+  if (!opts.silent && SET.notch && SET.notch.timerSound !== false) {   // silent: caller plays its own sound (Adhan)
     playAlarmChime();
     alarmChimeInterval = setInterval(() => {
       if (appState.alarmActive && !appState.alarmClosing) {
@@ -95,12 +104,13 @@ function dismissTimerAlarm() {
   const alarmBox = document.getElementById('c-alarm-box');
   if (!alarmBox || !appState.alarmActive || appState.alarmClosing) return;
   appState.alarmClosing = true;
+  try { if (appState.alarmOpts && appState.alarmOpts.onDismiss) appState.alarmOpts.onDismiss(); } catch (_) {}
 
   // content fades, island shrinks back to the pill (no bounce), the old status comes back
   island.classList.remove('hud-pre');
   island.classList.add('alarm-active', 'hud-out');
   alarmBackT = setTimeout(() => {
-    island.classList.remove('alarm-active', 'alarm-full', 'hud-out');
+    island.classList.remove('alarm-active', 'alarm-full', 'hud-out', 'alarm-prayer');
     island.classList.add('hud-back');
     alarmCleanT = setTimeout(() => {
       alarmBox.classList.add('hidden');

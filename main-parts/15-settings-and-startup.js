@@ -39,6 +39,7 @@ function syncIslandHit(targetZoom) {
 function applySettings() {
   applyTheme(SET);
   if (typeof applyScreenTimeSetting === 'function') applyScreenTimeSetting();
+  if (typeof prayerApplySettings === 'function') prayerApplySettings();
   island.dataset.menu = menuSurface(SET.appearance).style;
   const validTheme = ['default', 'matrix'].includes(SET.appearance.themeStyle) ? SET.appearance.themeStyle : 'default';
   island.dataset.theme = validTheme;

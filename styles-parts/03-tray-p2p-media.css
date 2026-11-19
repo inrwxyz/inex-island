@@ -1,0 +1,406 @@
+/* ==================== 6. FILE TRAY & PEER PICKER ==================== */
+.tray-files-grid {
+  display: flex;
+  gap: 8px;
+  padding: 6px 14px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  flex: 1;
+  align-items: center;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(150, 150, 160, 0.45) transparent;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+}
+.tray-files-grid::-webkit-scrollbar {
+  height: 5px;
+}
+.tray-files-grid::-webkit-scrollbar-track {
+  background: transparent;
+}
+.tray-files-grid::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 4px;
+}
+.tray-files-grid::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.55);
+}
+.tray-file-card {
+  min-width: 80px;
+  max-width: 80px;
+  height: 68px;
+  flex-shrink: 0;
+  background: var(--color-tile-bg);
+  border: 1px solid rgba(150, 150, 160, 0.28);
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 4px;
+  position: relative;
+  cursor: pointer;
+  user-select: none;
+  transition: transform 0.12s ease, border-color 0.12s ease, background 0.12s ease;
+}
+.tray-file-card:hover {
+  border-color: rgba(255, 255, 255, 0.4);
+}
+.tray-file-card.sel {
+  border: 1.5px solid #38bdf8 !important;
+  background: rgba(56, 189, 248, 0.14) !important;
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.35);
+}
+.tray-file-card .f-check {
+  display: none;
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 15px;
+  height: 15px;
+  background: #38bdf8;
+  color: #000;
+  font-size: 10px;
+  font-weight: 900;
+  border-radius: 50%;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+.tray-file-card.sel .f-check {
+  display: flex;
+}
+.tray-file-card .f-name {
+  font-size: 8.5px;
+  opacity: 0.85;
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: center;
+  margin-top: 4px;
+}
+.tray-file-card .f-del {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  line-height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(239, 68, 68, 0.22);
+  border: 1px solid rgba(239, 68, 68, 0.45);
+  border-radius: 50%;
+  color: #f87171;
+  font-size: 13px;
+  font-weight: bold;
+  opacity: 0.85;
+  cursor: pointer;
+  z-index: 10;
+  transition: all 0.15s ease;
+}
+.tray-file-card .f-del:hover {
+  background: rgba(239, 68, 68, 0.9);
+  color: #ffffff;
+  opacity: 1;
+  transform: scale(1.15);
+}
+.tray-file-card > svg { width: 22px; height: 22px; }
+
+.peer-picker-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 14px 4px;
+  font-size: 10px;
+}
+.peer-chips { display: flex; gap: 5px; overflow-x: auto; }
+.peer-chip {
+  background: var(--color-tile-bg);
+  border: 1px solid currentColor;
+  color: inherit;
+  border-radius: 8px;
+  padding: 2px 8px;
+  font-size: 9.5px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.tray-share-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding: 6px 14px 14px;
+}
+.share-action-btn {
+  background: var(--color-tile-bg);
+  border: 1px solid rgba(150, 150, 160, 0.28);
+  border-radius: 9px;
+  padding: 8px 10px;
+  color: inherit;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+}
+.share-action-btn:hover { background: rgba(150, 150, 160, 0.15); }
+
+/* ==================== 7. P2P LINK ==================== */
+.status-tag {
+  font-size: 9.5px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 8px;
+  border: 1px solid rgba(150, 150, 160, 0.4);
+  font-family: var(--font-mono);
+}
+.p2p-body {
+  padding: 4px 14px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+  overflow: hidden;
+}
+.p2p-top-actions { display: flex; gap: 6px; align-items: center; }
+.gen-code-btn {
+  background: var(--color-tile-bg);
+  border: 1px solid currentColor;
+  color: inherit;
+  border-radius: 9px;
+  padding: 6px 10px;
+  font-size: 10.5px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.pair-btn {
+  background: var(--color-tile-on-bg);
+  color: var(--color-tile-on-fg);
+  border: none;
+  border-radius: 9px;
+  padding: 0 11px;
+  font-size: 10.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.p2p-expiry-badge {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 0 4px;
+  background: transparent;
+  border: none;
+  color: #a1a1aa;
+  letter-spacing: 0.5px;
+  display: inline-flex;
+  align-items: center;
+}
+.p2p-exit-btn {
+  background: rgba(239, 68, 68, 0.16);
+  border: 1px solid rgba(239, 68, 68, 0.32);
+  color: #f87171;
+  border-radius: 6px;
+  padding: 2px 7px;
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  transition: all 0.15s ease;
+}
+.p2p-exit-btn:hover {
+  background: rgba(239, 68, 68, 0.35);
+  color: #fff;
+  border-color: rgba(239, 68, 68, 0.6);
+}
+.peer-send-btn {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: inherit;
+  border-radius: 6px;
+  padding: 3px 8px;
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  transition: background 0.15s ease;
+}
+.peer-send-btn:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
+.empty-hint {
+  font-size: 10px;
+  opacity: 0.65;
+  text-align: center;
+  margin-top: 16px;
+}
+
+/* ==================== 8. INEX AMBIENT MEDIA PLAYER ==================== */
+.media-ambient-card {
+  --amb: 70, 130, 180;
+  background: #060608 !important;
+  color: #ffffff !important;
+  justify-content: space-between;
+  padding-bottom: 12px;
+  position: relative;
+  overflow: hidden;
+}
+
+.media-ambient-wave {
+  position: absolute;
+  inset: -35%;
+  background:
+    radial-gradient(circle at 30% 35%, rgba(var(--amb), 0.88) 0%, transparent 55%),
+    radial-gradient(circle at 75% 65%, rgba(var(--amb), 0.68) 0%, transparent 60%);
+  filter: blur(22px);
+  animation: ambientWave 6s ease-in-out infinite alternate;
+  pointer-events: none;
+  z-index: 0;
+}
+.media-ambient-card.no-ambient .media-ambient-wave {
+  display: none;
+}
+@keyframes ambientWave {
+  0%   { transform: scale(1) translate(-4%, -3%) rotate(0deg); }
+  50%  { transform: scale(1.12) translate(4%, 4%) rotate(6deg); }
+  100% { transform: scale(1.04) translate(-2%, 5%) rotate(-4deg); }
+}
+
+.media-top, .media-timeline, .media-transport, .media-vol-row {
+  position: relative;
+  z-index: 1;
+}
+.media-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px 4px;
+}
+.media-cover {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  border-radius: 9px;
+  overflow: visible;
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
+}
+.media-cover .art-img { border-radius: 8px; }
+.media-meta { flex: 1; overflow: hidden; }
+.media-meta strong {
+  font-size: 13px;
+  font-weight: 700;
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.4);
+}
+.media-meta small {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.72);
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.m-eq { height: 20px; }
+.m-eq span { width: 3px; background: rgba(255, 255, 255, 0.9) !important; transform: scaleY(0.1); }
+
+.media-timeline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 14px;
+  font-size: 9.5px;
+  font-family: var(--font-mono);
+  color: rgba(255, 255, 255, 0.78);
+}
+.t-bar {
+  position: relative;
+  flex: 1;
+  height: 5px;
+  background: rgba(255, 255, 255, 0.24);
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+}
+.t-fill {
+  width: 0%;
+  height: 100%;
+  background: #ffffff;
+  border-radius: 4px;
+  pointer-events: none;
+}
+#m-seek-slider {
+  position: absolute;
+  inset: -4px 0;
+  width: 100%;
+  height: 13px;
+  opacity: 0;
+  cursor: pointer;
+  margin: 0;
+}
+
+.media-transport {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 22px;
+  padding: 4px 0 2px;
+}
+.m-btn {
+  background: none;
+  border: none;
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.15s, opacity 0.15s;
+}
+.m-btn:hover { transform: scale(1.1); }
+.m-btn.muted-ico { opacity: 0.6; }
+.m-btn.muted-ico:hover { opacity: 1; }
+.m-btn.play-circle { width: 34px; height: 34px; background: transparent; }
+
+.media-vol-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: rgba(255, 255, 255, 0.8);
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  padding: 0 16px;
+  transition: max-height 0.3s var(--spring), opacity 0.25s ease, padding 0.3s var(--spring);
+}
+.state-media.vol-open .media-vol-row {
+  max-height: 28px;
+  opacity: 1;
+  padding: 4px 16px 0;
+}
+.media-vol-row input[type="range"] {
+  flex: 1;
+  height: 3.5px;
+  accent-color: #fff;
+  cursor: pointer;
+}
+

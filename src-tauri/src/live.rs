@@ -245,16 +245,26 @@ fn hook_session(
 }
 
 #[cfg(target_os = "windows")]
+fn is_self_media_session(s: &windows::Media::Control::GlobalSystemMediaTransportControlsSession) -> bool {
+    let raw = s.SourceAppUserModelId().map(|x| x.to_string()).unwrap_or_default().to_ascii_lowercase();
+    raw.contains("inex") || raw.contains("island") || raw.contains("tauri")
+}
+
+#[cfg(target_os = "windows")]
 fn attach_media(
     app: &AppHandle,
     m: &windows::Media::Control::GlobalSystemMediaTransportControlsSessionManager,
 ) {
     if let Ok(sessions) = m.GetSessions() {
         for s in sessions {
-            hook_session(app, &s);
+            if !is_self_media_session(&s) {
+                hook_session(app, &s);
+            }
         }
     } else if let Ok(s) = m.GetCurrentSession() {
-        hook_session(app, &s);
+        if !is_self_media_session(&s) {
+            hook_session(app, &s);
+        }
     }
 }
 

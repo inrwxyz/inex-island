@@ -384,6 +384,7 @@ document.getElementById('c-alarm-box')?.addEventListener('click', (e) => {
 });
 document.getElementById('btn-alarm-snooze')?.addEventListener('click', (e) => {
   e.stopPropagation();
+  if (appState.alarmOpts && typeof appState.alarmOpts.onSnooze === 'function') { appState.alarmOpts.onSnooze(); return; }   // Adhan card: this button is "Mute"
   if (typeof snoozeClockAlarm === 'function') snoozeClockAlarm();
   if (typeof dismissTimerAlarm === 'function') dismissTimerAlarm();
 });

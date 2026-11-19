@@ -3,6 +3,11 @@
   nsExec::Exec 'taskkill /F /IM inex-island.exe'
 !macroend
 
+!macro NSIS_HOOK_POSTINSTALL
+  CreateDirectory "$INSTDIR\audio"
+  CopyFiles /SILENT "$INSTDIR\_up_\src\audio\*.*" "$INSTDIR\audio"
+!macroend
+
 !macro NSIS_HOOK_PREUNINSTALL
   DetailPrint "Closing existing Inex Island instances..."
   nsExec::Exec 'taskkill /F /IM inex-island.exe'

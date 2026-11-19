@@ -90,6 +90,8 @@ const STAT_MODE_OPTIONS = [
   ['disk', 'Disk']
 ];
 const PET_ON = (s) => !!s.companion.enabled;
+const PRAYER_ON = (s) => !!(s.prayer && s.prayer.enabled);
+const PRAYER_MASJID_ON = (s) => PRAYER_ON(s) && !!s.prayer.masjidOverride;
 // Companion Pet only shows up here once Enable Companion is on (Settings > Notch > Companion Pet)
 const COMPACT_CONTENT_OPTS = (s) => [
   ['clock', 'Time (Default)'],
@@ -203,15 +205,32 @@ const PAGES = [
 
   {
     id: 'sounds', num: '03', label: 'Sounds & Alarms', eyebrow: 'AUDIO & ALARMS',
-    title: 'Sounds & Alarms', sub: 'Native Windows sounds, status alerts, productivity chimes, and desktop clock alarms.',
+    title: 'Sounds & Alarms', sub: 'Native Windows sounds, status alerts, productivity chimes, desktop clock alarms, and prayer alerts.',
     icon: 'sound',
     hero: 'soundsMaster',
     sections: [
-      { id: 'sounds-events', title: 'System Status Sounds', defaultOpen: true, rows: [
+      { id: 'sounds-events', title: 'System Status Sounds', showIf: (s) => (s.sounds?.enabled !== false) && statusSoundsEditOpen, defaultOpen: true, rows: [
         { path: 'sounds.power', type: 'toggle', icon: 'battery', t: 'Charger & Low Battery', d: 'Soft chime on plug-in, unplug and low battery warning', disabledIf: (s) => !s.sounds?.enabled, preview: 'power' },
         { path: 'sounds.bluetooth', type: 'toggle', icon: 'bt', t: 'Bluetooth Connect', d: 'Crisp pluck when headphones or BT devices connect', disabledIf: (s) => !s.sounds?.enabled, preview: 'bluetooth' },
         { path: 'sounds.transfer', type: 'toggle', icon: 'upload', t: 'File Drop & P2P Transfer', d: 'Tone for incoming files and completed transfers', disabledIf: (s) => !s.sounds?.enabled, preview: 'transfer' },
         { path: 'sounds.lock', type: 'toggle', icon: 'lock', t: 'Lock / Unlock Reveal', d: 'Chime paired with biometric / locker unlock animation', disabledIf: (s) => !s.sounds?.enabled, preview: 'lock' }
+      ] },
+      { id: 'sounds-prayer', title: 'Prayer & Solar Deck', defaultOpen: true, rows: [
+        { path: 'prayer.enabled', type: 'toggle', icon: 'moon', t: 'Prayer & Solar Deck', d: 'Adds a mosque button to the Control Deck with prayer times, the sun\'s path and Adhan alerts. Off = nothing shown, nothing running', onChange: (v) => { if (!v) prayerEditOpen = false; } },
+        { path: 'prayer.locationMode', type: 'seg', icon: 'pin', t: 'Location', d: 'Found once and kept on this PC. No background network use', options: [['auto', 'Auto (GPS/IP)'], ['manual', 'Custom City']], showIf: (s) => PRAYER_ON(s) && prayerEditOpen },
+        { path: 'prayer.city', type: 'text', icon: 'pin', t: 'City', d: 'City, Country. Press Enter to apply', placeholder: 'e.g. Sagardighi, India  or  Dhaka', showIf: (s) => PRAYER_ON(s) && prayerEditOpen && s.prayer.locationMode === 'manual' },
+        { path: 'prayer.asrMethod', type: 'seg', icon: 'sun', t: 'Asr Method', d: 'Shadow length used for Asr', options: [['standard', 'Standard (Shafi/Hanbali/Maliki)'], ['hanafi', 'Hanafi']], showIf: (s) => PRAYER_ON(s) && prayerEditOpen },
+        { path: 'prayer.masjidOverride', type: 'toggle', icon: 'clock', t: 'Custom Masjid Timings', d: 'Use your local mosque\'s clock instead of the calculated times. Empty fields stay calculated', showIf: (s) => PRAYER_ON(s) && prayerEditOpen },
+        { path: 'prayer.masjid.fajr', type: 'text', icon: 'clock', t: 'Fajr', d: 'e.g. 4:45 or 04:45 AM', placeholder: '04:45', showIf: (s) => PRAYER_MASJID_ON(s) && prayerEditOpen },
+        { path: 'prayer.masjid.dhuhr', type: 'text', icon: 'clock', t: 'Dhuhr', d: 'e.g. 12:15 or 12:15 PM', placeholder: '12:15', showIf: (s) => PRAYER_MASJID_ON(s) && prayerEditOpen },
+        { path: 'prayer.masjid.asr', type: 'text', icon: 'clock', t: 'Asr', d: 'e.g. 3:30 or 03:30 PM', placeholder: '03:30', showIf: (s) => PRAYER_MASJID_ON(s) && prayerEditOpen },
+        { path: 'prayer.masjid.maghrib', type: 'text', icon: 'clock', t: 'Maghrib', d: 'e.g. 5:25 or 05:25 PM', placeholder: '05:25', showIf: (s) => PRAYER_MASJID_ON(s) && prayerEditOpen },
+        { path: 'prayer.masjid.isha', type: 'text', icon: 'clock', t: 'Isha', d: 'e.g. 7:00 or 07:00 PM', placeholder: '07:00', showIf: (s) => PRAYER_MASJID_ON(s) && prayerEditOpen },
+        { path: 'prayer.adhanSound', type: 'select', icon: 'sound', t: 'Adhan Sound', d: 'Played at prayer times with Mute and Dismiss options', options: [['madinah', 'Masjid Nabawi Adhan'], ['beep', 'Peaceful Chime (12s)'], ['mute', 'Silent / Visual Only']], showIf: (s) => PRAYER_ON(s) && prayerEditOpen },
+        { path: 'prayer.fullAdhan', type: 'toggle', icon: 'sound', t: 'Full Length Adhan', d: 'On = complete 3:48 adhan. Off = all 4 Takbeers only (~45s)', showIf: (s) => PRAYER_ON(s) && prayerEditOpen && s.prayer.adhanSound === 'madinah' },
+        { path: 'prayer.alertLead', type: 'select', icon: 'bell', t: 'Heads-up (Before)', d: 'A quiet card and chime this long before the Adhan. The Adhan itself always plays at the exact time', options: [['0', 'Exact Time Only'], ['2', '2 mins before'], ['5', '5 mins before'], ['10', '10 mins before'], ['15', '15 mins before']], showIf: (s) => PRAYER_ON(s) && prayerEditOpen },
+        { path: 'prayer.alertRepeat', type: 'select', icon: 'bell', t: 'Follow-up (After)', d: 'A reminder card and chime after the prayer time (like Iqamah reminder)', options: [['0', 'Off'], ['2', '2 mins after'], ['5', '5 mins after'], ['10', '10 mins after'], ['15', '15 mins after']], showIf: (s) => PRAYER_ON(s) && prayerEditOpen },
+        { type: 'action', icon: 'bell', t: 'Preview Adhan Alert', d: 'Plays the island card with your chosen sound', run: () => { try { localStorage.setItem('inex.prayer.preview', String(Date.now())); } catch (_) {} }, showIf: (s) => PRAYER_ON(s) && prayerEditOpen }
       ] },
       { id: 'sounds-timer', title: 'Productivity & Timer', defaultOpen: true, rows: [
         { path: 'notch.timerSound', type: 'toggle', icon: 'bell', t: 'Focus Timer Chime', d: 'Gentle crystal alarm when Focus Timer finishes', preview: 'alarm' }
@@ -287,7 +306,7 @@ const SECTION_ICON = {
   'menu-appearance': 'palette', 'menu-mac-widgets': 'layers', 'menu-motion': 'spark', 'menu-quick-actions': 'widgets',
   'sounds-events': 'sound', 'sounds-timer': 'bell', 'sounds-alarms': 'bell',
   'connect-devices': 'bt',
-  'notch-pet': 'spark', 'notch-wellness': 'bell',
+  'notch-pet': 'spark', 'notch-wellness': 'bell', 'sounds-prayer': 'moon',
   'sys-appearance': 'monitor', 'sys-island-color': 'palette', 'sys-alarms': 'bell', 'sys-startup': 'power', 'sys-alerts': 'bell', 'sys-backup': 'download', 'sys-maint': 'gear',
   'about-links': 'info'
 };
@@ -335,8 +354,10 @@ function toast(msg) {
   t.textContent = msg; t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 1800);
 }
 let isSelfSaving = false;
-let tilesEditOpen = false;   // Quick Action Bar editor
-let skinPickOpen = false;    // Eye Style picker
+let tilesEditOpen = false;        // Quick Action Bar editor
+let skinPickOpen = false;         // Eye Style picker
+let statusSoundsEditOpen = false; // Status Sound Effects list editor
+let prayerEditOpen = false;       // Prayer Times settings editor
 let isDragging = false;
 let saveDebounce = null;
 
@@ -430,9 +451,21 @@ function control(row) {
   }
 
   if (row.type === 'toggle') {
+    if (row.path === 'prayer.enabled' && v) {
+      const editBtn = el('button', 'btn btn-outline', prayerEditOpen ? 'Done' : 'Edit');
+      editBtn.type = 'button';
+      editBtn.style.marginRight = '8px';
+      editBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        prayerEditOpen = !prayerEditOpen;
+        renderPage();
+      });
+      wrap.append(editBtn);
+    }
     const b = el('button', 'sw' + (v ? ' on' : ''));
     b.addEventListener('click', () => {
       const next = !get(row.path);
+      if (row.path === 'prayer.enabled' && !next) prayerEditOpen = false;
       change(next);
       if (next && row.preview) previewSound(row.preview);
     });
@@ -637,7 +670,7 @@ function control(row) {
   } else if (row.type === 'text') {
     const inp = el('input', 'txtin'); inp.type = 'text'; inp.value = v || ''; inp.placeholder = row.placeholder || '';
     inp.addEventListener('input', () => {
-      if (row.path === 'weather.city') return;
+      if (row.path === 'weather.city' || row.path === 'prayer.city') return;   // applied on Enter / blur only
       set(row.path, inp.value.trim());
       if (row.path === 'share.deviceName') localStorage.setItem('island_pc_name', inp.value.trim());
       save(S);
@@ -734,15 +767,23 @@ function renderSoundsHero(main) {
       <div class="ico-box">${ICON.sound}</div>
       <div class="txt">
         <div class="hero-title">Status Sound Effects</div>
-        <div class="hero-desc">${on ? 'Enabled — subtle chimes play on system status events' : 'Muted — all status sounds are silenced'}</div>
+        <div class="hero-desc">${on ? (statusSoundsEditOpen ? 'Choose which system status sounds to play' : 'Enabled — 4 status chimes active. Tap Edit to customize') : 'Muted — all status sounds are silenced'}</div>
       </div>
-      <button type="button" class="sw lg ${on ? 'on' : ''}" aria-label="Toggle Status Sounds"></button>
+      <div class="hero-actions" style="display:flex;align-items:center;gap:8px;">
+        ${on ? `<button type="button" class="btn btn-outline status-edit-btn">${statusSoundsEditOpen ? 'Done' : 'Edit'}</button>` : ''}
+        <button type="button" class="sw lg ${on ? 'on' : ''}" aria-label="Toggle Status Sounds"></button>
+      </div>
     </div>
   `;
   hero.querySelector('.sw').addEventListener('click', () => {
     const next = !(S.sounds?.enabled !== false);
+    if (!next) statusSoundsEditOpen = false;
     commit('sounds.enabled', next);
     if (next) previewSound('clipboard');
+    renderPage();
+  });
+  hero.querySelector('.status-edit-btn')?.addEventListener('click', () => {
+    statusSoundsEditOpen = !statusSoundsEditOpen;
     renderPage();
   });
   main.append(hero);

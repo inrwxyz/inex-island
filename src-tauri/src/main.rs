@@ -431,6 +431,22 @@ fn place_island(window: &WebviewWindow, width: f64, height: f64) -> bool {
 
 // 1. Real Windows Media Status (Universal Media Detection across all Windows players)
 #[cfg(target_os = "windows")]
+fn is_self_media_session(s: &windows::Media::Control::GlobalSystemMediaTransportControlsSession) -> bool {
+    let raw = s.SourceAppUserModelId().map(|x| x.to_string()).unwrap_or_default().to_ascii_lowercase();
+    if raw.contains("inex") || raw.contains("island") || raw.contains("tauri") {
+        return true;
+    }
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(stem) = exe.file_stem().and_then(|st| st.to_str()) {
+            if !stem.is_empty() && raw.contains(&stem.to_ascii_lowercase()) {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+#[cfg(target_os = "windows")]
 fn get_best_media_session(
     manager: &windows::Media::Control::GlobalSystemMediaTransportControlsSessionManager,
 ) -> Option<windows::Media::Control::GlobalSystemMediaTransportControlsSession> {
@@ -438,6 +454,9 @@ fn get_best_media_session(
     if let Ok(sessions) = manager.GetSessions() {
         let mut first_valid = None;
         for s in sessions {
+            if is_self_media_session(&s) {
+                continue;
+            }
             if let Ok(info) = s.GetPlaybackInfo() {
                 if let Ok(status) = info.PlaybackStatus() {
                     if status == Status::Playing {
@@ -453,7 +472,12 @@ fn get_best_media_session(
             return first_valid;
         }
     }
-    manager.GetCurrentSession().ok()
+    if let Ok(curr) = manager.GetCurrentSession() {
+        if !is_self_media_session(&curr) {
+            return Some(curr);
+        }
+    }
+    None
 }
 
 #[cfg(target_os = "windows")]
@@ -1834,6 +1858,106 @@ fn play_alarm_sound() {
     }
 }
 
+#[cfg(target_os = "windows")]
+fn send_mci(cmd: &str) -> u32 {
+    #[link(name = "winmm")]
+    extern "system" {
+        fn mciSendStringW(
+            lpszCommand: *const u16,
+            lpszReturnString: *mut u16,
+            cchReturn: u32,
+            hwndCallback: isize,
+        ) -> u32;
+    }
+    use windows::core::HSTRING;
+    let hstr = HSTRING::from(cmd);
+    unsafe { mciSendStringW(hstr.as_ptr(), std::ptr::null_mut(), 0, 0) }
+}
+
+#[cfg(target_os = "windows")]
+fn find_audio_file(app: &tauri::AppHandle, filename: &str) -> Option<std::path::PathBuf> {
+    // 1. Check resource directory (Tauri bundled resources)
+    if let Ok(res) = app.path().resource_dir() {
+        let candidates = [
+            res.join("_up_").join("src").join("audio").join(filename),
+            res.join("audio").join(filename),
+            res.join("src").join("audio").join(filename),
+            res.join(filename),
+        ];
+        for c in &candidates {
+            if c.exists() { return Some(c.clone()); }
+        }
+    }
+
+    // 2. Check executable directory (Installed folder)
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            let candidates = [
+                dir.join("_up_").join("src").join("audio").join(filename),
+                dir.join("audio").join(filename),
+                dir.join("resources").join("audio").join(filename),
+                dir.join("src").join("audio").join(filename),
+                dir.join(filename),
+            ];
+            for c in &candidates {
+                if c.exists() { return Some(c.clone()); }
+            }
+        }
+    }
+
+    // 3. Dev / local workspace relative paths
+    let dev_candidates = [
+        format!("../src/audio/{}", filename),
+        format!("src/audio/{}", filename),
+        format!("audio/{}", filename),
+    ];
+    for d in &dev_candidates {
+        let p = std::path::PathBuf::from(d);
+        if p.exists() { return Some(p); }
+    }
+
+    None
+}
+
+#[tauri::command]
+fn play_adhan_native(app: tauri::AppHandle, sound_name: String) -> bool {
+    #[cfg(target_os = "windows")]
+    {
+        let _ = send_mci("stop inex_adhan");
+        let _ = send_mci("close inex_adhan");
+
+        let filename = match sound_name.as_str() {
+            "short" => "adhan-short.mp3",
+            "chime" | "beep" => "chime.wav",
+            _ => "adhan-madinah.mp3",
+        };
+
+        if let Some(path) = find_audio_file(&app, filename) {
+            let path_str = path
+                .canonicalize()
+                .map(|c| c.to_string_lossy().replace(r"\\?\", ""))
+                .unwrap_or_else(|_| path.to_string_lossy().to_string());
+
+            let open_cmd = format!("open \"{}\" alias inex_adhan", path_str);
+            if send_mci(&open_cmd) == 0 {
+                let _ = send_mci("setaudio inex_adhan volume to 500");
+                let _ = send_mci("play inex_adhan");
+                return true;
+            }
+        }
+    }
+    false
+}
+
+#[tauri::command]
+fn stop_adhan_native() {
+    #[cfg(target_os = "windows")]
+    {
+        let _ = send_mci("stop inex_adhan");
+        let _ = send_mci("close inex_adhan");
+    }
+}
+
 static SETTINGS_OPEN_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 fn show_settings_window(app: &AppHandle) {
@@ -2219,6 +2343,8 @@ fn main() {
             drag_settings,
             play_alarm_sound,
             play_status_sound,
+            play_adhan_native,
+            stop_adhan_native,
             quit_app,
             restart_app,
             settings_changed,

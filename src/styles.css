@@ -1,3 +1,4 @@
+/* GENERATED from styles-parts/*.css by scripts/build-styles.mjs. Edit the parts, not this file. */
 :root {
   --font-main: 'Plus Jakarta Sans', 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
   --font-mono: 'Space Grotesk', 'JetBrains Mono', monospace;
@@ -3027,10 +3028,12 @@ body {
 .mx-time span { font-size: 10.5px; font-weight: 500; color: var(--menu-fg-dim); }
 .mx-top-right { display: flex; align-items: center; gap: 6px; }
 .mx-weather {
-  display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 9px;
-  border-radius: 11px; font-size: 10.5px; font-weight: 600; color: var(--menu-fg);
-  background: color-mix(in srgb, var(--menu-fg) 9%, transparent);
+  display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 4px;
+  border-radius: 6px; font-size: 10.5px; font-weight: 600; color: var(--menu-fg-dim);
+  background: transparent; border: none; cursor: pointer;
+  line-height: 1; vertical-align: middle;
 }
+.mx-weather:hover { color: var(--menu-fg); background: color-mix(in srgb, var(--menu-fg) 8%, transparent); }
 .mx-battery {
   display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 8px;
   border-radius: 11px; font-size: 10px; font-weight: 700; color: var(--menu-fg);
@@ -4192,3 +4195,70 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .wg-ring-fg, #wg-cur-swap { transition: none !important; }
 }
+
+/* ==================== PRAYER & SOLAR DECK (optional, Settings > Notch > Prayer Times) ==================== */
+/* Same surface rules as the Widgets deck: true black cards, 1px hairline, no glow, no gradients. */
+#mac-prayer-btn.on { background: color-mix(in srgb, var(--menu-fg) 22%, transparent) !important; color: var(--menu-fg) !important; }
+
+#mx-prayer-body { display: none; }
+#view-control-mac.prayer-open > .mx-body { display: none !important; }
+#view-control-mac.prayer-open > #mx-prayer-body { display: grid !important; }
+#view-control-mac.widgets-open > #mx-prayer-body,
+#view-control-mac.tray-open > #mx-prayer-body { display: none !important; }
+
+#view-control-mac > #mx-prayer-body {
+  flex: 1; min-height: 0; max-height: 174px; width: 478px; min-width: 478px; margin-left: calc(50% - 239px);
+  box-sizing: border-box; padding: 0; gap: 8px; animation: none !important;
+  grid-template-columns: 1fr 1fr; grid-template-rows: 1fr;
+  --menu-fg: #f5f5f7; --menu-fg-dim: #9a9aa6; --pr-sun: #e0c068; --pr-calm: #9ccaae;
+  font-family: Inter, system-ui, -apple-system, "Segoe UI", "Noto Sans Bengali", sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+#mx-prayer-body > .mx-widget-card { padding: 7px 9px 8px; gap: 4px; animation: none !important; }
+#mx-prayer-body .wg-head > span { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* left: sun arc */
+#pr-arc { display: block; width: 100%; height: 66px; flex: none; overflow: visible; }
+#pr-arc .pr-horizon { stroke: rgba(255,255,255,.12); stroke-width: 1; }
+#pr-arc .pr-arc-base { fill: none; stroke: rgba(255,255,255,.16); stroke-width: 1.4; stroke-linecap: round; stroke-dasharray: 2.2 2.6; }
+#pr-arc .pr-arc-prog { fill: none; stroke: var(--pr-sun); stroke-opacity: .75; stroke-width: 1.6; stroke-linecap: round; transition: stroke-dasharray .6s ease; }
+#pr-arc .pr-mk { fill: rgba(255,255,255,.55); }
+#pr-arc .pr-mk.past { fill: rgba(255,255,255,.22); }
+#pr-arc .pr-mk.next { fill: #000; stroke: var(--pr-calm); stroke-width: 1.4; }
+#pr-arc .pr-sun-halo { fill: var(--pr-sun); fill-opacity: .16; }          /* flat soft ring, no blur */
+#pr-arc .pr-sun-dot { fill: var(--pr-sun); }
+#pr-arc .pr-sun-dot.night { fill: #c9ced9; fill-opacity: .8; }              /* below the horizon: pale, quiet */
+#pr-arc .pr-tl { fill: var(--menu-fg-dim); font-size: 8.5px; font-weight: 500; }
+.pr-now { display: flex; align-items: baseline; gap: 6px; line-height: 1.1; margin-top: 1px; }
+.pr-now b { font-size: 20px; font-weight: 650; letter-spacing: -0.02em; color: var(--menu-fg); }
+.pr-now em { font-style: normal; font-size: 12px; font-weight: 500; color: var(--menu-fg-dim); }
+.pr-sub { font-size: 11px; font-weight: 500; color: var(--menu-fg-dim); }
+
+/* right: timeline */
+.pr-list { display: flex; flex-direction: column; gap: 1px; margin-top: 2px; }
+.pr-row { display: flex; align-items: center; height: 21px; padding: 0 7px; margin: 0 -7px; border-radius: 8px; font-size: 11.5px; color: var(--menu-fg); }
+.pr-row .pr-n { flex: 1; font-weight: 500; }
+.pr-row .pr-t { font-weight: 500; letter-spacing: 0.01em; }
+.pr-row.minor { font-size: 10.5px; color: var(--menu-fg-dim); }
+.pr-row.past { opacity: .36; }
+.pr-row.next { background: rgba(255,255,255,.075); }
+.pr-row.next .pr-n, .pr-row.next .pr-t { font-weight: 650; }
+.pr-badge { margin-right: 7px; padding: 1px 6px; border-radius: 6px; font-size: 8px; font-weight: 700; letter-spacing: .07em; color: var(--pr-calm); background: rgba(156,202,174,.14); }
+
+/* Adhan island alert: re-uses the timer-end card, calmer and slightly wider */
+.island.state-compact.alarm-active.alarm-prayer { width: 262px !important; box-shadow: 0 0 0 1px rgba(255,255,255,.12) !important; }
+.c-alarm-hud .pr-icon, .c-alarm-hud .pr-bars { display: none; }
+.c-alarm-hud.pr-alert .alarm-icon-wrap { background: rgba(255,255,255,.08); color: #e6dfc4; }
+.c-alarm-hud.pr-alert .alarm-icon-wrap > svg:not(.pr-icon) { display: none; }
+.c-alarm-hud.pr-alert .alarm-icon-wrap > .pr-icon { display: block; filter: none; animation: none; }
+.c-alarm-hud.pr-alert .alarm-pulse { border-color: rgba(255,255,255,.32); animation-duration: 3.4s; }
+.c-alarm-hud.pr-alert .alarm-pulse.p2 { animation-delay: 1.9s; }
+.c-alarm-hud.pr-alert .pr-bars { display: flex; align-items: center; gap: 2px; height: 14px; flex: none; }
+.pr-bars i { display: block; width: 2px; height: 14px; border-radius: 1px; background: rgba(255,255,255,.6); transform-origin: 50% 50%; animation: prBar 1.5s ease-in-out infinite; }
+.pr-bars i:nth-child(2) { animation-delay: .25s; }
+.pr-bars i:nth-child(3) { animation-delay: .5s; }
+.pr-bars i:nth-child(4) { animation-delay: .75s; }
+@keyframes prBar { 0%, 100% { transform: scaleY(.3); } 50% { transform: scaleY(1); } }
+.c-alarm-hud.pr-alert.pr-quiet .pr-bars i { animation-play-state: paused; opacity: .25; }
+.c-alarm-hud.pr-alert .alarm-stop-btn { padding: 0 9px; font-size: 10px; background: rgba(255,255,255,.10); color: #f5f5f7; }
+.c-alarm-hud.pr-alert .alarm-stop-btn:hover { background: rgba(255,255,255,.18); }

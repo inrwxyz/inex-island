@@ -1,0 +1,611 @@
+/* ==================== DYNAMIC-ISLAND STYLE HUDs (Face ID / Touch ID / Bluetooth / Charger) ==================== */
+/* HUD content sits in .compact-bar next to .c-center (NOT inside it). */
+.c-biometric-hud, .c-bt-hud {
+  font-family: "SF Pro Display", -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* the old pill content blurs away first, and blurs back in after the island shrinks */
+.island.hud-pre :is(.c-left, .c-center, .c-right, .c-timer-chip) {
+  opacity: 0; transform: scale(0.92); filter: blur(3px);
+  transition: opacity 0.1s ease-in, transform 0.1s ease-in, filter 0.1s ease-in;
+}
+.island.hud-back :is(.c-left, .c-center, .c-right) { animation: hudBack 0.4s 0.18s var(--ease-close) both; }
+@keyframes hudBack { from { opacity: 0; transform: scale(0.92); filter: blur(3px); } to { opacity: 1; transform: none; filter: none; } }
+/* collapse: smooth, no bounce (iOS style) */
+.island.hud-back {
+  transition: width 0.45s var(--ease-close), height 0.45s var(--ease-close),
+              top 0.4s var(--ease-close), border-radius 0.4s var(--ease-close),
+              background 0.25s ease, box-shadow 0.3s ease !important;
+}
+.island.hud-out .c-biometric-hud, .island.hud-out .c-bt-hud, .island.hud-out .c-alarm-hud { animation: hudOut 0.16s ease-in forwards !important; }
+@keyframes hudOut { to { opacity: 0; transform: scale(0.94); filter: blur(3px); } }
+
+/* ---------- Face ID / Touch ID ---------- */
+/* NOTE: Face ID / Touch ID keeps its ORIGINAL look and timing (92px square, 33px radius, original spring). */
+.island.state-compact.biometric-active {
+  width: 92px !important; height: 92px !important; border-radius: 33px !important; top: 10px !important;
+  background: var(--notch-bg) !important; color: var(--notch-fg) !important; border: 0 !important;
+  box-shadow: none !important;
+  transition: width 0.6s cubic-bezier(0.34, 1.5, 0.64, 1), height 0.6s cubic-bezier(0.34, 1.5, 0.64, 1),
+              top 0.5s cubic-bezier(0.22, 1, 0.36, 1), border-radius 0.5s cubic-bezier(0.22, 1, 0.36, 1) !important;
+}
+.island.state-compact.biometric-active .compact-bar { height: 100% !important; padding: 0 !important; justify-content: center !important; }
+.island.state-compact.biometric-active :is(.c-left, .c-center, .c-right, .c-bt-hud) { display: none !important; }
+.island.state-compact.biometric-active .c-biometric-hud { display: flex !important; }
+
+.c-biometric-hud {
+  display: none; flex-direction: column; align-items: center; justify-content: center;
+  width: 100%; height: 100%; gap: 4px;
+  animation: bioIn 0.5s 0.1s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes bioIn { 0% { opacity: 0; transform: scale(0.7); filter: blur(6px); } 100% { opacity: 1; transform: none; filter: blur(0); } }
+
+.bio-glyph-wrap { width: 46px; height: 46px; display: flex; align-items: center; justify-content: center; }
+.bio-glyph-wrap svg { overflow: visible; }
+.bio-glyph-wrap .bio-leave { animation: bioLeave 0.16s ease-in forwards !important; }
+@keyframes bioLeave { to { opacity: 0; transform: scale(0.65); filter: blur(5px); } }
+.bio-label {
+  font-size: 11px; font-weight: 500; color: rgba(var(--notch-fg-rgb, 245, 245, 247), 0.78); letter-spacing: -0.005em;
+  max-width: 78px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: center;
+}
+
+.bio-scan-svg { color: var(--notch-fg, #fff); }
+.bio-scan-svg .bio-br { stroke-dasharray: 44; stroke-dashoffset: 44; animation: bioDraw 0.42s cubic-bezier(0.22, 1, 0.36, 1) forwards; }
+.bio-scan-svg .bio-br:nth-of-type(2) { animation-delay: 0.05s; }
+.bio-scan-svg .bio-br:nth-of-type(3) { animation-delay: 0.1s; }
+.bio-scan-svg .bio-br:nth-of-type(4) { animation-delay: 0.15s; }
+.bio-scan-svg .bio-core { stroke-opacity: 0; opacity: 0; animation: bioCore 0.35s 0.25s ease-out forwards; }
+.bio-scan-svg .bio-scan {
+  fill: #30d158; opacity: 0; filter: drop-shadow(0 0 5px rgba(48, 209, 88, 0.95));
+  animation: bioSweep 0.9s 0.3s cubic-bezier(0.45, 0, 0.55, 1) infinite alternate;
+}
+@keyframes bioCore { to { opacity: 0.35; stroke-opacity: 0.35; } }
+
+.bio-face-svg { color: var(--notch-fg, #fff); }
+.bio-face-svg .bio-br { stroke-dasharray: 44; stroke-dashoffset: 44; animation: bioDraw 0.42s cubic-bezier(0.22, 1, 0.36, 1) forwards; }
+.bio-face-svg .bio-br:nth-of-type(2) { animation-delay: 0.05s; }
+.bio-face-svg .bio-br:nth-of-type(3) { animation-delay: 0.1s; }
+.bio-face-svg .bio-br:nth-of-type(4) { animation-delay: 0.15s; }
+.bio-face-svg .bio-ft { opacity: 0; animation: bioFade 0.3s ease-out forwards; }
+.bio-face-svg .bio-ft:nth-of-type(5) { animation-delay: 0.22s; }
+.bio-face-svg .bio-ft:nth-of-type(6) { animation-delay: 0.3s; }
+.bio-face-svg .bio-ft:nth-of-type(7) { animation-delay: 0.38s; }
+.bio-face-svg .bio-ft:nth-of-type(8) { animation-delay: 0.46s; }
+.bio-face-svg .bio-scan {
+  fill: #30d158; opacity: 0; filter: drop-shadow(0 0 5px rgba(48, 209, 88, 0.95));
+  animation: bioSweep 0.9s 0.3s cubic-bezier(0.45, 0, 0.55, 1) infinite alternate;
+}
+@keyframes bioDraw { to { stroke-dashoffset: 0; } }
+@keyframes bioFade { to { opacity: 1; } }
+@keyframes bioSweep { 0% { transform: translateY(0); opacity: 0; } 15% { opacity: 0.95; } 85% { opacity: 0.95; } 100% { transform: translateY(24px); opacity: 0; } }
+
+.bio-finger-svg { color: var(--notch-fg, #fff); animation: fpGlow 0.9s 0.1s ease-in-out forwards; }
+.bio-finger-svg .fp-ridge { opacity: 0.28; animation: fpLight 0.42s ease-out forwards; }
+.bio-finger-svg .fp-ridge:nth-child(1) { animation-delay: 0.42s; }
+.bio-finger-svg .fp-ridge:nth-child(2) { animation-delay: 0.50s; }
+.bio-finger-svg .fp-ridge:nth-child(3) { animation-delay: 0.36s; }
+.bio-finger-svg .fp-ridge:nth-child(4) { animation-delay: 0.28s; }
+.bio-finger-svg .fp-ridge:nth-child(5) { animation-delay: 0.24s; }
+.bio-finger-svg .fp-ridge:nth-child(6) { animation-delay: 0.32s; }
+.bio-finger-svg .fp-ridge:nth-child(7) { animation-delay: 0.46s; }
+.bio-finger-svg .fp-ridge:nth-child(8) { animation-delay: 0.12s; }
+.bio-finger-svg .fp-ridge:nth-child(9) { animation-delay: 0.04s; }
+@keyframes fpLight { 0% { opacity: 0.28; stroke: var(--notch-fg, #fff); } 100% { opacity: 1; stroke: var(--notch-ok, #30d158); } }
+@keyframes fpGlow { 60% { filter: drop-shadow(0 0 6px rgba(48, 209, 88, 0.7)); } 100% { filter: drop-shadow(0 0 3px rgba(48, 209, 88, 0.35)); } }
+
+.bio-check-svg { animation: bioPop 0.55s cubic-bezier(0.34, 1.7, 0.64, 1) both; }
+.bio-check-svg .ring { stroke-dasharray: 108; stroke-dashoffset: 108; animation: bioDraw 0.4s ease-out forwards; }
+.bio-check-svg .fillc { opacity: 0; animation: bioFade 0.3s 0.2s ease-out forwards; }
+.bio-check-svg .tick { stroke-dasharray: 34; stroke-dashoffset: 34; animation: bioDraw 0.3s 0.22s ease-out forwards; }
+@keyframes bioPop { 0% { transform: scale(0.55); opacity: 0; filter: blur(4px); } 100% { transform: scale(1); opacity: 1; filter: blur(0); } }
+
+/* ---------- Device HUD (Bluetooth connect / charger) ---------- */
+.island.state-compact.bt-hud-active {
+  width: 220px !important; height: 37px !important; border-radius: 19px !important; top: 7px !important;
+  background: var(--notch-bg) !important; color: var(--notch-fg) !important; border: 0 !important;
+  box-shadow: none !important;
+  transition: width 0.65s var(--spring-pop), height 0.6s var(--spring-pop),
+              top 0.45s var(--ease-close), border-radius 0.5s var(--ease-close) !important;
+}
+.island.state-compact.bt-hud-active .compact-bar { padding: 0 12px 0 9px !important; justify-content: space-between !important; height: 100% !important; }
+.island.state-compact.bt-hud-active :is(.c-left, .c-center, .c-right, .c-biometric-hud) { display: none !important; }
+.island.state-compact.bt-hud-active .c-bt-hud { display: flex !important; }
+
+.c-bt-hud { display: none; align-items: center; gap: 7px; width: 100%; height: 100%; }
+/* content arrives in a stagger after the pill has opened: icon -> text -> battery */
+.c-bt-hud > * { animation: btIn 0.45s var(--ease-close) both; }
+.c-bt-hud > .bt-hud-icon { animation-delay: 0.14s; }
+.c-bt-hud > .bt-hud-text { animation-delay: 0.2s; }
+.c-bt-hud > .bt-hud-batt-box { animation-delay: 0.26s; }
+@keyframes btIn { 0% { opacity: 0; transform: scale(0.9) translateY(2px); filter: blur(3px); } 100% { opacity: 1; transform: none; filter: blur(0); } }
+
+.bt-hud-icon { width: 23px; height: 23px; flex: none; display: flex; align-items: center; justify-content: center; perspective: 140px; color: var(--notch-fg, #fff); border-radius: 50%; }
+.bt-hud-icon svg { width: 20px; height: 20px; overflow: visible; transform-style: preserve-3d; filter: drop-shadow(0 3px 5px rgba(0, 0, 0, 0.7));
+  animation: budsSpin 0.7s 0.16s var(--ease-close) both; }
+.bt-hud-icon.plain { background: rgba(var(--notch-fg-rgb, 245, 245, 247), 0.12); }
+.bt-hud-icon.plain svg { width: 12px; height: 12px; }
+.bt-hud-icon.green { background: rgba(48, 209, 88, 0.16); color: #30d158; }
+.bt-hud-icon.green svg { filter: drop-shadow(0 0 6px rgba(48, 209, 88, 0.7)); animation: budsSpin 0.7s 0.12s cubic-bezier(0.22, 1, 0.36, 1) both, boltPulse 0.9s 0.8s ease-in-out infinite alternate; }
+.bt-hud-icon.amber { background: rgba(255, 159, 10, 0.18); color: #ff9f0a; }
+.bt-hud-icon.amber svg { filter: drop-shadow(0 0 6px rgba(255, 159, 10, 0.7)); }
+.bt-hud-icon.red { background: rgba(255, 69, 58, 0.18); color: #ff453a; }
+.bt-hud-icon.red svg { filter: drop-shadow(0 0 6px rgba(255, 69, 58, 0.7)); animation: lowBattPulse 0.9s ease-in-out infinite alternate; }
+@keyframes lowBattPulse { 0% { transform: scale(0.96); opacity: 0.85; } 100% { transform: scale(1.1); opacity: 1; } }
+@keyframes budsSpin { 0% { transform: rotateY(-90deg) scale(0.7); opacity: 0; } 60% { opacity: 1; } 100% { transform: rotateY(0) scale(1); opacity: 1; } }
+
+.bt-hud-text { display: flex; flex-direction: column; min-width: 0; flex: 1 1 auto; line-height: 1.2; }
+.bt-hud-name { font-size: 10.5px; font-weight: 600; color: var(--notch-fg, #fff); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: -0.015em; }
+.bt-hud-tag { font-size: 8.5px; font-weight: 500; color: var(--notch-fg-dim, rgba(255, 255, 255, 0.55)); letter-spacing: -0.005em; }
+
+.bt-hud-batt-box { display: flex; align-items: center; gap: 5px; flex: none; }
+.bt-hud-batt-pct { font-size: 10.5px; font-weight: 600; color: var(--notch-fg, #fff); font-variant-numeric: tabular-nums; letter-spacing: -0.015em; }
+.bt-ring { flex: none; overflow: visible; width: 17px; height: 17px; }
+.bt-ring-bg { fill: none; stroke: rgba(var(--notch-fg-rgb, 245, 245, 247), 0.16); stroke-width: 3; }
+.bt-ring-fg { fill: none; stroke: #30d158; stroke-width: 3; stroke-linecap: round; stroke-dasharray: 66; stroke-dashoffset: 66;
+  transition: stroke-dashoffset 1s 0.3s cubic-bezier(0.22, 1, 0.36, 1), stroke 0.3s; }
+.bt-ring-fg.amber { stroke: #ff9f0a; }
+.bt-ring-fg.low { stroke: #ff453a; }
+
+/* ---------- Charger toast (kept for the unplug / low-battery toasts) ---------- */
+@keyframes boltPulse { 0% { transform: scale(0.95); opacity: 0.8; } 100% { transform: scale(1.15); opacity: 1; } }
+
+/* ---------- Bezel (attached) notch: HUDs stay glued to the top edge and grow downward ---------- */
+.island:not([data-style="floating"]).state-compact.bt-hud-active {
+  top: 0 !important;
+  height: 40px !important;
+  border-radius: 0 0 var(--radius) var(--radius) !important;   /* exactly the collapsed notch's corners (Settings > Corner Roundness) */
+  box-shadow: none !important;
+}
+.island:not([data-style="floating"]).state-compact:is(.bt-hud-active, .alarm-active) .compact-bar { padding: 0 13px 0 10px !important; }
+
+/* ---------- Face ID / Touch ID: original enter/exit animation (scoped, so it is not affected by the Bluetooth HUD tuning) ---------- */
+.island.bio-hud.hud-pre :is(.c-left, .c-center, .c-right) {
+  opacity: 0; transform: scale(0.86); filter: blur(5px);
+  transition: opacity 0.12s ease-in, transform 0.12s ease-in, filter 0.12s ease-in;
+}
+.island.bio-hud.hud-back :is(.c-left, .c-center, .c-right) { animation: hudBackBio 0.45s 0.12s cubic-bezier(0.22, 1, 0.36, 1) both; }
+@keyframes hudBackBio { from { opacity: 0; transform: scale(0.85); filter: blur(6px); } to { opacity: 1; transform: none; filter: none; } }
+.island.bio-hud.hud-back {
+  transition: width 0.5s cubic-bezier(0.32, 0.72, 0, 1), height 0.5s cubic-bezier(0.32, 0.72, 0, 1),
+              top 0.45s cubic-bezier(0.32, 0.72, 0, 1), border-radius 0.45s cubic-bezier(0.32, 0.72, 0, 1),
+              background 0.25s ease, box-shadow 0.3s ease !important;
+}
+.island.bio-hud.hud-out .c-biometric-hud { animation: hudOutBio 0.16s ease-in forwards !important; }
+@keyframes hudOutBio { to { opacity: 0; transform: scale(0.88); filter: blur(5px); } }
+
+/* ==================== TIMER-END CARD (iPhone Dynamic Island style) ==================== */
+/* flow (same as the device HUD): old content blurs away (hud-pre) -> island springs open -> content arrives in a stagger -> Stop / auto close -> hud-out -> hud-back */
+.island.state-compact.alarm-active {
+  /* identical size, corners and spring to the Bluetooth / charger HUD (.bt-hud-active) */
+  width: 220px !important;
+  height: 37px !important;
+  border-radius: 19px !important;
+  top: 7px !important;
+  background: var(--notch-bg) !important;
+  color: var(--notch-fg) !important;
+  border: 0 !important;
+  box-shadow: 0 0 0 1px rgba(255, 159, 10, 0.4) !important;   /* amber border only, no glow */
+  transition: width 0.65s var(--spring-pop), height 0.6s var(--spring-pop),
+              top 0.45s var(--ease-close), border-radius 0.5s var(--ease-close) !important;
+}
+.island:not([data-style="floating"]).state-compact.alarm-active {
+  top: 0 !important;
+  height: 40px !important;
+  border-radius: 0 0 var(--radius) var(--radius) !important;   /* follows Settings > Corner Roundness, like the Bluetooth HUD */
+}
+.island.state-compact.alarm-active .compact-bar {
+  padding: 0 10px 0 9px !important;
+  justify-content: space-between !important;
+  height: 100% !important;
+}
+.island.state-compact.alarm-active :is(.c-left, .c-center, .c-right, .c-biometric-hud, .c-bt-hud, .c-timer-chip) {
+  display: none !important;
+}
+.island.state-compact.alarm-active .c-alarm-hud { display: flex !important; }
+
+.c-alarm-hud {
+  display: none;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+  user-select: none;
+  font-family: "SF Pro Display", -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+.c-alarm-hud > * { animation: btIn 0.5s var(--ease-close) both; }
+.c-alarm-hud > .alarm-icon-wrap { animation-delay: 0.12s; }
+.c-alarm-hud > .alarm-text-wrap { animation-delay: 0.18s; }
+.c-alarm-hud > .alarm-stop-btn { animation-delay: 0.24s; }
+.alarm-icon-wrap {
+  position: relative;
+  width: 23px;
+  height: 23px;
+  flex: none;
+  border-radius: 50%;
+  background: rgba(255, 159, 10, 0.18);
+  color: #ff9f0a;
+  display: grid;
+  place-items: center;
+}
+.alarm-icon-wrap svg {
+  width: 13px;
+  height: 13px;
+  filter: drop-shadow(0 0 5px rgba(255, 159, 10, 0.55));
+  transform-origin: 50% 60%;
+  animation: alarmWiggle 1.3s 0.5s ease-in-out infinite;
+}
+.alarm-pulse {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255, 159, 10, 0.6);
+  opacity: 0;
+  animation: alarmRipple 1.9s 0.35s ease-out infinite;
+}
+.alarm-pulse.p2 { animation-delay: 1.3s; }
+@keyframes alarmRipple { 0% { transform: scale(1); opacity: 0.75; } 100% { transform: scale(1.45); opacity: 0; } }
+@keyframes alarmWiggle {
+  0%, 55%, 100% { transform: rotate(0); }
+  10% { transform: rotate(-14deg); }
+  22% { transform: rotate(12deg); }
+  34% { transform: rotate(-9deg); }
+  46% { transform: rotate(6deg); }
+}
+.alarm-text-wrap { display: flex; flex-direction: column; flex: 1; min-width: 0; line-height: 1.2; }
+.alarm-title { font-size: 10.5px; font-weight: 600; color: var(--notch-fg, #fff); letter-spacing: -0.02em; }
+.alarm-sub {
+  font-size: 8.5px;
+  font-weight: 500;
+  color: var(--notch-fg-dim, rgba(255, 255, 255, 0.55));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.alarm-stop-btn {
+  flex: none;
+  height: 20px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 10px;
+  background: rgba(255, 159, 10, 0.2);
+  color: #ff9f0a;
+  font-size: 10.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.16s ease, transform 0.16s ease;
+}
+.alarm-stop-btn:hover { background: rgba(255, 159, 10, 0.34); transform: scale(1.05); }
+.alarm-stop-btn:active { transform: scale(0.95); }
+
+/* ==================== TIMER RUNNING (idle pill + second Live Activity chip) ==================== */
+#c-clock.c-clock-timer::before {
+  content: "";
+  display: inline-block;
+  width: 11px;
+  height: 11px;
+  margin-right: 4px;
+  vertical-align: -1px;
+  background: #ff9f0a;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='13.5' r='7.5'/%3E%3Cpath d='M12 9.5v4l2.5 2'/%3E%3Cpath d='M9.5 2.5h5'/%3E%3C/svg%3E") center / contain no-repeat;
+          mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='13.5' r='7.5'/%3E%3Cpath d='M12 9.5v4l2.5 2'/%3E%3Cpath d='M9.5 2.5h5'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+.c-timer-chip {
+  display: none;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  margin-left: 8px;
+  padding: 2px 7px 2px 5px;
+  border-radius: 10px;
+  background: rgba(255, 159, 10, 0.16);
+  color: #ff9f0a;
+  font-size: 10.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  animation: btIn 0.4s var(--ease-close) both;
+}
+.c-timer-chip svg { width: 11px; height: 11px; }
+.island.state-compact.timer-chip-on .c-timer-chip { display: inline-flex; }
+.island.state-compact:is(.bt-hud-active, .biometric-active, .alarm-active, .transferring, .has-toast) .c-timer-chip { display: none !important; }
+.island.state-compact.transferring.timer-chip-on { width: 252px; }
+.island.state-compact.has-toast.timer-chip-on { width: 246px; }
+
+/* ==================== FILE TRANSFER (Mac AirDrop style: blue disc with ripples, progress ring, direction arrow) ==================== */
+.c-xfer { gap: 8px; font-family: "SF Pro Display", -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+.xfer-ring-wrap {
+  position: relative; width: 24px; height: 24px; flex: none; display: grid; place-items: center;
+  border-radius: 50%; background: rgba(10, 132, 255, 0.2);
+}
+/* AirDrop ripples: soft rings radiate from the disc while waiting for data */
+.xfer-ring-wrap::before, .xfer-ring-wrap::after {
+  content: ""; position: absolute; inset: 0; border-radius: 50%;
+  border: 1.5px solid rgba(10, 132, 255, 0.55); opacity: 0;
+  animation: xferRipple 1.9s ease-out infinite;
+}
+.xfer-ring-wrap::after { animation-delay: 0.95s; }
+@keyframes xferRipple { 0% { transform: scale(1); opacity: 0.7; } 100% { transform: scale(1.7); opacity: 0; } }
+.xfer-ring { position: absolute; inset: 1px; width: 22px; height: 22px; overflow: visible; }
+.xfer-ring-bg { fill: none; stroke: rgba(var(--notch-fg-rgb, 245, 245, 247), 0.14); stroke-width: 2.2; }
+.xfer-ring-fg {
+  fill: none; stroke: #0a84ff; stroke-width: 2.4; stroke-linecap: round;
+  stroke-dasharray: 66; stroke-dashoffset: 66;
+  transition: stroke-dashoffset 0.35s ease-out;
+}
+.c-xfer.indeterminate .xfer-ring { animation: xferSpin 1.1s linear infinite; }
+.c-xfer.indeterminate .xfer-ring-fg { stroke-dashoffset: 46 !important; }
+@keyframes xferSpin { to { transform: rotate(360deg); } }
+.xfer-glyph { width: 11px; height: 11px; color: #4da3ff; position: relative; animation: xferBobUp 1.1s ease-in-out infinite; }
+.c-xfer.recv .xfer-glyph { animation-name: xferBobDown; }
+@keyframes xferBobUp { 0%, 100% { transform: translateY(1.5px); opacity: 0.7; } 50% { transform: translateY(-1.5px); opacity: 1; } }
+@keyframes xferBobDown { 0%, 100% { transform: translateY(-1.5px); opacity: 0.7; } 50% { transform: translateY(1.5px); opacity: 1; } }
+.xfer-text { display: flex; flex-direction: column; line-height: 1.2; min-width: 0; flex: 1 1 auto; }
+.xfer-label { font-size: 10.5px; font-weight: 600; color: var(--notch-fg, #fff); letter-spacing: -0.015em; white-space: nowrap; }
+.xfer-pct { font-size: 8.5px; font-weight: 500; color: var(--notch-fg-dim, rgba(255, 255, 255, 0.55)); font-variant-numeric: tabular-nums; }
+.c-xfer { animation: btIn 0.45s var(--ease-close) both; }
+.c-toast.t-done .c-toast-ico { color: #30d158; }
+.c-toast.t-done .c-toast-ico polyline { stroke-dasharray: 14; stroke-dashoffset: 14; animation: toastTick 0.4s 0.12s var(--ease-close) forwards; }
+@keyframes toastTick { to { stroke-dashoffset: 0; } }
+
+/* ==================== BATTERY HUD (charging / low battery / on battery) ==================== */
+.bt-batt { display: none; align-items: center; flex: none; }
+.bt-hud-batt-box.as-batt .bt-ring { display: none; }
+.bt-hud-batt-box.as-batt .bt-batt { display: flex; }
+.bt-batt-body {
+  position: relative;
+  width: 25px;
+  height: 12.5px;
+  padding: 1.2px;
+  border-radius: 4.2px;
+  border: 1.3px solid rgba(var(--notch-fg-rgb, 245, 245, 247), 0.4);
+  overflow: hidden;
+}
+.bt-batt-fill {
+  display: block;
+  position: relative;
+  overflow: hidden;
+  height: 100%;
+  width: 0;
+  border-radius: 2.2px;
+  background: var(--notch-fg, #fff);
+  transition: width 1s 0.3s cubic-bezier(0.22, 1, 0.36, 1), background 0.3s;
+}
+.bt-batt.charging .bt-batt-fill { background: #30d158; }
+.bt-batt-fill.amber { background: #ff9f0a !important; }
+.bt-batt-fill.low { background: #ff453a !important; }
+.bt-batt-cap { width: 2px; height: 5px; margin-left: 1px; border-radius: 0 1.5px 1.5px 0; background: rgba(var(--notch-fg-rgb, 245, 245, 247), 0.4); }
+.bt-batt-bolt { position: absolute; inset: 0; display: none; place-items: center; color: #fff; }
+.bt-batt-bolt svg { width: 8px; height: 8px; filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.55)); }
+.bt-batt.charging .bt-batt-bolt { display: grid; animation: btIn 0.5s 0.9s var(--ease-close) both; }
+.bt-batt.charging .bt-batt-fill::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 30%, rgba(255, 255, 255, 0.55) 50%, transparent 70%);
+  transform: translateX(-100%);
+  animation: battSheen 1.5s 1.3s ease-in-out infinite;
+}
+@keyframes battSheen { to { transform: translateX(100%); } }
+.bt-batt.low .bt-batt-body { border-color: rgba(255, 69, 58, 0.85); animation: battLowBlink 0.8s 1.1s ease-in-out infinite alternate; }
+@keyframes battLowBlink { from { opacity: 1; } to { opacity: 0.45; } }
+
+/* timer running on an otherwise idle pill: the pill grows a little (spring) to hold icon + countdown */
+.island.state-compact.timer-live:not(.media-active):not(.transferring):not(.has-toast):not(.incoming-open):not(.alarm-active) { width: 176px; }
+.island.state-compact.timer-live:not(.media-active):not(.transferring):not(.has-toast) {
+  transition: width 0.62s var(--spring-pop), height 0.5s var(--spring-pop), border-radius 0.45s var(--ease-close), opacity 0.22s ease, border-color 0.22s ease, background 0.25s ease, top 0.4s var(--ease-close);
+}
+/* copy HUD: the tick draws itself */
+.bt-hud-icon .clip-tick { stroke-dasharray: 14; stroke-dashoffset: 14; animation: toastTick 0.4s 0.45s var(--ease-close) forwards; }
+
+/* ==================== ALARM VIEW + CARD EXTRAS ==================== */
+.alarm-box { display: flex; flex-direction: column; gap: 6px; padding: 2px 14px 10px; }
+.alarm-next-label { font-size: 9px; font-weight: 600; opacity: 0.6; }
+.alarm-picker { display: flex; align-items: center; justify-content: center; gap: 6px; }
+.alarm-col { display: flex; flex-direction: column; align-items: center; gap: 0; }
+.alarm-num { font-size: 26px; font-weight: 700; font-family: var(--font-mono); line-height: 1.05; min-width: 38px; text-align: center; font-variant-numeric: tabular-nums; }
+.alarm-colon { font-size: 22px; font-weight: 700; opacity: 0.6; margin-top: -2px; }
+.alarm-step { background: transparent; border: none; color: inherit; opacity: 0.5; font-size: 8px; line-height: 1; padding: 3px 12px; border-radius: 6px; cursor: pointer; }
+.alarm-step:hover { opacity: 1; background: rgba(150, 150, 160, 0.2); }
+.alarm-ampm, .alarm-chip {
+  background: transparent; border: 1px solid rgba(150, 150, 160, 0.3); color: inherit; opacity: 0.85;
+  font-size: 9px; font-weight: 700; padding: 3px 7px; border-radius: 7px; cursor: pointer;
+}
+.alarm-chip.on { background: rgba(10, 132, 255, 0.25); border-color: rgba(10, 132, 255, 0.6); color: #4da3ff; opacity: 1; }
+.alarm-side { display: flex; flex-direction: column; gap: 5px; margin-left: 6px; }
+.alarm-list { display: flex; flex-direction: column; gap: 4px; max-height: 104px; overflow-y: auto; }
+.alarm-row { display: flex; align-items: center; gap: 8px; padding: 4px 8px; border-radius: 9px; background: var(--color-tile-bg); }
+.alarm-row.off .alarm-row-time { opacity: 0.45; }
+.alarm-row-time { flex: 1; font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; display: flex; align-items: baseline; gap: 6px; }
+.alarm-row-time small { font-size: 8.5px; font-weight: 500; opacity: 0.6; }
+.alarm-del { background: transparent; border: none; color: inherit; opacity: 0.45; cursor: pointer; padding: 3px; border-radius: 50%; display: grid; place-items: center; }
+.alarm-del:hover { opacity: 1; background: rgba(239, 68, 68, 0.25); color: #f87171; }
+.alarm-snooze-btn { background: rgba(var(--notch-fg-rgb, 245, 245, 247), 0.12); color: var(--notch-fg, #fff); padding: 0 8px; }
+.alarm-snooze-btn:hover { background: rgba(var(--notch-fg-rgb, 245, 245, 247), 0.22); }
+.c-alarm-hud { gap: 6px; }
+
+/* ==================== HUD accent extras ==================== */
+.bt-hud-icon.ok { background: rgba(48, 209, 88, 0.18); color: #30d158; }
+.bt-hud-icon.ok svg { filter: drop-shadow(0 0 5px rgba(48, 209, 88, 0.55)); }
+.bt-hud-tag { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+
+/* ===== Mac Control Center style (default look) ===== */
+:root { --mac-accent: #0a84ff; }
+
+.island.island.island:not([data-theme="matrix"]) .ctrl-grid { gap: 10px; }
+
+.island.island.island:not([data-theme="matrix"]) .ctrl-tile {
+  display: grid !important;
+  grid-template-columns: 32px minmax(0, 1fr);
+  column-gap: 7px;
+  align-items: center; justify-items: start; text-align: left;
+  height: 52px; padding: 0 8px;
+  background: color-mix(in srgb, var(--menu-fg) 9%, transparent);
+  border: 0 !important; border-radius: 20px;
+  box-shadow: none !important; color: inherit !important;
+}
+.island.island.island:not([data-theme="matrix"]) .ctrl-tile:hover {
+  background: color-mix(in srgb, var(--menu-fg) 14%, transparent);
+}
+.island.island.island.island:not([data-theme="matrix"]) .ctrl-tile.hidden { display: none !important; }
+.island.island.island.island:not([data-theme="matrix"]) .ctrl-tile.active,
+.island.island.island.island:not([data-theme="matrix"]) .ctrl-tile.active:hover {
+  background: color-mix(in srgb, var(--menu-fg) 9%, transparent) !important;
+  border: 0 !important; box-shadow: none !important; color: inherit !important;
+}
+.island:not([data-theme="matrix"]) .ctrl-tile .ico {
+  grid-row: 1 / 3; margin: 0;
+  width: 32px; height: 32px; padding: 7px; border-radius: 50%;
+  background: color-mix(in srgb, var(--menu-fg) 20%, transparent);
+  transition: background 0.18s ease;
+}
+.island.island.island:not([data-theme="matrix"]) .ctrl-tile.active .ico {
+  background: var(--mac-accent); color: var(--mac-accent-fg, #fff);
+}
+
+/* name + status */
+.island:not([data-theme="matrix"]) .ctrl-tile .sr {
+  display: block !important;
+  grid-row: 1 / 3; grid-column: 2; align-self: center;
+  font-size: 10.5px; font-weight: 500; line-height: 1.25;
+  min-width: 0; max-width: 100%;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  color: var(--menu-fg-dim);
+}
+.island:not([data-theme="matrix"]) .ctrl-tile.active .sr { color: var(--mac-accent-text, var(--mac-accent)); }
+.island:not([data-theme="matrix"]) .ctrl-tile .sr::before {
+  display: block; font-size: 11.5px; font-weight: 600; letter-spacing: -0.03em; color: var(--menu-fg);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+#wifi-sub::before { content: "Wi-Fi"; }
+#tile-drop-sub::before { content: "Inex Drop"; }
+#bt-sub::before { content: "Bluetooth"; }
+#tile-tray-sub::before { content: "Tray"; }
+.island:not([data-theme="matrix"]) #tile-drop-title,
+.island:not([data-theme="matrix"]) #tile-p2p-title,
+.island:not([data-theme="matrix"]) .ctrl-tile .cap { display: none !important; }
+
+/* round quick buttons */
+.island.island.island:not([data-theme="matrix"]) .q-icon-btn {
+  flex: none; width: 36px; height: 36px; border-radius: 50%; border: 0;
+  background: color-mix(in srgb, var(--menu-fg) 12%, transparent);
+}
+.island.island.island:not([data-theme="matrix"]) .q-icon-btn.active {
+  background: var(--color-tile-on-bg) !important;
+  color: var(--color-tile-on-fg) !important;
+  border: 0 !important;
+}
+.island:not([data-theme="matrix"]) .quick-icons-row { padding: 6px 14px; }
+
+/* pill sliders, icon inside */
+.island:not([data-theme="matrix"]) .ctrl-sliders { gap: 8px; }
+.island:not([data-theme="matrix"]) .ctrl-slider-row { position: relative; gap: 0; }
+.island:not([data-theme="matrix"]) .ctrl-slider-row input[type="range"] {
+  -webkit-appearance: none; appearance: none;
+  flex: 1; height: 30px; margin: 0; overflow: hidden;
+  border-radius: 15px;
+  background-color: color-mix(in srgb, var(--menu-fg) 16%, transparent) !important;
+}
+.island:not([data-theme="matrix"]) .ctrl-slider-row input[type="range"]::-webkit-slider-runnable-track {
+  height: 30px; background: transparent;
+}
+.island:not([data-theme="matrix"]) .ctrl-slider-row input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none;
+  width: 0; height: 30px; border-radius: 0;
+  background: transparent;
+  box-shadow: -600px 0 0 600px var(--color-tile-on-bg);
+}
+.island:not([data-theme="matrix"]) .ctrl-slider-row .s-ico {
+  position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
+  width: 14px; height: 14px; opacity: 1; z-index: 2; pointer-events: none;
+  color: #fff; mix-blend-mode: difference;
+}
+.island:not([data-theme="matrix"]) .ctrl-slider-row .s-val {
+  position: absolute; right: 14px; width: auto; z-index: 2;
+  pointer-events: none; color: #fff; mix-blend-mode: difference; opacity: 1;
+}
+
+/* Inex Drop Sub-View */
+.drop-body {
+  padding: 8px 14px 10px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  min-height: 180px;
+}
+.drop-state-box {
+  width: 100%; display: flex; flex-direction: column; align-items: center; text-align: center;
+}
+.drop-idle-ico {
+  width: 50px; height: 50px; border-radius: 50%;
+  background: color-mix(in srgb, var(--menu-fg) 10%, transparent);
+  color: var(--mac-accent);
+  display: grid; place-items: center; margin-bottom: 8px;
+}
+.drop-idle-title { font-size: 13.5px; font-weight: 600; margin-bottom: 3px; color: var(--menu-fg); }
+
+/* Inex Drop Transfer Authorization Prompt (Accept / Decline) */
+.drop-prompt-card {
+  width: 100%; display: flex; flex-direction: column; align-items: center; text-align: center;
+  padding: 6px 12px 8px; border-radius: 16px; background: color-mix(in srgb, var(--menu-fg) 8%, transparent);
+  border: 1px solid rgba(255, 255, 255, 0.08); animation: toastPop 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
+  box-sizing: border-box; margin-bottom: 14px;
+}
+.drop-prompt-icon-bubble {
+  width: 30px; height: 30px; border-radius: 50%;
+  background: color-mix(in srgb, var(--menu-fg) 14%, transparent);
+  color: var(--menu-fg); display: grid; place-items: center;
+  margin-bottom: 4px;
+}
+.drop-prompt-dev {
+  font-size: 12px; font-weight: 700; color: var(--menu-fg); line-height: 1.2;
+}
+.drop-prompt-headline {
+  font-size: 10.5px; color: var(--menu-fg-dim); margin: 1px 0 6px;
+}
+.drop-prompt-filebox {
+  width: 100%; background: rgba(0, 0, 0, 0.32); border-radius: 10px; padding: 5px 10px;
+  margin-bottom: 8px; border: 1px solid rgba(255, 255, 255, 0.06); box-sizing: border-box;
+}
+.prompt-fname {
+  display: block; font-size: 11.5px; font-weight: 600; color: var(--menu-fg, #fff); overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; max-width: 230px; margin: 0 auto;
+}
+.prompt-fsize {
+  display: block; font-size: 9.5px; color: var(--menu-fg-dim); font-weight: 600; margin-top: 1px;
+}
+.drop-prompt-actions {
+  display: flex; gap: 8px; width: 100%; margin-bottom: 2px;
+}
+.prompt-accept-btn {
+  flex: 1; height: 28px !important; background: #30d158 !important; color: #fff !important; font-size: 11px !important; font-weight: 700;
+  border-radius: 8px; border: 0; cursor: pointer; transition: all 0.15s ease;
+  box-shadow: 0 2px 8px rgba(48, 209, 88, 0.35);
+}
+.prompt-accept-btn:hover { filter: brightness(1.08); }
+.prompt-accept-btn:active { transform: scale(0.97); }
+.prompt-decline-btn {
+  flex: 1; height: 28px !important; background: rgba(255, 69, 58, 0.18) !important; color: #ff453a !important;
+  border: 1px solid rgba(255, 69, 58, 0.38) !important; font-size: 11px !important; font-weight: 600;
+  border-radius: 8px; cursor: pointer; transition: all 0.15s ease;
+}
+.prompt-decline-btn:hover { background: rgba(255, 69, 58, 0.28) !important; }
+.prompt-decline-btn:active { transform: scale(0.97); }
+
+/* ---------- Accept / Decline buttons inside the shared device HUD (file transfer request) ---------- */
+.c-bt-hud > .bt-hud-actions { animation-delay: 0.26s; }
+.bt-hud-actions { display: flex; align-items: center; gap: 5px; flex: none; }
+.bt-hud-actions.hidden { display: none; }
+.hud-action-btn {
+  width: 22px; height: 22px; border-radius: 50%; border: 0; padding: 0; cursor: pointer;
+  display: grid; place-items: center;
+  transition: transform 0.12s ease, filter 0.15s ease, background 0.15s ease;
+}
+.hud-action-btn:active { transform: scale(0.9); }
+.hud-action-btn.accept { background: #30d158; color: #fff; box-shadow: 0 2px 6px rgba(48, 209, 88, 0.35); }
+.hud-action-btn.accept:hover { filter: brightness(1.12); }
+.hud-action-btn.decline { background: rgba(255, 69, 58, 0.18); color: #ff453a; box-shadow: inset 0 0 0 1px rgba(255, 69, 58, 0.45); }
+.hud-action-btn.decline:hover { background: rgba(255, 69, 58, 0.3); }
+
+.drop-prompt-icon-bubble svg { width: 16px; height: 16px; }
+

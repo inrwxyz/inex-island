@@ -7,6 +7,8 @@
     "tauri": "tauri",
     "dev": "tauri dev",
     "build": "tauri build",
+    "build:parts": "node scripts/build-styles.mjs && node scripts/build-main.mjs",
+    "build:styles": "node scripts/build-styles.mjs",
     "build:main": "node scripts/build-main.mjs",
     "clean": "cargo clean --manifest-path src-tauri/Cargo.toml"
   },
