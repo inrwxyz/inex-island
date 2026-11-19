@@ -280,6 +280,17 @@ async function refreshWeather() {
   }
 }
 
+window.addEventListener('storage', (e) => {
+  if (e.key === 'inex.weather.refresh') {
+    weather.loc = null; weather.locAt = 0; weather.at = 0; weather.key = ''; weather.cityLoc = null; weather.cityQ = '';
+    try {
+      const sv = JSON.parse(localStorage.getItem('inex.loc') || 'null');
+      if (sv && sv.loc) { weather.loc = sv.loc; weather.locAt = sv.at || Date.now(); }
+    } catch (_) {}
+    refreshWeather();
+  }
+});
+
 // bytes per second -> short text for the Net Speed widget: "512 K/s", "2.4 M/s", "12 M/s"
 function fmtNet(b) {
   if (!(b > 0)) return '0 K/s';

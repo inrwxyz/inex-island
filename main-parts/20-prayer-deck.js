@@ -174,46 +174,53 @@ async function prGeocode(query) {
   if (!isFinite(+r.latitude) || !isFinite(+r.longitude)) return null;
   return { lat: +r.latitude, lon: +r.longitude, city: r.name || name, tz: r.timezone || '' };
 }
-async function prIpLocation() {
-  try {   // the weather feature may already know where this PC is: reuse it, no request at all
-    const sv = JSON.parse(localStorage.getItem('inex.loc') || 'null');
-    if (sv && sv.loc && isFinite(sv.loc.lat) && isFinite(sv.loc.lon)) return { lat: +sv.loc.lat, lon: +sv.loc.lon, city: sv.loc.city || '', tz: '' };
-  } catch (_) {}
+async function prIpLocation(forceFresh = false) {
+  if (!forceFresh) {
+    try {   // the weather feature may already know where this PC is: reuse it if recent (<1h)
+      const sv = JSON.parse(localStorage.getItem('inex.loc') || 'null');
+      if (sv && sv.loc && isFinite(sv.loc.lat) && isFinite(sv.loc.lon) && (Date.now() - (sv.at || 0) < 60 * 60 * 1000)) {
+        return { lat: +sv.loc.lat, lon: +sv.loc.lon, city: sv.loc.city || '', tz: '' };
+      }
+    } catch (_) {}
+  }
   const tries = [
-    async () => { const r = await prFetch('https://ipapi.co/json/'); if (!r.ok) return null; const d = await r.json(); return d.latitude ? { lat: +d.latitude, lon: +d.longitude, city: d.city || '', tz: '' } : null; },
     async () => { const r = await prFetch('https://ipwho.is/'); if (!r.ok) return null; const d = await r.json(); return d && d.success !== false && d.latitude ? { lat: +d.latitude, lon: +d.longitude, city: d.city || '', tz: '' } : null; },
+    async () => { const r = await prFetch('https://ipapi.co/json/'); if (!r.ok) return null; const d = await r.json(); return d.latitude ? { lat: +d.latitude, lon: +d.longitude, city: d.city || '', tz: '' } : null; },
     async () => { const r = await prFetch('https://freeipapi.com/api/json'); if (!r.ok) return null; const d = await r.json(); return d && d.latitude ? { lat: +d.latitude, lon: +d.longitude, city: d.cityName || '', tz: '' } : null; }
   ];
   for (const t of tries) { try { const l = await t(); if (l && isFinite(l.lat) && isFinite(l.lon)) return l; } catch (_) {} }
   return null;
 }
 // Returns true when prayer.loc is usable. Auto mode keeps the PC's own time zone (an IP lookup is near the PC).
-async function prEnsureLoc() {
+async function prEnsureLoc(forceFresh = false) {
   const c = prCfg();
   const cityStr = String(c.city || '').trim();
   const manual = !!cityStr;
   const q = cityStr.toLowerCase();
   let cached = null;
-  try { cached = JSON.parse(localStorage.getItem(PR_LOC_KEY) || 'null'); } catch (_) {}
-  if (cached && cached.loc && (manual ? (cached.mode === 'manual' && cached.q === q) : cached.mode === 'auto')) {
-    prayer.loc = cached.loc; prayer.locErr = '';
-    return true;
+  if (!forceFresh) {
+    try { cached = JSON.parse(localStorage.getItem(PR_LOC_KEY) || 'null'); } catch (_) {}
+    if (cached && cached.loc && (manual ? (cached.mode === 'manual' && cached.q === q) : cached.mode === 'auto')) {
+      prayer.loc = cached.loc; prayer.locErr = '';
+      return true;
+    }
   }
   if (prayer.locBusy) return !!prayer.loc;
-  if (prayer.locFailAt && Date.now() - prayer.locFailAt < 5 * 60000) return !!prayer.loc;   // do not hammer the network
+  if (!forceFresh && prayer.locFailAt && Date.now() - prayer.locFailAt < 5 * 60000) return !!prayer.loc;   // do not hammer the network
   prayer.locBusy = true;
   let loc = null;
-  try { loc = manual ? await prGeocode(cityStr) : await prIpLocation(); } catch (_) {}
+  try { loc = manual ? await prGeocode(cityStr) : await prIpLocation(forceFresh); } catch (_) {}
   prayer.locBusy = false;
   if (loc) {
     prayer.loc = loc; prayer.locErr = ''; prayer.locFailAt = 0;
     try { localStorage.setItem(PR_LOC_KEY, JSON.stringify({ mode: manual ? 'manual' : 'auto', q: q, loc: loc })); } catch (_) {}
+    try { localStorage.setItem('inex.loc', JSON.stringify({ loc: loc, at: Date.now() })); } catch (_) {}
     return true;
   }
   prayer.locFailAt = Date.now();
   prayer.locErr = manual ? 'City not found' : 'Location unavailable';
   if (manual && !prayer.loc) {   // typed city failed: try the automatic location so the deck is still useful
-    try { const a = await prIpLocation(); if (a) prayer.loc = a; } catch (_) {}
+    try { const a = await prIpLocation(forceFresh); if (a) prayer.loc = a; } catch (_) {}
   }
   return !!prayer.loc;
 }
@@ -512,7 +519,7 @@ window.addEventListener('storage', (e) => {
   if (e.key === 'inex.prayer.refreshLoc' && prOn()) {
     try { localStorage.removeItem(PR_LOC_KEY); } catch (_) {}
     prayer.loc = null; prayer.days = null;
-    prEnsureLoc().then(() => { prArm(); if (prayer.open) prRender(); });
+    prEnsureLoc(true).then(() => { prArm(); if (prayer.open) prRender(); });
   }
 });
 prayerApplySettings();

@@ -153,7 +153,7 @@ const PAGES = [
         { path: 'widgets.right', type: 'select', icon: 'widgets', t: 'Right Hover Widget', d: 'Shown on the right on notch hover', options: WIDGET_OPTS, showIf: (s) => s.widgets.enabled },
         { path: 'weather.enabled', type: 'toggle', icon: 'cloud', t: 'Live Weather', d: 'Fetch real-time local temperature for notch & widgets', showIf: (s) => s.widgets.enabled || weatherNeededByNotch(s) || (menuIs('mac')(s) && s.macMenu?.showWeather) },
         { path: 'weather.unit', type: 'seg', icon: 'sun', t: 'Unit', d: 'Celsius or Fahrenheit', options: [['C', '°C'], ['F', '°F']], showIf: weatherShown },
-        { path: 'weather.city', type: 'text', icon: 'pin', t: 'City', d: 'Leave empty for automatic location. Press Enter to apply', placeholder: 'e.g. Dhaka', showIf: weatherShown },
+        { path: 'weather.city', type: 'text', icon: 'pin', t: 'City', d: 'City for temperature & live weather. Press Enter to apply', placeholder: 'Type city or click 🔄', refreshBtn: true, showIf: weatherShown },
         { path: 'overlays.privacyDot', type: 'toggle', icon: 'mic', t: 'Mic Indicator', d: 'Small dot beside the clock while an app uses your microphone' }
       ] },
       { id: 'notch-pet', title: 'Companion Pet', defaultOpen: false, rows: [
@@ -217,15 +217,15 @@ const PAGES = [
       ] },
       { id: 'sounds-prayer', title: 'Prayer & Solar Deck', defaultOpen: true, rows: [
         { path: 'prayer.enabled', type: 'toggle', icon: 'moon', t: 'Prayer & Solar Deck', d: 'Adds a mosque button to the Control Deck with prayer times, the sun\'s path and Adhan alerts. Off = nothing shown, nothing running', onChange: (v) => { if (!v) prayerEditOpen = false; } },
-        { path: 'prayer.city', type: 'text', icon: 'pin', t: 'City', d: 'Leave empty for automatic IP location. Press Enter to apply', placeholder: 'Auto (Network IP) or type City', refreshBtn: true, showIf: (s) => PRAYER_ON(s) && prayerEditOpen },
+        { path: 'prayer.city', type: 'text', icon: 'pin', t: 'City', d: 'City for prayer calculations. Press Enter to apply', placeholder: 'Type city or click 🔄', refreshBtn: true, showIf: (s) => PRAYER_ON(s) && prayerEditOpen },
         { path: 'prayer.asrMethod', type: 'seg', icon: 'sun', t: 'Asr Method', d: 'Shadow length used for Asr', options: [['standard', 'Standard'], ['hanafi', 'Hanafi']], showIf: (s) => PRAYER_ON(s) && prayerEditOpen },
         { path: 'prayer.masjidOverride', type: 'toggle', icon: 'clock', t: 'Custom Masjid Timings', d: 'Use your local mosque\'s clock instead of the calculated times. Empty fields stay calculated', showIf: (s) => PRAYER_ON(s) && prayerEditOpen },
         { type: 'action', icon: 'refresh', t: 'Reset to Calculated Times', d: 'Fill all 5 custom fields with today\'s calculated prayer times for your city', run: resetMasjidToCalculated, showIf: (s) => PRAYER_MASJID_ON(s) && prayerEditOpen },
-        { path: 'prayer.masjid.fajr', type: 'text', icon: 'clock', t: 'Fajr', d: 'e.g. 4:45 or 04:45 AM', placeholder: '04:45', showIf: (s) => PRAYER_MASJID_ON(s) && prayerEditOpen },
-        { path: 'prayer.masjid.dhuhr', type: 'text', icon: 'clock', t: 'Dhuhr', d: 'e.g. 12:15 or 12:15 PM', placeholder: '12:15', showIf: (s) => PRAYER_MASJID_ON(s) && prayerEditOpen },
-        { path: 'prayer.masjid.asr', type: 'text', icon: 'clock', t: 'Asr', d: 'e.g. 3:30 or 03:30 PM', placeholder: '03:30', showIf: (s) => PRAYER_MASJID_ON(s) && prayerEditOpen },
-        { path: 'prayer.masjid.maghrib', type: 'text', icon: 'clock', t: 'Maghrib', d: 'e.g. 5:25 or 05:25 PM', placeholder: '05:25', showIf: (s) => PRAYER_MASJID_ON(s) && prayerEditOpen },
-        { path: 'prayer.masjid.isha', type: 'text', icon: 'clock', t: 'Isha', d: 'e.g. 7:00 or 07:00 PM', placeholder: '07:00', showIf: (s) => PRAYER_MASJID_ON(s) && prayerEditOpen },
+        { path: 'prayer.masjid.fajr', type: 'text', icon: 'clock', t: 'Fajr', placeholder: '04:45', showIf: (s) => PRAYER_MASJID_ON(s) && prayerEditOpen },
+        { path: 'prayer.masjid.dhuhr', type: 'text', icon: 'clock', t: 'Dhuhr', placeholder: '12:15', showIf: (s) => PRAYER_MASJID_ON(s) && prayerEditOpen },
+        { path: 'prayer.masjid.asr', type: 'text', icon: 'clock', t: 'Asr', placeholder: '03:30', showIf: (s) => PRAYER_MASJID_ON(s) && prayerEditOpen },
+        { path: 'prayer.masjid.maghrib', type: 'text', icon: 'clock', t: 'Maghrib', placeholder: '05:25', showIf: (s) => PRAYER_MASJID_ON(s) && prayerEditOpen },
+        { path: 'prayer.masjid.isha', type: 'text', icon: 'clock', t: 'Isha', placeholder: '07:00', showIf: (s) => PRAYER_MASJID_ON(s) && prayerEditOpen },
         { path: 'prayer.adhanSound', type: 'select', icon: 'sound', t: 'Adhan Sound', d: 'Played at prayer times with Mute and Dismiss options', options: [['madinah', 'Masjid Nabawi Adhan'], ['beep', 'Peaceful Chime (12s)'], ['mute', 'Silent / Visual Only']], showIf: (s) => PRAYER_ON(s) && prayerEditOpen },
         { path: 'prayer.fullAdhan', type: 'toggle', icon: 'sound', t: 'Full Length Adhan', d: 'On = complete 3:48 adhan. Off = all 4 Takbeers only (~45s)', showIf: (s) => PRAYER_ON(s) && prayerEditOpen && s.prayer.adhanSound === 'madinah' },
         { path: 'prayer.alertLead', type: 'select', icon: 'bell', t: 'Heads-up (Before)', d: 'A quiet card and chime this long before the Adhan. The Adhan itself always plays at the exact time', options: [['0', 'Exact Time Only'], ['2', '2 mins before'], ['5', '5 mins before'], ['10', '10 mins before'], ['15', '15 mins before']], showIf: (s) => PRAYER_ON(s) && prayerEditOpen },
@@ -443,17 +443,71 @@ function getCalculatedPrayerTimes(loc, hanafi) {
   } catch (_) { return null; }
 }
 
-function resetMasjidToCalculated() {
+async function fetchLiveIpLocation() {
+  const tries = [
+    async () => {
+      const r = await fetch('https://ipwho.is/');
+      if (!r.ok) return null;
+      const d = await r.json();
+      return (d && d.success !== false && d.latitude && d.longitude) ? { lat: +d.latitude, lon: +d.longitude, city: d.city || '' } : null;
+    },
+    async () => {
+      const r = await fetch('https://ipapi.co/json/');
+      if (!r.ok) return null;
+      const d = await r.json();
+      return (d && d.latitude && d.longitude) ? { lat: +d.latitude, lon: +d.longitude, city: d.city || '' } : null;
+    },
+    async () => {
+      const r = await fetch('https://freeipapi.com/api/json');
+      if (!r.ok) return null;
+      const d = await r.json();
+      return (d && d.latitude && d.longitude) ? { lat: +d.latitude, lon: +d.longitude, city: d.cityName || '' } : null;
+    }
+  ];
+  for (const t of tries) {
+    try {
+      const res = await t();
+      if (res && isFinite(res.lat) && isFinite(res.lon)) return res;
+    } catch (_) {}
+  }
+  return null;
+}
+
+async function resetMasjidToCalculated() {
   if (!S.prayer) S.prayer = {};
   let loc = null;
-  try {
-    const pl = JSON.parse(localStorage.getItem('inex.prayer.loc') || 'null');
-    if (pl && pl.loc) loc = pl.loc;
-    else {
-      const wl = JSON.parse(localStorage.getItem('inex.loc') || 'null');
-      if (wl && wl.loc) loc = wl.loc;
+  const city = String(S.prayer.city || '').trim();
+  if (city) {
+    try {
+      const res = await fetch('https://geocoding-api.open-meteo.com/v1/search?name=' + encodeURIComponent(city) + '&count=1&language=en&format=json');
+      if (res.ok) {
+        const d = await res.json();
+        if (d && d.results && d.results[0]) {
+          const r = d.results[0];
+          loc = { lat: +r.latitude, lon: +r.longitude, city: r.name || city };
+        }
+      }
+    } catch (_) {}
+  }
+  if (!loc) {
+    try {
+      const pl = JSON.parse(localStorage.getItem('inex.prayer.loc') || 'null');
+      if (pl && pl.loc) loc = pl.loc;
+      else {
+        const wl = JSON.parse(localStorage.getItem('inex.loc') || 'null');
+        if (wl && wl.loc) loc = wl.loc;
+      }
+    } catch (_) {}
+  }
+  if (!loc) {
+    loc = await fetchLiveIpLocation();
+    if (loc) {
+      try {
+        localStorage.setItem('inex.prayer.loc', JSON.stringify({ mode: 'auto', loc: loc, at: Date.now() }));
+        localStorage.setItem('inex.loc', JSON.stringify({ loc: loc, at: Date.now() }));
+      } catch (_) {}
     }
-  } catch (_) {}
+  }
   if (loc && isFinite(loc.lat) && isFinite(loc.lon)) {
     const calc = getCalculatedPrayerTimes(loc, S.prayer.asrMethod === 'hanafi');
     if (calc) {
@@ -464,13 +518,13 @@ function resetMasjidToCalculated() {
         maghrib: calc.maghrib,
         isha: calc.isha
       };
-      save(S);
+      await save(S);
       renderPage();
       return;
     }
   }
   S.prayer.masjid = { fajr: '', dhuhr: '', asr: '', maghrib: '', isha: '' };
-  save(S);
+  await save(S);
   renderPage();
 }
 
@@ -752,18 +806,18 @@ function control(row) {
     customSel.append(trigger, menu);
     wrap.append(customSel);
   } else if (row.type === 'text') {
-    let ph = row.placeholder || '';
-    if (row.path === 'prayer.city' && !v) {
+    let val = v || '';
+    if ((row.path === 'prayer.city' || row.path === 'weather.city') && !val) {
       try {
         const pl = JSON.parse(localStorage.getItem('inex.prayer.loc') || 'null');
-        if (pl && pl.loc && pl.loc.city) ph = `Auto (${pl.loc.city}) or type City`;
+        if (pl && pl.loc && pl.loc.city) val = pl.loc.city;
         else {
           const wl = JSON.parse(localStorage.getItem('inex.loc') || 'null');
-          if (wl && wl.loc && wl.loc.city) ph = `Auto (${wl.loc.city}) or type City`;
+          if (wl && wl.loc && wl.loc.city) val = wl.loc.city;
         }
       } catch (_) {}
     }
-    const inp = el('input', 'txtin'); inp.type = 'text'; inp.value = v || ''; inp.placeholder = ph;
+    const inp = el('input', 'txtin'); inp.type = 'text'; inp.value = val; inp.placeholder = row.placeholder || '';
     inp.addEventListener('input', () => {
       if (row.path === 'weather.city' || row.path === 'prayer.city') return;   // applied on Enter / blur only
       set(row.path, inp.value.trim());
@@ -772,21 +826,63 @@ function control(row) {
     });
     inp.addEventListener('change', () => {
       if (row.path === 'share.deviceName') localStorage.setItem('island_pc_name', inp.value.trim());
-      change(inp.value.trim(), false);
+      const newVal = inp.value.trim();
+      change(newVal, false);
+      if (row.path === 'prayer.city' && newVal) {
+        resetMasjidToCalculated();
+      }
     });
     wrap.append(inp);
     if (row.refreshBtn) {
       const refBtn = el('button', 'btn btn-outline', '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13" style="display:inline-block;vertical-align:-1px;"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>');
       refBtn.type = 'button';
-      refBtn.title = 'Re-detect automatic IP location';
+      refBtn.title = 'Re-detect location via live IP';
       refBtn.style.marginLeft = '6px';
-      refBtn.addEventListener('click', (e) => {
+      refBtn.addEventListener('click', async (e) => {
         e.stopPropagation();
-        set(row.path, '');
-        try { localStorage.removeItem('inex.prayer.loc'); } catch (_) {}
-        try { localStorage.setItem('inex.prayer.refreshLoc', String(Date.now())); } catch (_) {}
-        save(S);
-        renderPage();
+        refBtn.disabled = true;
+        const iconSvg = refBtn.querySelector('svg');
+        if (iconSvg) iconSvg.classList.add('spinning');
+        try {
+          try { localStorage.removeItem('inex.prayer.loc'); } catch (_) {}
+          try { localStorage.removeItem('inex.loc'); } catch (_) {}
+          const loc = await fetchLiveIpLocation();
+          if (loc && isFinite(loc.lat) && isFinite(loc.lon)) {
+            const detectedCity = loc.city || '';
+            set(row.path, detectedCity);
+            if (row.path === 'prayer.city' && S.weather) S.weather.city = detectedCity;
+            if (row.path === 'weather.city' && S.prayer) S.prayer.city = detectedCity;
+
+            try {
+              localStorage.setItem('inex.prayer.loc', JSON.stringify({ mode: 'auto', loc: loc, at: Date.now() }));
+              localStorage.setItem('inex.loc', JSON.stringify({ loc: loc, at: Date.now() }));
+            } catch (_) {}
+
+            if (S.prayer) {
+              const calc = getCalculatedPrayerTimes(loc, S.prayer.asrMethod === 'hanafi');
+              if (calc) {
+                S.prayer.masjid = {
+                  fajr: calc.fajr,
+                  dhuhr: calc.dhuhr,
+                  asr: calc.asr,
+                  maghrib: calc.maghrib,
+                  isha: calc.isha
+                };
+              }
+            }
+            await save(S);
+            try {
+              localStorage.setItem('inex.prayer.refreshLoc', String(Date.now()));
+              localStorage.setItem('inex.weather.refresh', String(Date.now()));
+            } catch (_) {}
+          }
+        } catch (err) {
+          console.error('Refresh location error:', err);
+        } finally {
+          refBtn.disabled = false;
+          if (iconSvg) iconSvg.classList.remove('spinning');
+          renderPage();
+        }
       });
       wrap.append(refBtn);
     }
