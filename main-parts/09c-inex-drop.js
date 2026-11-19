@@ -66,7 +66,7 @@ function promptTitle(p) {
 
 // Island notch prompt HUD
 function showPromptHud(p) {
-  playStatusSound('transfer', 'transfer');
+  playStatusSound('transfer', 'transfer-ask');
   if (typeof showDeviceHud === 'function') {
     showDeviceHud({
       iconHTML: getBatchIcon(p.names || [p.name]),

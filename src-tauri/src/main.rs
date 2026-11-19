@@ -1859,7 +1859,13 @@ fn play_status_sound(kind: String) {
                 static W: OnceLock<Vec<u8>> = OnceLock::new();
                 W.get_or_init(|| synthesize_wav_notes(0.26, 13.5, &[(587.33, 0.0, 0.16), (880.0, 0.05, 0.17)]))
             }
+            // File transfer finished: the real Quick Share sound (src-tauri/sounds/transfer.wav, baked into the exe).
             "transfer" => {
+                static W: OnceLock<Vec<u8>> = OnceLock::new();
+                W.get_or_init(|| include_bytes!("../sounds/transfer.wav").to_vec())
+            }
+            // incoming-file request popup: the old short 3-note beep (the long Quick Share sound is for "done")
+            "transfer-ask" => {
                 static W: OnceLock<Vec<u8>> = OnceLock::new();
                 W.get_or_init(|| synthesize_wav_notes(0.32, 11.0, &[(523.25, 0.0, 0.16), (783.99, 0.06, 0.16), (1046.5, 0.12, 0.14)]))
             }

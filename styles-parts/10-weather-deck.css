@@ -25,23 +25,23 @@
 #wxd-ico svg { width: 34px !important; height: 34px !important; margin: 0 !important; vertical-align: top !important; display: block; }
 #wxd-temp { font-size: 30px; font-weight: 650; letter-spacing: -0.03em; line-height: 1; color: var(--menu-fg); }
 .wxd-cond { font-size: 11.5px; font-weight: 600; color: var(--menu-fg); line-height: 1.2; }
-.wxd-sub { font-size: 10px; font-weight: 500; color: var(--menu-fg-dim); line-height: 1.25; }
+.wxd-sub { font-size: 9.5px; font-weight: 500; color: var(--menu-fg-dim); line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .wxd-aqi { display: flex; align-items: baseline; gap: 6px; margin-top: auto; line-height: 1; }
 .wxd-aqi small { font-size: 9px; font-weight: 700; letter-spacing: .06em; color: var(--menu-fg-dim); }
 .wxd-aqi b { font-size: 17px; font-weight: 700; }
 .wxd-aqit { font-size: 10px; font-weight: 600; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
-.wxd-scale { position: relative; display: flex; gap: 2px; height: 4px; margin-top: 3px; }
-.wxd-scale i { flex: 1; border-radius: 2px; }
-.wxd-scale u { position: absolute; top: -2px; width: 3px; height: 8px; margin-left: -1.5px; border-radius: 2px; background: #fff; box-shadow: 0 0 0 1px #000; }
+/* phone-style AQI line: one continuous green -> yellow -> orange -> red -> purple -> maroon line, round dot at the value.
+   The dot's black ring makes the little gap around it (card is true black). Static, no animation. */
+.wxd-scale { position: relative; height: 5px; margin-top: 5px; border-radius: 3px;
+  background: linear-gradient(90deg, #3fbf5f 0%, #3fbf5f 8%, #e8c52f 25%, #f0892f 41.7%, #e0453f 58.3%, #9a4fc1 75%, #8f2a45 91.7%, #8f2a45 100%); }
+.wxd-scale u { position: absolute; top: 50%; width: 7px; height: 7px; margin: -3.5px 0 0 -3.5px; border-radius: 50%; background: #fff; box-shadow: 0 0 0 2.5px #000; }
 
 /* centre: round sun arc, sunrise / sunset */
 #wxd-arc { display: block; width: 100%; height: 78px; flex: none; overflow: visible; }
 #wxd-arc .wxd-horizon { stroke: rgba(255,255,255,.14); stroke-width: 1; }
 #wxd-arc .wxd-base { fill: none; stroke: rgba(255,255,255,.18); stroke-width: 1.6; stroke-linecap: round; }
 #wxd-arc .wxd-prog { fill: none; stroke: #f5b73b; stroke-width: 2; stroke-linecap: round; }
-#wxd-arc .wxd-halo { fill: #f5b73b; fill-opacity: .18; }
-#wxd-arc .wxd-dot { fill: #f5b73b; }
-#wxd-arc .wxd-dot.night { fill: #c9ced9; }
+#wxd-arc .wxd-halo { fill: #f5b73b; fill-opacity: .16; }
 .wxd-times { display: flex; justify-content: space-between; gap: 6px; margin-top: auto; }
 .wxd-times > div { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 .wxd-times > div:last-child { align-items: flex-end; }

@@ -22,6 +22,8 @@ function wxdBand(table, v) {
 
 const WXD_SUNRISE = '<svg viewBox="0 0 24 24" fill="none" stroke="#f5a623" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13"><path d="M3 19h18"/><path d="M7 19a5 5 0 0 1 10 0"/><path d="M12 4v6"/><path d="M9.5 6.5L12 4l2.5 2.5"/></svg>';
 const WXD_SUNSET = '<svg viewBox="0 0 24 24" fill="none" stroke="#f26b3a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13"><path d="M3 19h18"/><path d="M7 19a5 5 0 0 1 10 0"/><path d="M12 4v6"/><path d="M9.5 7.5L12 10l2.5-2.5"/></svg>';
+const WXD_SUN_SVG = '<circle cx="12" cy="12" r="5" fill="#FFB900"/><g stroke="#F59E0B" stroke-width="1.9" stroke-linecap="round"><line x1="12" y1="2" x2="12" y2="4.6"/><line x1="12" y1="19.4" x2="12" y2="22"/><line x1="2" y1="12" x2="4.6" y2="12"/><line x1="19.4" y1="12" x2="22" y2="12"/><line x1="4.9" y1="4.9" x2="6.8" y2="6.8"/><line x1="17.2" y1="17.2" x2="19.1" y2="19.1"/><line x1="4.9" y1="19.1" x2="6.8" y2="17.2"/><line x1="17.2" y1="6.8" x2="19.1" y2="4.9"/></g>';
+const WXD_MOON_SVG = '<path d="M20 13.6A8.4 8.4 0 1 1 10.4 4 6.6 6.6 0 0 0 20 13.6z" fill="#E6EAF5"/><path d="M18.6 2.6l.8 1.9 1.9.8-1.9.8-.8 1.9-.8-1.9-1.9-.8 1.9-.8z" fill="#FFFFFF"/><circle cx="21.2" cy="10.4" r="0.8" fill="#C9D1E8"/>';
 const WXD_I = (c, inner) => '<svg viewBox="0 0 24 24" fill="none" stroke="' + c + '" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + inner + '</svg>';
 const WXD_ICONS = {
   hum: WXD_I('#4aa3df', '<path d="M12 3c3.5 4.2 6 7.2 6 10.5a6 6 0 0 1-12 0C6 10.2 8.5 7.2 12 3z"/>'),
@@ -37,7 +39,6 @@ function wxdBuild() {
   if (!deck) return false;
   const body = document.createElement('div');
   body.id = 'mx-weather-body';
-  let segs = ''; WXD_AQI.forEach((b) => { segs += '<i style="background:' + b[2] + '"></i>'; });
   body.innerHTML =
     '<div class="mx-widget-card">' +
       '<div class="wg-head"><b>Weather</b><span id="wxd-place">--</span></div>' +
@@ -46,7 +47,7 @@ function wxdBuild() {
       '<div class="wxd-sub" id="wxd-sub">--</div>' +
       '<div class="wxd-aqi"><small>AQI</small><b id="wxd-aqi">--</b></div>' +
       '<div class="wxd-aqit" id="wxd-aqit"></div>' +
-      '<div class="wxd-scale">' + segs + '<u id="wxd-aqi-mark" style="left:0%;display:none"></u></div>' +
+      '<div class="wxd-scale"><u id="wxd-aqi-mark" style="left:0%;display:none"></u></div>' +
     '</div>' +
     '<div class="mx-widget-card">' +
       '<div class="wg-head"><b>Sun</b><span id="wxd-daylen"></span></div>' +
@@ -54,12 +55,15 @@ function wxdBuild() {
         '<line class="wxd-horizon" x1="8" y1="84" x2="192" y2="84"/>' +
         '<path class="wxd-base" d="M22 84A78 78 0 0 1 178 84" pathLength="100"/>' +
         '<path id="wxd-prog" class="wxd-prog" d="M22 84A78 78 0 0 1 178 84" pathLength="100" stroke-dasharray="0 100"/>' +
-        '<circle id="wxd-halo" class="wxd-halo" r="9" cx="22" cy="84" style="display:none"/>' +
-        '<circle id="wxd-dot" class="wxd-dot night" r="5" cx="22" cy="84"/>' +
+        '<g id="wxd-body" transform="translate(22 84)">' +
+          '<circle id="wxd-halo" class="wxd-halo" r="13"/>' +
+          '<g id="wxd-sun" transform="scale(1.1) translate(-12 -12)">' + WXD_SUN_SVG + '</g>' +
+          '<g id="wxd-moon" style="display:none" transform="scale(1.1) translate(-12 -12)">' + WXD_MOON_SVG + '</g>' +
+        '</g>' +
       '</svg>' +
       '<div class="wxd-times">' +
-        '<div><small>' + WXD_SUNRISE + 'Sunrise</small><b id="wxd-rise">--</b></div>' +
-        '<div><small>Sunset' + WXD_SUNSET + '</small><b id="wxd-set">--</b></div>' +
+        '<div><small id="wxd-l-lab"></small><b id="wxd-l-time">--</b></div>' +
+        '<div><small id="wxd-r-lab"></small><b id="wxd-r-time">--</b></div>' +
       '</div>' +
     '</div>' +
     '<div class="mx-widget-card">' +
@@ -95,7 +99,7 @@ function wxdLoadCache() {
 async function wxdFetch(force) {
   if (wxd.busy) return;
   const unit = (typeof SET !== 'undefined' && SET.weather && SET.weather.unit === 'F') ? 'F' : 'C';
-  if (!force && wxd.data && wxd.data.unit === unit && Date.now() - wxd.at < 10 * 60 * 1000) return;
+  if (!force && wxd.data && wxd.data.unit === unit && wxd.data.rises && Date.now() - wxd.at < 10 * 60 * 1000) return;
   wxd.busy = true;
   try {
     const loc = await detectLocation();
@@ -104,7 +108,7 @@ async function wxdFetch(force) {
     const uf = f ? '&temperature_unit=fahrenheit&wind_speed_unit=mph' : '&wind_speed_unit=kmh';
     const u1 = 'https://api.open-meteo.com/v1/forecast?latitude=' + loc.lat + '&longitude=' + loc.lon +
       '&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,is_day,surface_pressure,wind_speed_10m,wind_direction_10m,visibility,uv_index' +
-      '&daily=sunrise,sunset,temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=1' + uf;
+      '&daily=sunrise,sunset,temperature_2m_max,temperature_2m_min&timezone=auto&past_days=1&forecast_days=2' + uf;
     const u2 = 'https://air-quality-api.open-meteo.com/v1/air-quality?latitude=' + loc.lat + '&longitude=' + loc.lon + '&current=us_aqi&timezone=auto';
     const [r1, r2] = await Promise.allSettled([wxFetch(u1), wxFetch(u2)]);
     let j1 = null, j2 = null;
@@ -112,16 +116,17 @@ async function wxdFetch(force) {
     try { if (r2.status === 'fulfilled' && r2.value.ok) j2 = await r2.value.json(); } catch (_) {}
     if (!j1 || !j1.current) return;                 // keep whatever we had
     const c = j1.current, d = j1.daily || {}, off = j1.utc_offset_seconds || 0;
-    const riseS = d.sunrise && d.sunrise[0], setS = d.sunset && d.sunset[0];
+    const riseA = d.sunrise || [], setA = d.sunset || [];
+    const ti = riseA.length >= 3 && setA.length >= 3 ? 1 : 0;           // index of "today" (0 = yesterday)
+    const msOf = (a) => a.map((x) => Date.parse(x + 'Z') - off * 1000);
     const num = (v) => (typeof v === 'number' ? v : null);
     wxd.data = {
       unit, place: loc.city || (typeof weather !== 'undefined' ? weather.place : '') || '',
       temp: num(c.temperature_2m), feels: num(c.apparent_temperature), hum: num(c.relative_humidity_2m),
       code: c.weather_code || 0, isDay: c.is_day === 1, pres: num(c.surface_pressure),
       wind: num(c.wind_speed_10m), wdir: num(c.wind_direction_10m), vis: num(c.visibility), uv: num(c.uv_index),
-      hi: d.temperature_2m_max ? num(d.temperature_2m_max[0]) : null, lo: d.temperature_2m_min ? num(d.temperature_2m_min[0]) : null,
-      rise: riseS ? Date.parse(riseS + 'Z') - off * 1000 : null, set: setS ? Date.parse(setS + 'Z') - off * 1000 : null,
-      riseTxt: wxdFmt12(riseS), setTxt: wxdFmt12(setS),
+      hi: d.temperature_2m_max ? num(d.temperature_2m_max[ti]) : null, lo: d.temperature_2m_min ? num(d.temperature_2m_min[ti]) : null,
+      ti, rises: msOf(riseA), sets: msOf(setA), riseT: riseA.map(wxdFmt12), setT: setA.map(wxdFmt12),
       aqi: (j2 && j2.current && typeof j2.current.us_aqi === 'number') ? Math.round(j2.current.us_aqi) : null
     };
     wxd.at = Date.now();
@@ -135,14 +140,33 @@ async function wxdFetch(force) {
 function wxdSet(id, txt) { const e = wxdEl(id); if (e) e.textContent = txt; }
 
 function wxdRenderSun() {
-  const v = wxd.data; if (!v || !v.rise || !v.set || v.set <= v.rise) return;
-  const t = (Date.now() - v.rise) / (v.set - v.rise);
-  const tc = Math.max(0, Math.min(1, t));
-  const x = 100 - 78 * Math.cos(Math.PI * tc), y = 84 - 78 * Math.sin(Math.PI * tc);
-  const day = t >= 0 && t <= 1;
-  const prog = wxdEl('wxd-prog'); if (prog) prog.setAttribute('stroke-dasharray', (t > 1 ? 100 : tc * 100) + ' 100');
-  const halo = wxdEl('wxd-halo'); if (halo) { halo.setAttribute('cx', x); halo.setAttribute('cy', y); halo.style.display = day ? '' : 'none'; }
-  const dot = wxdEl('wxd-dot'); if (dot) { dot.setAttribute('cx', x); dot.setAttribute('cy', y); dot.setAttribute('class', day ? 'wxd-dot' : 'wxd-dot night'); }
+  const v = wxd.data; if (!v || !v.rises || !v.rises.length) return;
+  const k = v.ti || 0, now = Date.now();
+  let mode, a, b, lt, rt;
+  if (v.rises.length >= 3 && v.sets.length >= 3) {
+    if (now < v.rises[k]) { mode = 'night'; a = v.sets[k - 1]; b = v.rises[k]; lt = v.setT[k - 1]; rt = v.riseT[k]; }
+    else if (now <= v.sets[k]) { mode = 'day'; a = v.rises[k]; b = v.sets[k]; lt = v.riseT[k]; rt = v.setT[k]; }
+    else { mode = 'night'; a = v.sets[k]; b = v.rises[k + 1]; lt = v.setT[k]; rt = v.riseT[k + 1]; }
+  } else {                                                          // only today's times known
+    const r = v.rises[0], st = v.sets[0];
+    if (now >= r && now <= st) { mode = 'day'; a = r; b = st; lt = v.riseT[0]; rt = v.setT[0]; }
+    else { mode = 'night'; a = st; b = r + 86400000; lt = v.setT[0]; rt = v.riseT[0]; if (now < r) { a = st - 86400000; b = r; } }
+  }
+  if (!(b > a)) return;
+  const t = Math.max(0, Math.min(1, (now - a) / (b - a)));
+  const x = 100 - 78 * Math.cos(Math.PI * t), y = 84 - 78 * Math.sin(Math.PI * t);
+  const prog = wxdEl('wxd-prog');
+  if (prog) { prog.setAttribute('stroke-dasharray', (t * 100) + ' 100'); prog.setAttribute('stroke', mode === 'day' ? '#f5b73b' : '#8fa2cc'); }
+  const body = wxdEl('wxd-body'); if (body) body.setAttribute('transform', 'translate(' + x.toFixed(1) + ' ' + y.toFixed(1) + ')');
+  const sun = wxdEl('wxd-sun'), moon = wxdEl('wxd-moon'), halo = wxdEl('wxd-halo');
+  if (sun) sun.style.display = mode === 'day' ? '' : 'none';
+  if (moon) moon.style.display = mode === 'day' ? 'none' : '';
+  if (halo) halo.style.display = mode === 'day' ? '' : 'none';
+  // labels: day = Sunrise (left) -> Sunset (right); night = Sunset (left) -> Sunrise (right), like the phone
+  const l = wxdEl('wxd-l-lab'), r = wxdEl('wxd-r-lab');
+  if (l) l.innerHTML = mode === 'day' ? WXD_SUNRISE + 'Sunrise' : WXD_SUNSET + 'Sunset';
+  if (r) r.innerHTML = mode === 'day' ? 'Sunset' + WXD_SUNSET : 'Sunrise' + WXD_SUNRISE;
+  wxdSet('wxd-l-time', lt); wxdSet('wxd-r-time', rt);
 }
 
 function wxdRender() {
@@ -156,7 +180,7 @@ function wxdRender() {
   wxdSet('wxd-place', v.place || '--');
   wxdSet('wxd-temp', deg(v.temp) + (v.temp === null ? '' : v.unit));
   wxdSet('wxd-cond', wmo ? wmo.text : '--');
-  wxdSet('wxd-sub', 'Feels ' + deg(v.feels) + '  \u00b7  H ' + deg(v.hi) + '  L ' + deg(v.lo));
+  wxdSet('wxd-sub', 'Feels ' + deg(v.feels) + ' \u00b7 H' + deg(v.hi) + ' L' + deg(v.lo));
   // AQI
   const aqiEl = wxdEl('wxd-aqi'), aqiT = wxdEl('wxd-aqit'), mark = wxdEl('wxd-aqi-mark');
   if (v.aqi === null) {
@@ -169,12 +193,12 @@ function wxdRender() {
     if (aqiT) { aqiT.textContent = b.label; aqiT.style.color = b.color; }
     const lo = b.i === 0 ? 0 : WXD_AQI[b.i - 1][0] + 1, hi = WXD_AQI[b.i][0];
     const pos = ((b.i + Math.min(1, (v.aqi - lo) / Math.max(1, hi - lo + 1))) / WXD_AQI.length) * 100;
-    if (mark) { mark.style.left = pos + '%'; mark.style.display = ''; }
+    if (mark) { mark.style.left = Math.max(4, Math.min(96, pos)) + '%'; mark.style.background = b.color; mark.style.display = ''; }
   }
   // sun
-  wxdSet('wxd-rise', v.riseTxt); wxdSet('wxd-set', v.setTxt);
-  if (v.rise && v.set && v.set > v.rise) {
-    const mins = Math.round((v.set - v.rise) / 60000);
+  if (v.rises && v.rises.length) {
+    const k = v.ti || 0;
+    const mins = Math.round((v.sets[k] - v.rises[k]) / 60000);
     wxdSet('wxd-daylen', Math.floor(mins / 60) + 'h ' + String(mins % 60).padStart(2, '0') + 'm');
   }
   wxdRenderSun();
