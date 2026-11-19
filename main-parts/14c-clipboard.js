@@ -8,6 +8,8 @@ const CLIPBOARD_TEXT_LIMIT = 50000;
 let clipboardItems = [];
 let clipPreviewUrls = [];
 let clipRenderGen = 0;
+let lastCopiedId = null;
+let lastCopiedTimer = null;
 
 // Purge legacy IndexedDB full-image cache from older versions if present.
 try { indexedDB.deleteDatabase('inex-island-clipboard'); } catch (_) {}
@@ -245,6 +247,7 @@ function renderClipboardList() {
   visibleItems.forEach((item) => {
     const card = document.createElement('div');
     card.className = 'clipboard-item';
+    if (item.id === lastCopiedId) card.classList.add('copied');
     card.title = 'Click to copy';
 
     const header = document.createElement('div');
@@ -316,7 +319,7 @@ function renderClipboardList() {
           ok = !!(await tryInvoke('set_clipboard_files', { paths: [item.path] }));
           if (!ok) {
             removeScreenshotByPath(item.path);
-            showToast('snip', 'Screenshot deleted', 1200);
+            showClipboardHud('Screenshot deleted');
             return;
           }
         } else {
@@ -331,11 +334,20 @@ function renderClipboardList() {
       } catch (_) { ok = false; }
 
       if (ok) {
-        card.classList.add('copied');
-        showToast('snip', 'Copied to clipboard', 1200);
-        setTimeout(() => { card.classList.remove('copied'); }, 1100);
+        lastCopiedId = item.id;
+        pushClipboardItem(item);
+        if (lastCopiedTimer) clearTimeout(lastCopiedTimer);
+        lastCopiedTimer = setTimeout(() => {
+          lastCopiedId = null;
+          if (isClipboardViewOpen()) renderClipboardList();
+        }, 1200);
+        renderClipboardList();
+        const hudText = item.kind === 'screenshot'
+          ? (item.name || 'Screenshot')
+          : (item.text.replace(/\s+/g, ' ').trim().slice(0, 22) + (item.text.trim().length > 22 ? '\u2026' : ''));
+        showClipboardHud(hudText);
       } else {
-        showToast('snip', 'Copy failed', 1200);
+        showClipboardHud('Copy failed');
       }
     });
 

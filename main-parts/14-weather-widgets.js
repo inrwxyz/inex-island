@@ -2,16 +2,14 @@
 const W_SVG = (inner) => `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" style="display:inline-block;vertical-align:-2px;margin-right:3px;flex-shrink:0;">${inner}</svg>`;
 
 const W_ICONS = {
-  sun: W_SVG('<circle cx="12" cy="12" r="5" fill="#F59E0B"/><g stroke="#F59E0B" stroke-width="1.8" stroke-linecap="round"><line x1="12" y1="2" x2="12" y2="4.5"/><line x1="12" y1="19.5" x2="12" y2="22"/><line x1="2" y1="12" x2="4.5" y2="12"/><line x1="19.5" y1="12" x2="22" y2="12"/><line x1="4.93" y1="4.93" x2="6.7" y2="6.7"/><line x1="17.3" y1="17.3" x2="19.07" y2="19.07"/><line x1="4.93" y1="19.07" x2="6.7" y2="17.3"/><line x1="17.3" y1="6.7" x2="19.07" y2="4.93"/></g>'),
+  sun: W_SVG('<circle cx="12" cy="12" r="5" fill="#FFB900"/><g stroke="#F59E0B" stroke-width="1.8" stroke-linecap="round"><line x1="12" y1="2" x2="12" y2="4.5"/><line x1="12" y1="19.5" x2="12" y2="22"/><line x1="2" y1="12" x2="4.5" y2="12"/><line x1="19.5" y1="12" x2="22" y2="12"/><line x1="4.93" y1="4.93" x2="6.7" y2="6.7"/><line x1="17.3" y1="17.3" x2="19.07" y2="19.07"/><line x1="4.93" y1="19.07" x2="6.7" y2="17.3"/><line x1="17.3" y1="6.7" x2="19.07" y2="4.93"/></g>'),
   moon: W_SVG('<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" fill="#FBBF24"/><circle cx="17.5" cy="5.5" r="0.8" fill="#FDE68A"/><circle cx="20" cy="9.5" r="0.6" fill="#FDE68A"/>'),
-  cloud_sun: W_SVG('<circle cx="8.5" cy="8.5" r="4" fill="#F59E0B"/><g stroke="#F59E0B" stroke-width="1.6" stroke-linecap="round"><line x1="8.5" y1="2" x2="8.5" y2="3.8"/><line x1="2" y1="8.5" x2="3.8" y2="8.5"/><line x1="3.9" y1="3.9" x2="5.2" y2="5.2"/><line x1="13.1" y1="3.9" x2="11.8" y2="5.2"/></g><path d="M19.5 18H8a4.5 4.5 0 0 1-.4-8.98A5.5 5.5 0 0 1 18.8 11.5 3.5 3.5 0 0 1 19.5 18z" fill="#E2E8F0"/>'),
-  cloud_moon: W_SVG('<path d="M13.5 3.8a4.5 4.5 0 0 1 4.8 4.8 4.5 4.5 0 0 1-.5 2A4 4 0 0 0 12 7a4 4 0 0 0-.2-1.7 4.5 4.5 0 0 1 1.7-1.5z" fill="#FBBF24"/><path d="M19.5 18H8a4.5 4.5 0 0 1-.4-8.98A5.5 5.5 0 0 1 18.8 11.5 3.5 3.5 0 0 1 19.5 18z" fill="#E2E8F0"/>'),
-  cloud: W_SVG('<path d="M16 13a3.5 3.5 0 0 0-3.5-3.5 3.5 3.5 0 0 0-.6.05 4.8 4.8 0 0 0-7.4 2.45A3.5 3.5 0 0 0 6 17h10a3.5 3.5 0 0 0 0-7z" fill="#94A3B8" opacity="0.65"/><path d="M19.5 19H8a4.5 4.5 0 0 1-.4-8.98 5.5 5.5 0 0 1 10.7 2.48A3.5 3.5 0 0 1 19.5 19z" fill="#F1F5F9"/>'),
-  drizzle: W_SVG('<path d="M19 14H7.5a4 4 0 0 1-.4-7.98 5 5 0 0 1 9.7 2.2A3.2 3.2 0 0 1 19 14z" fill="#94A3B8"/><g stroke="#38BDF8" stroke-width="1.8" stroke-linecap="round"><line x1="8.5" y1="16.5" x2="7.5" y2="19"/><line x1="13.5" y1="16.5" x2="12.5" y2="19"/></g>'),
+  cloud_sun: W_SVG('<circle cx="8.5" cy="8.5" r="4.2" fill="#FFB900"/><g stroke="#F59E0B" stroke-width="1.6" stroke-linecap="round"><line x1="8.5" y1="2" x2="8.5" y2="3.8"/><line x1="2" y1="8.5" x2="3.8" y2="8.5"/><line x1="3.9" y1="3.9" x2="5.2" y2="5.2"/><line x1="13.1" y1="3.9" x2="11.8" y2="5.2"/></g><path d="M19.5 18H8a4.5 4.5 0 0 1-.4-8.98A5.5 5.5 0 0 1 18.8 11.5 3.5 3.5 0 0 1 19.5 18z" fill="#F1F5F9"/>'),
+  cloud_moon: W_SVG('<path d="M13.5 3.8a4.5 4.5 0 0 1 4.8 4.8 4.5 4.5 0 0 1-.5 2A4 4 0 0 0 12 7a4 4 0 0 0-.2-1.7 4.5 4.5 0 0 1 1.7-1.5z" fill="#FBBF24"/><path d="M19.5 18H8a4.5 4.5 0 0 1-.4-8.98A5.5 5.5 0 0 1 18.8 11.5 3.5 3.5 0 0 1 19.5 18z" fill="#F1F5F9"/>'),
+  cloud: W_SVG('<path d="M16 13a3.5 3.5 0 0 0-3.5-3.5 3.5 3.5 0 0 0-.6.05 4.8 4.8 0 0 0-7.4 2.45A3.5 3.5 0 0 0 6 17h10a3.5 3.5 0 0 0 0-7z" fill="#94A3B8" opacity="0.75"/><path d="M19.5 19H8a4.5 4.5 0 0 1-.4-8.98 5.5 5.5 0 0 1 10.7 2.48A3.5 3.5 0 0 1 19.5 19z" fill="#F8FAFC"/>'),
   rain: W_SVG('<path d="M19 14H7.5a4 4 0 0 1-.4-7.98 5 5 0 0 1 9.7 2.2A3.2 3.2 0 0 1 19 14z" fill="#64748B"/><g stroke="#38BDF8" stroke-width="1.8" stroke-linecap="round"><line x1="8" y1="16" x2="6.5" y2="20.5"/><line x1="12" y1="16" x2="10.5" y2="20.5"/><line x1="16" y1="16" x2="14.5" y2="20.5"/></g>'),
   storm: W_SVG('<path d="M19 13.5H7.5a4 4 0 0 1-.4-7.98 5 5 0 0 1 9.7 2.2A3.2 3.2 0 0 1 19 13.5z" fill="#475569"/><polygon points="12,12.5 8.5,17.5 11.5,17.5 10,22.5 15.5,16 12.5,16" fill="#FACC15" stroke="#EAB308" stroke-width="0.5"/>'),
-  snow: W_SVG('<path d="M19 14H7.5a4 4 0 0 1-.4-7.98 5 5 0 0 1 9.7 2.2A3.2 3.2 0 0 1 19 14z" fill="#94A3B8"/><circle cx="8" cy="18" r="1.2" fill="#BAE6FD"/><circle cx="12.5" cy="19.5" r="1.2" fill="#E0F2FE"/><circle cx="16.5" cy="18" r="1.2" fill="#BAE6FD"/>'),
-  haze: W_SVG('<circle cx="12" cy="9" r="4" fill="#FBBF24"/><path d="M4 16h16M6 19h12" stroke="#94A3B8" stroke-width="1.8" stroke-linecap="round"/>')
+  snow: W_SVG('<path d="M19 14H7.5a4 4 0 0 1-.4-7.98 5 5 0 0 1 9.7 2.2A3.2 3.2 0 0 1 19 14z" fill="#94A3B8"/><circle cx="8" cy="18" r="1.2" fill="#BAE6FD"/><circle cx="12.5" cy="19.5" r="1.2" fill="#E0F2FE"/><circle cx="16.5" cy="18" r="1.2" fill="#BAE6FD"/>')
 };
 
 const WMO_CODES = {
@@ -19,13 +17,13 @@ const WMO_CODES = {
   1: { day: W_ICONS.cloud_sun, night: W_ICONS.cloud_moon, text: 'Mostly Clear' },
   2: { day: W_ICONS.cloud_sun, night: W_ICONS.cloud_moon, text: 'Partly Cloudy' },
   3: { day: W_ICONS.cloud, night: W_ICONS.cloud, text: 'Mostly Cloudy' },
-  45: { day: W_ICONS.haze, night: W_ICONS.moon, text: 'Fog' },
-  48: { day: W_ICONS.haze, night: W_ICONS.moon, text: 'Haze' },
-  51: { day: W_ICONS.drizzle, night: W_ICONS.drizzle, text: 'Light Drizzle' },
-  53: { day: W_ICONS.drizzle, night: W_ICONS.drizzle, text: 'Drizzle' },
-  55: { day: W_ICONS.drizzle, night: W_ICONS.drizzle, text: 'Drizzle' },
-  56: { day: W_ICONS.drizzle, night: W_ICONS.drizzle, text: 'Freezing Drizzle' },
-  57: { day: W_ICONS.drizzle, night: W_ICONS.drizzle, text: 'Freezing Drizzle' },
+  45: { day: W_ICONS.cloud, night: W_ICONS.cloud, text: 'Fog' },
+  48: { day: W_ICONS.cloud, night: W_ICONS.cloud, text: 'Haze' },
+  51: { day: W_ICONS.cloud, night: W_ICONS.cloud, text: 'Light Drizzle' },
+  53: { day: W_ICONS.cloud, night: W_ICONS.cloud, text: 'Drizzle' },
+  55: { day: W_ICONS.cloud, night: W_ICONS.cloud, text: 'Drizzle' },
+  56: { day: W_ICONS.cloud, night: W_ICONS.cloud, text: 'Freezing Drizzle' },
+  57: { day: W_ICONS.cloud, night: W_ICONS.cloud, text: 'Freezing Drizzle' },
   61: { day: W_ICONS.rain, night: W_ICONS.rain, text: 'Light Rain' },
   63: { day: W_ICONS.rain, night: W_ICONS.rain, text: 'Rain' },
   65: { day: W_ICONS.rain, night: W_ICONS.rain, text: 'Heavy Rain' },
@@ -113,10 +111,6 @@ async function geocodeCity(name) {
         if (rest) {
           const hit = list.find((x) => [x.country, x.country_code, x.admin1, x.admin2].filter(Boolean).join(' ').toLowerCase().includes(rest));
           if (hit) r = hit;
-        } else {
-          // If no country specified, prioritize match in local user country / timezone (e.g. India)
-          const inHit = list.find((x) => x.country_code === 'IN' || x.timezone === 'Asia/Kolkata');
-          if (inHit) r = inHit;
         }
       }
     }
@@ -128,13 +122,11 @@ async function geocodeCity(name) {
     for (const w of words) {
       if (/^(depz|epz|zone|road|sector|block|area|thana|upazila)$/i.test(w)) continue;
       try {
-        const subRes = await wxFetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(w)}&count=10&language=en&format=json`);
+        const subRes = await wxFetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(w)}&count=5&language=en&format=json`);
         if (subRes.ok) {
           const subD = await subRes.json();
-          const subList = (subD && subD.results) || [];
-          if (subList.length) {
-            const inHit = subList.find((x) => x.country_code === 'IN' || x.timezone === 'Asia/Kolkata');
-            r = inHit || subList[0];
+          if (subD && subD.results && subD.results[0]) {
+            r = subD.results[0];
             break;
           }
         }

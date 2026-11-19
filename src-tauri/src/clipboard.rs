@@ -122,12 +122,88 @@ mod imp {
         }
     }
 
-    /// Places only existing file paths on the Windows clipboard (`CF_HDROP`).
+    fn load_image_as_hbitmap(path: &Path) -> Option<isize> {
+        use std::ffi::c_void;
+        use windows::Win32::Foundation::FreeLibrary;
+        use windows::Win32::System::LibraryLoader::{GetProcAddress, LoadLibraryW};
+
+        #[repr(C)]
+        struct GdiplusStartupInput {
+            gdiplus_version: u32,
+            debug_event_callback: usize,
+            suppress_background_thread: i32,
+            suppress_external_codecs: i32,
+        }
+
+        let dll_name: Vec<u16> = "gdiplus.dll".encode_utf16().chain(std::iter::once(0)).collect();
+        unsafe {
+            let hmodule = LoadLibraryW(windows::core::PCWSTR(dll_name.as_ptr())).ok()?;
+            if hmodule.is_invalid() {
+                return None;
+            }
+
+            let startup: Option<unsafe extern "system" fn(*mut usize, *const GdiplusStartupInput, *mut c_void) -> i32> =
+                std::mem::transmute(GetProcAddress(hmodule, windows::core::s!("GdiplusStartup")));
+            let shutdown: Option<unsafe extern "system" fn(usize)> =
+                std::mem::transmute(GetProcAddress(hmodule, windows::core::s!("GdiplusShutdown")));
+            let create_bitmap: Option<unsafe extern "system" fn(*const u16, *mut *mut c_void) -> i32> =
+                std::mem::transmute(GetProcAddress(hmodule, windows::core::s!("GdipCreateBitmapFromFile")));
+            let create_hbitmap: Option<unsafe extern "system" fn(*mut c_void, *mut isize, u32) -> i32> =
+                std::mem::transmute(GetProcAddress(hmodule, windows::core::s!("GdipCreateHBITMAPFromBitmap")));
+            let dispose: Option<unsafe extern "system" fn(*mut c_void) -> i32> =
+                std::mem::transmute(GetProcAddress(hmodule, windows::core::s!("GdipDisposeImage")));
+
+            let mut token: usize = 0;
+            let input = GdiplusStartupInput {
+                gdiplus_version: 1,
+                debug_event_callback: 0,
+                suppress_background_thread: 0,
+                suppress_external_codecs: 0,
+            };
+
+            if let (Some(startup_fn), Some(shutdown_fn), Some(create_bitmap_fn), Some(create_hbitmap_fn), Some(dispose_fn)) =
+                (startup, shutdown, create_bitmap, create_hbitmap, dispose)
+            {
+                if startup_fn(&mut token, &input, std::ptr::null_mut()) == 0 {
+                    let wide_path: Vec<u16> = path.as_os_str().to_string_lossy().encode_utf16().chain(std::iter::once(0)).collect();
+                    let mut gp_bitmap: *mut c_void = std::ptr::null_mut();
+                    let mut hbitmap: isize = 0;
+
+                    if create_bitmap_fn(wide_path.as_ptr(), &mut gp_bitmap) == 0 && !gp_bitmap.is_null() {
+                        let _ = create_hbitmap_fn(gp_bitmap, &mut hbitmap, 0);
+                        let _ = dispose_fn(gp_bitmap);
+                    }
+                    shutdown_fn(token);
+                    let _ = FreeLibrary(hmodule);
+
+                    if hbitmap != 0 {
+                        return Some(hbitmap);
+                    }
+                } else {
+                    let _ = FreeLibrary(hmodule);
+                }
+            } else {
+                let _ = FreeLibrary(hmodule);
+            }
+        }
+        None
+    }
+
+    /// Places existing file paths and image bitmap on the Windows clipboard (`CF_HDROP` + `CF_BITMAP`).
     pub fn write_files(paths: &[String]) -> bool {
         let existing: Vec<&String> = paths.iter().filter(|p| Path::new(p.as_str()).is_file()).collect();
         if existing.is_empty() {
             return false;
         }
+
+        // If the first file is an image, load it as HBITMAP so CF_BITMAP is set on the clipboard
+        let first_path = Path::new(existing[0].as_str());
+        let hbm_opt = if is_screenshot_ext(first_path) {
+            load_image_as_hbitmap(first_path)
+        } else {
+            None
+        };
+
         // DROPFILES header (20 bytes): pFiles = 20, pt = (0,0), fNC = 0, fWide = 1; then "a\0b\0\0" in UTF-16.
         let mut bytes: Vec<u8> = Vec::new();
         bytes.extend_from_slice(&20u32.to_le_bytes());
@@ -146,11 +222,23 @@ mod imp {
         unsafe {
             let hg = match GlobalAlloc(GMEM_MOVEABLE, bytes.len()) {
                 Ok(h) => h,
-                Err(_) => return false,
+                Err(_) => {
+                    if let Some(hbm) = hbm_opt {
+                        use windows::Win32::Graphics::Gdi::DeleteObject;
+                        use windows::Win32::Graphics::Gdi::HGDIOBJ;
+                        let _ = DeleteObject(HGDIOBJ(hbm as *mut _));
+                    }
+                    return false;
+                }
             };
             let dst = GlobalLock(hg) as *mut u8;
             if dst.is_null() {
                 let _ = GlobalFree(hg);
+                if let Some(hbm) = hbm_opt {
+                    use windows::Win32::Graphics::Gdi::DeleteObject;
+                    use windows::Win32::Graphics::Gdi::HGDIOBJ;
+                    let _ = DeleteObject(HGDIOBJ(hbm as *mut _));
+                }
                 return false;
             }
             std::ptr::copy_nonoverlapping(bytes.as_ptr(), dst, bytes.len());
@@ -158,7 +246,19 @@ mod imp {
 
             let ok = with_clipboard(|| {
                 let _ = EmptyClipboard();
-                SetClipboardData(CF_HDROP, HANDLE(hg.0)).is_ok()
+                let mut success = SetClipboardData(CF_HDROP, HANDLE(hg.0)).is_ok();
+                if let Some(hbm) = hbm_opt {
+                    const CF_BITMAP: u32 = 2;
+                    let b_ok = SetClipboardData(CF_BITMAP, HANDLE(hbm as *mut _)).is_ok();
+                    if b_ok {
+                        success = true;
+                    } else {
+                        use windows::Win32::Graphics::Gdi::DeleteObject;
+                        use windows::Win32::Graphics::Gdi::HGDIOBJ;
+                        let _ = DeleteObject(HGDIOBJ(hbm as *mut _));
+                    }
+                }
+                success
             })
             .unwrap_or(false);
 
@@ -445,5 +545,26 @@ mod tests {
     fn write_files_rejects_empty_or_missing() {
         assert!(!imp::write_files(&[]));
         assert!(!imp::write_files(&[r"C:\__definitely_missing__\nope.png".to_string()]));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn write_files_with_image_sets_bitmap_format() {
+        use windows::Win32::System::DataExchange::{IsClipboardFormatAvailable, OpenClipboard, CloseClipboard};
+        use windows::Win32::Foundation::HWND;
+        let shot = Path::new(r"C:\Users\inrwx\Pictures\Screenshots\Screenshot 2026-11-19 233638.png");
+        if shot.is_file() {
+            let paths = vec![shot.to_string_lossy().to_string()];
+            let ok = imp::write_files(&paths);
+            assert!(ok);
+            unsafe {
+                assert!(OpenClipboard(HWND::default()).is_ok());
+                const CF_BITMAP: u32 = 2;
+                const CF_HDROP: u32 = 15;
+                assert!(IsClipboardFormatAvailable(CF_BITMAP).is_ok());
+                assert!(IsClipboardFormatAvailable(CF_HDROP).is_ok());
+                let _ = CloseClipboard();
+            }
+        }
     }
 }
