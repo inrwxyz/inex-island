@@ -6871,16 +6871,16 @@ function syncEq() {
 
 
 // Widgets (Reliable Weather with Open-Meteo + Fast IP Geolocation, RAM, CPU, Disk, Battery)
-const W_SVG = (inner) => `<svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:-1px;margin-right:2px;flex-shrink:0;">${inner}</svg>`;
+const W_SVG = (inner) => `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" style="display:inline-block;vertical-align:-2px;margin-right:3px;flex-shrink:0;">${inner}</svg>`;
 
 const W_ICONS = {
-  sun: W_SVG('<circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32l1.41 1.41M2 12h2m16 0h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>'),
-  moon: W_SVG('<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>'),
-  cloud_sun: W_SVG('<path d="M12 2v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="M20 12h2"/><path d="m19.07 4.93-1.41 1.41"/><path d="M15.9 12.6a4 4 0 0 0-5.9-4.1"/><path d="M13 22H7a5 5 0 1 1 4.9-6H13a3 3 0 0 1 0 6Z"/>'),
-  cloud: W_SVG('<path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/>'),
-  rain: W_SVG('<path d="M4 14.9A7 7 0 1 1 15.7 8h1.8a4.5 4.5 0 0 1 2.5 8.2"/><path d="m8 19-1 3m5-3-1 3m5-3-1 3"/>'),
-  storm: W_SVG('<path d="M19 16.9A5 5 0 0 0 18 7h-1.26A8 8 0 1 0 4 15.25"/><polyline points="13 11 9 17 15 17 11 23"/>'),
-  snow: W_SVG('<path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/><line x1="8" y1="15" x2="8.01" y2="15"/><line x1="12" y1="17" x2="12.01" y2="17"/><line x1="16" y1="15" x2="16.01" y2="15"/>')
+  sun: W_SVG('<circle cx="12" cy="12" r="5" fill="#FFB800"/><g stroke="#FF9800" stroke-width="1.8" stroke-linecap="round"><line x1="12" y1="2" x2="12" y2="4.5"/><line x1="12" y1="19.5" x2="12" y2="22"/><line x1="2" y1="12" x2="4.5" y2="12"/><line x1="19.5" y1="12" x2="22" y2="12"/><line x1="4.93" y1="4.93" x2="6.7" y2="6.7"/><line x1="17.3" y1="17.3" x2="19.07" y2="19.07"/><line x1="4.93" y1="19.07" x2="6.7" y2="17.3"/><line x1="17.3" y1="6.7" x2="19.07" y2="4.93"/></g>'),
+  moon: W_SVG('<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" fill="#FBBF24"/><circle cx="17.5" cy="5.5" r="0.8" fill="#FDE68A"/><circle cx="20" cy="9.5" r="0.6" fill="#FDE68A"/>'),
+  cloud_sun: W_SVG('<circle cx="9" cy="9" r="4" fill="#FFB800"/><g stroke="#FF9800" stroke-width="1.6" stroke-linecap="round"><line x1="9" y1="2" x2="9" y2="3.8"/><line x1="2" y1="9" x2="3.8" y2="9"/><line x1="4.05" y1="4.05" x2="5.32" y2="5.32"/><line x1="13.95" y1="4.05" x2="12.68" y2="5.32"/></g><path d="M19 18H8.5a4.5 4.5 0 0 1-.4-8.98A5.5 5.5 0 0 1 18.8 11.5 3.5 3.5 0 0 1 19 18z" fill="#E2E8F0"/>'),
+  cloud: W_SVG('<path d="M18 13.5a3.5 3.5 0 0 0-3.5-3.5 3.5 3.5 0 0 0-.6.05 4.8 4.8 0 0 0-9.4 1.45A3.5 3.5 0 0 0 5 18h13a3.5 3.5 0 0 0 0-7z" fill="#94A3B8" opacity="0.6"/><path d="M19.5 19H7a4.5 4.5 0 0 1-.4-8.98 5.5 5.5 0 0 1 10.7 2.48A3.5 3.5 0 0 1 19.5 19z" fill="#E2E8F0"/>'),
+  rain: W_SVG('<path d="M18.5 15H7a4.5 4.5 0 0 1-.4-8.98 5.5 5.5 0 0 1 10.7 2.48A3.5 3.5 0 0 1 18.5 15z" fill="#94A3B8"/><line x1="8" y1="17" x2="6.5" y2="21" stroke="#38BDF8" stroke-width="2" stroke-linecap="round"/><line x1="12.5" y1="17" x2="11" y2="21" stroke="#38BDF8" stroke-width="2" stroke-linecap="round"/><line x1="17" y1="17" x2="15.5" y2="21" stroke="#38BDF8" stroke-width="2" stroke-linecap="round"/>'),
+  storm: W_SVG('<path d="M18.5 14H7a4.5 4.5 0 0 1-.4-8.98 5.5 5.5 0 0 1 10.7 2.48A3.5 3.5 0 0 1 18.5 14z" fill="#64748B"/><polygon points="12,13 8.5,18 11.5,18 10,23 15.5,16.5 12.5,16.5" fill="#FACC15" stroke="#EAB308" stroke-width="0.5"/>'),
+  snow: W_SVG('<path d="M18.5 14H7a4.5 4.5 0 0 1-.4-8.98 5.5 5.5 0 0 1 10.7 2.48A3.5 3.5 0 0 1 18.5 14z" fill="#94A3B8"/><circle cx="8" cy="18" r="1.2" fill="#BAE6FD"/><circle cx="12.5" cy="19.5" r="1.2" fill="#E0F2FE"/><circle cx="16.5" cy="18" r="1.2" fill="#BAE6FD"/>')
 };
 
 const WMO_CODES = {
@@ -6962,15 +6962,38 @@ function wxFetch(url, ms = 7000) {
 
 // City typed in Settings -> lat/lon through Open-Meteo's free geocoding (no key). Runs only when the city changes.
 async function geocodeCity(name) {
-  const q = name.toLowerCase();
+  const q = name.toLowerCase().trim();
   try {
     const sv = JSON.parse(localStorage.getItem('inex.geo') || 'null');
     if (sv && sv.q === q && sv.loc) return sv.loc;
   } catch (_) {}
-  const res = await wxFetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(name)}&count=1&language=en&format=json`);
-  if (!res.ok) return null;
-  const d = await res.json();
-  const r = d && d.results && d.results[0];
+  let r = null;
+  try {
+    const res = await wxFetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(name)}&count=1&language=en&format=json`);
+    if (res.ok) {
+      const d = await res.json();
+      r = d && d.results && d.results[0];
+    }
+  } catch (_) {}
+
+  // If no exact match for multi-word query (e.g. "Savar DEPZ", "Uttara Sector 10"), try main city words
+  if ((!r || !isFinite(+r.latitude)) && name.includes(' ')) {
+    const words = name.split(/[\s,/-]+/).filter(w => w.trim().length > 2);
+    for (const w of words) {
+      if (/^(depz|epz|zone|road|sector|block|area|thana|upazila)$/i.test(w)) continue;
+      try {
+        const subRes = await wxFetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(w)}&count=1&language=en&format=json`);
+        if (subRes.ok) {
+          const subD = await subRes.json();
+          if (subD && subD.results && subD.results[0]) {
+            r = subD.results[0];
+            break;
+          }
+        }
+      } catch (_) {}
+    }
+  }
+
   if (!r || !isFinite(+r.latitude) || !isFinite(+r.longitude)) return null;
   const loc = { lat: +r.latitude, lon: +r.longitude, city: r.name || name };
   try { localStorage.setItem('inex.geo', JSON.stringify({ q, loc })); } catch (_) {}
@@ -7165,8 +7188,8 @@ function syncMacWeatherUI() {
     tmp.innerHTML = getActiveWeatherIcon();
     const newSvg = tmp.querySelector('svg');
     if (newSvg) {
-      newSvg.setAttribute('width', '12');
-      newSvg.setAttribute('height', '12');
+      newSvg.setAttribute('width', '14');
+      newSvg.setAttribute('height', '14');
       oldSvg.replaceWith(newSvg);
     }
   }
