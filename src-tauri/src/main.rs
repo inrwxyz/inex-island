@@ -1920,13 +1920,14 @@ fn find_audio_file(app: &tauri::AppHandle, filename: &str) -> Option<std::path::
 }
 
 #[tauri::command]
-fn play_adhan_native(app: tauri::AppHandle, sound_name: String) -> bool {
+fn play_adhan_native(app: tauri::AppHandle, sound_name: Option<String>) -> bool {
     #[cfg(target_os = "windows")]
     {
+        let name = sound_name.unwrap_or_else(|| "madinah".to_string());
         let _ = send_mci("stop inex_adhan");
         let _ = send_mci("close inex_adhan");
 
-        let filename = match sound_name.as_str() {
+        let filename = match name.as_str() {
             "short" => "adhan-short.mp3",
             "chime" | "beep" => "chime.wav",
             _ => "adhan-madinah.mp3",
@@ -1938,9 +1939,17 @@ fn play_adhan_native(app: tauri::AppHandle, sound_name: String) -> bool {
                 .map(|c| c.to_string_lossy().replace(r"\\?\", ""))
                 .unwrap_or_else(|_| path.to_string_lossy().to_string());
 
-            let open_cmd = format!("open \"{}\" alias inex_adhan", path_str);
+            let is_wav = filename.ends_with(".wav");
+            let open_cmd = if is_wav {
+                format!("open \"{}\" type waveaudio alias inex_adhan", path_str)
+            } else {
+                format!("open \"{}\" type mpegvideo alias inex_adhan", path_str)
+            };
+
             if send_mci(&open_cmd) == 0 {
-                let _ = send_mci("setaudio inex_adhan volume to 500");
+                if !is_wav {
+                    let _ = send_mci("setaudio inex_adhan volume to 500");
+                }
                 let _ = send_mci("play inex_adhan");
                 return true;
             }
