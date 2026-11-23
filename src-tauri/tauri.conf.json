@@ -1,0 +1,63 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Inex Island",
+  "version": "1.0.0",
+  "identifier": "com.inex.island",
+  "build": {
+    "frontendDist": "../src",
+    "beforeDevCommand": "npm run build:parts",
+    "beforeBuildCommand": "npm run build:parts"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "label": "main",
+        "title": "Inex Island",
+        "url": "index.html",
+        "width": 260,
+        "height": 56,
+        "decorations": false,
+        "transparent": true,
+        "alwaysOnTop": true,
+        "visible": false,
+        "skipTaskbar": true,
+        "resizable": false,
+        "shadow": false,
+        "focus": false,
+        "dragDropEnabled": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' ipc: http://ipc.localhost https://api.open-meteo.com https://geocoding-api.open-meteo.com https://nominatim.openstreetmap.org https://air-quality-api.open-meteo.com https://freeipapi.com https://ipwho.is https://ipapi.co http://ip-api.com https://wttr.in https://api.github.com https://github.com https://speed.cloudflare.com; object-src 'none'; base-uri 'self'; frame-src 'none'"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "createUpdaterArtifacts": true,
+    "resources": [
+      "../src/audio/*"
+    ],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.ico",
+      "icons/icon.png"
+    ],
+    "windows": {
+      "nsis": {
+        "installerHooks": "./installer-hooks.nsh"
+      }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDM0OTAwNkFGNTBDMDU4Q0QKUldUTldNQlFyd2FRTkFJM2JJQ1hTcGVNSHZMTzJLT0twRE1BMkUxZTlHQ0RFZU5nK0FMSktqR3QK",
+      "endpoints": [
+        "https://github.com/inrwxyz/inex-island/releases/latest/download/latest.json"
+      ]
+    }
+  }
+}

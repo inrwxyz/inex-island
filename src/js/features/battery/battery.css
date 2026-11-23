@@ -1,0 +1,18 @@
+/* Battery Feature CSS */
+.mx-battery #deck-bat-pct {
+  font-variant-numeric: tabular-nums;
+}
+
+.mx-battery #deck-bat-ico {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.mx-battery.charging {
+  color: #30d158;
+}
+
+.mx-battery.low {
+  color: #ff453a;
+}

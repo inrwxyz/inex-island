@@ -1,0 +1,23 @@
+{
+  "name": "inex-island",
+  "private": false,
+  "version": "1.0.0",
+  "license": "GPL-3.0-or-later",
+  "scripts": {
+    "tauri": "tauri",
+    "dev": "tauri dev",
+    "build": "tauri build",
+    "build:parts": "node scripts/build-styles.mjs && node scripts/build-main.mjs",
+    "build:styles": "node scripts/build-styles.mjs",
+    "build:main": "node scripts/build-main.mjs",
+    "clean": "cargo clean --manifest-path src-tauri/Cargo.toml"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.0.0"
+  },
+  "dependencies": {
+    "jsqr": "^1.4.0",
+    "qrcode": "^1.5.4",
+    "qrcode-generator": "^2.0.4"
+  }
+}

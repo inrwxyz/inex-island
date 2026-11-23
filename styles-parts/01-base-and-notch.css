@@ -1,0 +1,613 @@
+:root {
+  --font-main: 'Plus Jakarta Sans', 'Outfit', sans-serif;
+  --font-mono: 'Space Grotesk', 'JetBrains Mono', monospace;
+  --notch-bg: #030305;
+  --notch-fg: #f5f5f7;
+  --notch-fg-dim: #8e8e98;
+  --menu-bg: rgba(11, 11, 16, 0.92);
+  --menu-fg: #f5f5f7;
+  --menu-fg-dim: #8e8e98;
+  --color-tile-bg: rgba(255, 255, 255, 0.07);
+  --color-tile-border: rgba(255, 255, 255, 0.12);
+  --color-tile-on-bg: #f5f5f7;
+  --color-tile-on-fg: #050507;
+  --deck-accent: #0a84ff;
+  --deck-accent-fg: #ffffff;
+  --deck-accent-text: #0a84ff;
+  --on: 255, 255, 255;
+  --line: rgba(255, 255, 255, 0.45);
+  --radius: 13px;
+  --radius-menu: 15px;
+  --accent-green: #22c55e;
+  --spring: cubic-bezier(0.22, 1, 0.36, 1);
+  /* Real spring curves (WebView2 supports linear()); cubic-bezier fallback is declared first on each use. */
+  --spring-menu: linear(0, 0.0192, 0.0677, 0.1347, 0.2119, 0.2934, 0.3749, 0.4535, 0.5272, 0.5949, 0.656, 0.7105, 0.7583, 0.7999, 0.8357, 0.8663, 0.8921, 0.9137, 0.9317, 0.9465, 0.9586, 0.9684, 0.9763, 0.9826, 0.9875, 0.9914, 0.9943, 0.9966, 0.9982, 0.9994, 1.0003, 1.0009, 1.0012, 1.0014, 1.0015, 1.0015, 1.0015, 1.0014, 1.0013, 1.0012, 1);
+  --spring-pop: linear(0, 0.0283, 0.0995, 0.1964, 0.3057, 0.4179, 0.526, 0.6255, 0.7138, 0.7898, 0.8532, 0.9046, 0.945, 0.9757, 0.9981, 1.0136, 1.0235, 1.0291, 1.0313, 1.0312, 1.0295, 1.0267, 1.0234, 1.0199, 1.0164, 1.0131, 1.0102, 1.0076, 1.0055, 1.0037, 1.0022, 1.0012, 1.0003, 0.9998, 0.9994, 0.9991, 0.999, 0.999, 0.999, 0.9991, 1);
+  --ease-close: cubic-bezier(0.32, 0.72, 0, 1);
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  user-select: none;
+  font-family: var(--font-main);
+  letter-spacing: -0.01em;
+}
+
+select, select option, input, textarea {
+  color-scheme: dark;
+  background-color: #0c0c10;
+  color: #f5f5f7;
+}
+
+*::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.16);
+  border-radius: 6px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.28);
+}
+
+body {
+  background: transparent;
+  overflow: hidden;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding-top: 0;
+  color-scheme: dark;
+}
+
+/* MAIN ISLAND: Always flush at top so no leftover pill ever shows above opened menus */
+.island {
+  background: var(--notch-bg);
+  color: var(--notch-fg);
+  border-radius: 0 0 var(--radius) var(--radius);
+  border: 1px solid var(--notch-line, var(--line));
+  border-top: none;
+  margin-top: 0;
+  top: 0;
+  transform-origin: top center;
+  transition: width 0.55s var(--spring), height 0.55s var(--spring),
+              transform 0.28s var(--spring), opacity 0.22s ease,
+              border-color 0.22s ease, background 0.25s ease,
+              border-radius 0.4s var(--ease-close),
+              top 0.28s var(--spring);   /* zoom is transitioned in the state rules below: the menu is always 1.10 and the pill follows the Notch UI scale, so a switch between them has to animate or the box jumps in size */
+  transition-timing-function: initial;
+  backface-visibility: hidden;
+  overflow: hidden;
+  position: relative;
+}
+
+.island.has-curved-ears {
+  overflow: visible;
+}
+.island.has-curved-ears > .view {
+  overflow: hidden;
+  border-radius: inherit;
+}
+
+/* ===== CURVED NOTCH: the ears are part of the island itself (::before = left ear, ::after = right ear) =====
+   No separate ear elements any more: they are the island's own pseudo-elements, so they are sized/moved by the very same
+   box and transitions, and they copy the island's own background ("inherit"), so notch + ears + menu are always ONE colour
+   (solid, translucent, media, popups...) with no seam. 16px concave flare, cut with a radial mask. */
+.island.has-curved-ears::before,
+.island.has-curved-ears::after {
+  --ear-size: 16px;
+  content: "";
+  position: absolute;
+  top: 0;
+  width: var(--ear-size);
+  height: var(--ear-size);
+  background: inherit;
+  pointer-events: none;
+  z-index: 100;
+}
+.island.has-curved-ears::before {
+  left: calc(-1 * var(--ear-edge, 1px) - var(--ear-size) + var(--ear-overlap, 0.5px));
+  -webkit-mask-image: radial-gradient(circle at 0 100%, transparent 15.5px, #000 16px);
+          mask-image: radial-gradient(circle at 0 100%, transparent 15.5px, #000 16px);
+}
+.island.has-curved-ears::after {
+  right: calc(-1 * var(--ear-edge, 1px) - var(--ear-size) + var(--ear-overlap, 0.5px));
+  -webkit-mask-image: radial-gradient(circle at 100% 100%, transparent 15.5px, #000 16px);
+          mask-image: radial-gradient(circle at 100% 100%, transparent 15.5px, #000 16px);
+}
+/* The faint top highlight line stops at the island edge and made the ears look cut off: no highlight with ears */
+.island.has-curved-ears:not(.state-compact) { box-shadow: none; }
+/* no ears while hidden / intro / status pills / popups that open from the notch (plain pills) */
+.island:is(.smart-hidden, .intro-pre, .biometric-active, .has-status, .state-status, [data-status-active="true"]).has-curved-ears::before,
+.island:is(.smart-hidden, .intro-pre, .biometric-active, .has-status, .state-status, [data-status-active="true"]).has-curved-ears::after,
+.island.state-compact:is(.bt-hud-active, .alarm-active, .transferring, .has-toast, .incoming-open, .hud-pre, .hud-back).has-curved-ears::before,
+.island.state-compact:is(.bt-hud-active, .alarm-active, .transferring, .has-toast, .incoming-open, .hud-pre, .hud-back).has-curved-ears::after {
+  display: none;
+}
+/* media popup: the border is invisible, so the ears sit flush with the panel edge */
+.island.state-media.has-curved-ears::before { left: calc(0px - var(--ear-size) + var(--ear-overlap, 0.5px)); }
+.island.state-media.has-curved-ears::after  { right: calc(0px - var(--ear-size) + var(--ear-overlap, 0.5px)); }
+
+/* Growing = spring (tiny overshoot, Dynamic Island feel). Shrinking = smooth ease-out, no bounce. */
+.island.state-drop, .island.state-control, .island.state-control-deck, .island.state-tray,
+.island.state-tray-deck, .island.state-sub, .island.state-media, .island.state-calendar {
+  transition: width 0.55s var(--spring-menu), height 0.55s var(--spring-menu),
+              border-radius 0.4s var(--ease-close), opacity 0.22s ease,
+              border-color 0.22s ease, background 0.25s ease, top 0.4s var(--ease-close),
+              zoom 0.55s var(--spring-menu);
+}
+.island.state-compact {
+  transition: width 0.44s var(--ease-close), height 0.44s var(--ease-close),
+              border-radius 0.44s var(--ease-close), opacity 0.22s ease,
+              border-color 0.22s ease, background 0.25s ease, top 0.4s var(--ease-close),
+              zoom 0.44s var(--ease-close);
+}
+/* compact pill growing (hover / media / badges / toast) gets the little spring */
+.island.state-compact:hover:not(.no-hover-expand):not(.timer-live):not(.media-active):not(.transferring):not(.incoming-open):not(.alarm-active):not(.biometric-active):not(.bio-hud):not(.bt-hud-active):not(.has-status):not(.state-status):not([data-status-active="true"]):not(.hud-back):not(.hud-out):not(.hud-pre),
+.island.state-compact.has-badges, .island.state-compact.media-active,
+.island.state-compact.has-toast, .island.state-compact.transferring,
+.island.state-compact.incoming-open {
+  transition: width 0.62s var(--spring-pop), height 0.5s var(--spring-pop),
+              border-radius 0.45s var(--ease-close), opacity 0.25s ease,
+              border-color 0.22s ease, background 0.25s ease, top 0.4s var(--ease-close);
+}
+
+/* Menu -> pill (media player closing etc.): always the smooth no-bounce close curve.
+   The pill variants above (media-active, has-badges, hover...) use --spring-pop, which is a GROW spring:
+   when shrinking it undershoots the target size and bounces back, which showed as a jerk after the
+   island had returned to its place. menu-closing is set by switchView() for the length of the shrink. */
+.island.state-compact.menu-closing {
+  transition: width 0.5s var(--ease-close), height 0.5s var(--ease-close),
+              transform 0.32s cubic-bezier(0.16, 1, 0.3, 1),
+              border-radius 0.45s var(--ease-close), opacity 0.25s ease,
+              border-color 0.22s ease, background 0.25s ease, top 0.4s var(--ease-close),
+              zoom 0.5s var(--ease-close);
+}
+
+/* Floating Island Style: floats slightly below the screen top, always a fully round pill.
+   The roundness is hard-coded here on purpose (Settings > Corner Roundness is hidden for this style).
+   No inset highlight: it stacked on top of the 1px border and made the top edge look thicker than the rest. */
+.island[data-style="floating"].state-compact {
+  top: 7px;
+  border-radius: 18px;
+  border: 1px solid var(--notch-line, var(--line));
+  box-shadow: none;
+}
+.island[data-style="floating"]:not(.state-compact) {
+  top: 7px;
+  border-radius: 22px;
+  border: 1px solid var(--line);
+  box-shadow: none;
+}
+
+/* Intro: the island drops out of the top edge when the app opens */
+.island.intro-pre {
+  opacity: 0;
+  transform: translateY(-100%);
+  transition: none;
+  /* safety: if the script ever fails, the island still appears after 20 s */
+  animation: introFailsafe 0.01s 20s forwards;
+}
+@keyframes introFailsafe { to { opacity: 1; transform: none; } }
+.island.intro-play {
+  animation: islandIntro 0.75s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes islandIntro {
+  0%   { opacity: 0; transform: translateY(-100%); }
+  35%  { opacity: 1; }
+  70%  { transform: translateY(2px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+/* Smart Mode Fullscreen Hide: smooth subtle slide & fade */
+.island.smart-hidden {
+  transform: translateY(-115%) scale(0.96);
+  opacity: 0;
+  pointer-events: none;
+  transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.22s ease-out;
+}
+
+/* Ghost + Curved Notch: ONE continuous outline. ::before draws both curved ears (ring), ::after draws the notch sides + bottom;
+   the island's own border is hidden, and the side line is cut off above the ear (17px) so no line is left between notch and ears. */
+.island[data-mode="ghost"].state-compact.has-curved-ears { border-color: transparent; }
+.island[data-mode="ghost"].state-compact.has-curved-ears::before {
+  left: -17px; right: -17px; width: auto; height: 17px;
+  -webkit-mask-image: none; mask-image: none;
+  background-color: transparent;
+  background-image:
+    radial-gradient(circle at 0 100%, transparent 16px, var(--ghost-line) 16px, var(--ghost-line) 17px, transparent 17px),
+    radial-gradient(circle at 100% 100%, transparent 16px, var(--ghost-line) 16px, var(--ghost-line) 17px, transparent 17px);
+  background-size: 17px 17px, 17px 17px;
+  background-position: 0 0, 100% 0;
+  background-repeat: no-repeat;
+}
+.island[data-mode="ghost"].state-compact.has-curved-ears::after {
+  left: -1px; right: -1px; top: 0; bottom: -1px; width: auto; height: auto;
+  box-sizing: border-box;
+  background: transparent;
+  border: 1px solid var(--ghost-line);
+  border-top: none;
+  border-radius: 0 0 var(--radius) var(--radius);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 17px, #000 17px);
+          mask-image: linear-gradient(to bottom, transparent 17px, #000 17px);
+}
+
+/* Ghost Mode: 100% Transparent Background + Crisp thin border line */
+.island[data-mode="ghost"].state-compact {
+  --ghost-line: rgba(255, 255, 255, 0.16);   /* very faint edge so the notch boundary is still visible; raise/lower 0.16 to taste */
+  background: transparent;
+  color: #f5f5f7;
+  backdrop-filter: none;
+  border: 1px solid var(--ghost-line);
+  border-top: none;
+  box-shadow: none;
+}
+
+/* Compact Sizes */
+.island.state-compact {
+  width: 156px;
+  height: 31px;
+}
+.island.state-compact.has-badges,
+.island.state-compact.media-active {
+  width: 192px;
+}
+.island.state-compact:hover:not(.no-hover-expand):not(.timer-live):not(.media-active):not(.transferring):not(.incoming-open):not(.alarm-active):not(.biometric-active):not(.bio-hud):not(.bt-hud-active):not(.has-status):not(.state-status):not([data-status-active="true"]):not(.hud-back):not(.hud-out):not(.hud-pre) {
+  width: 256px;
+}
+.island.state-compact.incoming-open {
+  width: 236px;
+}
+.island.state-compact.transferring {
+  width: 186px;
+}
+.island.state-compact.transferring.xfer-live { width: 226px; }
+.island.state-compact.has-toast {
+  width: 196px;
+}
+
+/* PRIORITY 1: During File Transfer, Toast OR Incoming File Alert -> Hide Clock, Media, Tray, Peers & Hover Widgets */
+.island.state-compact.transferring #c-clock,
+.island.state-compact.transferring #c-left-box,
+.island.state-compact.transferring #c-right-box,
+.island.state-compact.has-toast #c-clock,
+.island.state-compact.has-toast #c-left-box,
+.island.state-compact.has-toast #c-right-box,
+.island.state-compact.incoming-open #c-clock,
+.island.state-compact.incoming-open #c-left-box,
+.island.state-compact.incoming-open #c-right-box {
+  display: none;
+}
+.island.state-compact.transferring .compact-bar,
+.island.state-compact.has-toast .compact-bar,
+.island.state-compact.incoming-open .compact-bar {
+  justify-content: center;
+}
+
+/* PRIORITY 2: When Media (Spotify/YouTube) is Active -> Hide Tray Badge, Peer Badge & Hover Widgets */
+.island.state-compact.media-active #c-tray-btn,
+.island.state-compact.media-active #c-peer-badge,
+.island.state-compact.media-active .c-hover-info {
+  display: none;
+}
+
+/* Live Focus Timer running on center clock */
+.island.state-compact.timer-live {
+  width: 176px;
+}
+.island.state-compact.timer-live .c-center {
+  flex: 1;
+  width: 100%;
+}
+.island.state-compact.timer-live #c-clock {
+  display: flex;
+  width: 100%;
+}
+.island.state-compact.timer-live .c-hover-info,
+.island.state-compact.timer-live #c-left-box,
+.island.state-compact.timer-live #c-right-box {
+  display: none;
+}
+#c-clock.c-clock-timer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 0 14px;
+  box-sizing: border-box;
+  color: #ff9f0a;
+  font-weight: 600;
+  letter-spacing: -0.2px;
+  font-variant-numeric: tabular-nums;
+}
+#c-clock.c-clock-timer .tg-glass {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 13px;
+  height: 17px;
+  flex-shrink: 0;
+  color: #ff9f0a;
+}
+#c-clock.c-clock-timer .tg-glass .tg-svg {
+  width: 13px;
+  height: 17px;
+  display: block;
+}
+#c-clock.c-clock-timer .tg-time {
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  font-size: 13px;
+  font-weight: 600;
+  color: #ff9f0a;
+}
+
+/* Expanded Menu States: Seamless morph from top edge */
+.island.state-drop,
+.island.state-control,
+.island.state-tray,
+.island.state-sub,
+.island.state-media,
+.island.state-calendar {
+  border-radius: 0 0 var(--radius-menu) var(--radius-menu);
+  border: 1px solid var(--line);
+  border-top: none;
+  box-shadow: none;
+}
+
+.island.state-drop     { width: 195px; height: 86px; border-style: none dashed dashed dashed; border-top: none; }
+.island.state-control  { width: 312px; height: 288px; }
+.island.state-tray     { width: 312px; height: 214px; }
+.island.state-tray.picker-open { height: 248px; }
+.island.state-sub      { width: 312px; height: 204px; }
+.island.state-media    { width: 312px; height: 162px; }
+.island.state-media.vol-open { height: 218px; }
+.island.state-calendar { width: 342px; height: 206px; }
+
+/* MENU STYLE 1: Transparent Mode */
+.island[data-menu="transparent"].state-control,
+.island[data-menu="transparent"].state-tray,
+.island[data-menu="transparent"].state-sub,
+.island[data-menu="transparent"].state-calendar,
+.island[data-menu="transparent"].state-drop {
+  background: rgba(6, 6, 9, 0.40);
+  backdrop-filter: blur(24px) saturate(160%);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  color: #f5f5f7;
+}
+
+/* Floating: no extra top highlight on menus either (wins over the menu-style rules below) */
+.island[data-style="floating"][data-menu]:not(.state-compact) {
+  box-shadow: none;
+}
+
+/* MENU STYLE 2: Color Mode */
+.island[data-menu="color"].state-control,
+.island[data-menu="color"].state-tray,
+.island[data-menu="color"].state-sub,
+.island[data-menu="color"].state-calendar,
+.island[data-menu="color"].state-drop {
+  background: var(--menu-bg);
+  color: var(--menu-fg);
+  backdrop-filter: blur(28px) saturate(180%);
+}
+
+.view {
+  display: none;
+  width: 100%;
+  height: 100%;
+}
+.view.active {
+  display: flex;
+  flex-direction: column;
+}
+.hidden { display: none !important; }
+.sr:not(.ctrl-tile .sr) { display: none; }
+
+/* ==================== 1. COMPACT BAR ==================== */
+.compact-bar {
+  width: 100%;
+  height: 31px;
+  display: flex;
+  align-items: center;
+  justify-content: normal;
+  padding: 0 11px;
+  cursor: pointer;
+}
+.c-left, .c-right {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.c-left { justify-content: flex-start; }
+.c-right { justify-content: flex-end; }
+.c-center {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 700;
+  color: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+/* Hover Widgets: Only show on mouse hover when no active status is playing */
+.c-hover-info {
+  display: inline-flex;
+  align-items: center;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--notch-fg-dim);
+  opacity: 0;
+  max-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: opacity 0.2s ease, max-width 0.2s ease;
+}
+.island.state-compact:hover:not(.media-active):not(.transferring):not(.incoming-open):not(.biometric-active):not(.bio-hud):not(.bt-hud-active):not(.has-status):not(.state-status):not([data-status-active="true"]):not(.hud-back):not(.hud-out):not(.hud-pre) .c-hover-info {
+  opacity: 1;
+  max-width: 78px;
+}
+/* Hide Tray & Peer badges on hover if a widget is configured on that side so they don't crowd */
+.island.state-compact:hover:not(.media-active) .c-left.has-widget #c-tray-btn,
+.island.state-compact:hover:not(.media-active) .c-right.has-widget #c-peer-badge {
+  display: none;
+}
+
+/* Subtle Pill Badge (Used for both File Tray & Connected Peers) */
+.c-pill-badge {
+  background: rgba(140, 140, 152, 0.18);
+  border: 1px solid rgba(var(--notch-fg-rgb, 245, 245, 247), 0.14);
+  color: var(--notch-fg-dim);
+  border-radius: 8px;
+  padding: 1.5px 5.5px;
+  font-size: 9.5px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 3.5px;
+  cursor: pointer;
+  flex: none;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.c-pill-badge:hover {
+  background: rgba(140, 140, 152, 0.28);
+  color: var(--notch-fg);
+}
+
+.island.state-compact:not(:hover) .c-media-disc.paused { display: none; }
+
+/* Inline PC-to-PC Transfer Animation */
+.c-transfer-inline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: inherit;
+}
+.c-transfer-cancel-btn {
+  border: none;
+  background: rgba(239, 68, 68, 0.22);
+  color: #f87171;
+  border-radius: 50%;
+  width: 14px;
+  height: 14px;
+  margin-left: 2px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  pointer-events: auto;
+  transition: background 0.15s ease, transform 0.15s ease, color 0.15s ease;
+  flex-shrink: 0;
+}
+.c-transfer-cancel-btn:hover {
+  background: rgba(239, 68, 68, 0.55);
+  color: #fff;
+  transform: scale(1.18);
+}
+.c-transfer-cancel-btn:active {
+  transform: scale(0.92);
+}
+.transfer-dots { display: flex; gap: 2.5px; }
+.transfer-dots span {
+  width: 3.5px;
+  height: 3.5px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: dotFlow 0.55s infinite alternate;
+}
+.transfer-dots span:nth-child(2) { animation-delay: 0.18s; }
+.transfer-dots span:nth-child(3) { animation-delay: 0.36s; }
+@keyframes dotFlow {
+  from { opacity: 0.2; transform: scale(0.8); }
+  to { opacity: 1; transform: scale(1.25); }
+}
+
+/* Incoming P2P File Pill (Subtle Tick & Cross Icons) */
+.c-incoming-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10.5px;
+  font-weight: 600;
+}
+.inc-file-ico {
+  opacity: 0.78;
+  flex: none;
+}
+.inc-label {
+  max-width: 126px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.inc-icon-btn {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1px solid rgba(var(--notch-fg-rgb, 245, 245, 247), 0.18);
+  background: rgba(var(--notch-fg-rgb, 245, 245, 247), 0.08);
+  color: inherit;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  padding: 0;
+  flex: none;
+  transition: background 0.15s ease, transform 0.12s ease, border-color 0.15s ease;
+}
+.inc-icon-btn:hover {
+  transform: scale(1.08);
+}
+.inc-icon-btn.accept:hover {
+  background: rgba(34, 197, 94, 0.25);
+  border-color: rgba(34, 197, 94, 0.65);
+  color: #4ade80;
+}
+.inc-icon-btn.decline:hover {
+  background: rgba(239, 68, 68, 0.25);
+  border-color: rgba(239, 68, 68, 0.65);
+  color: #f87171;
+}
+
+.c-media-disc {
+  width: 19px;
+  height: 19px;
+  border-radius: 5px;
+  overflow: hidden;
+  padding: 0;
+  background: rgba(var(--notch-fg-rgb, 245, 245, 247), 0.14);
+  border: 1px solid rgba(var(--notch-fg-rgb, 245, 245, 247), 0.35);
+  color: inherit;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex: none;
+}
+.c-media-disc.glow {
+  box-shadow: 0 0 8px 1px var(--thumb-glow, rgba(var(--notch-fg-rgb, 245, 245, 247), 0.45));
+}
+.art-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  border-radius: inherit;
+}
+.hidden.art-img { display: none !important; }
+

@@ -1,0 +1,399 @@
+/* ==================== P2P LINK: one QR slot (Generate -> QR -> friend's QR lands here -> reply QR) ==================== */
+.qr-slot {
+  position: relative; flex: none; width: 104px; height: 104px; box-sizing: border-box;
+  display: flex; align-items: center; justify-content: center; overflow: hidden; outline: none;
+  border: 1px dashed currentColor; border-radius: 14px; background: var(--color-tile-bg);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.qr-slot.has-qr { background: #fff; border: 1px solid rgba(255, 255, 255, 0.5); cursor: pointer; }
+.qr-slot .qr-canvas { width: 100%; height: 100%; display: block; image-rendering: pixelated; }
+.qr-slot-idle { display: flex; flex-direction: column; align-items: center; gap: 7px; padding: 6px; text-align: center; }
+.qr-slot-hint { font-size: 9px; line-height: 1.3; opacity: 0.6; }
+.qr-slot.drop-over { border-style: solid; transform: scale(1.05); box-shadow: 0 0 0 2px rgba(48, 209, 88, 0.7); }
+.qr-slot:focus-visible { border-style: solid; box-shadow: 0 0 0 2px rgba(150, 150, 160, 0.6); }
+.qr-slot .qr-scan-line {
+  position: absolute; left: 0; right: 0; top: 0; height: 2px; opacity: 0; pointer-events: none;
+  background: linear-gradient(90deg, transparent, #30d158, transparent); box-shadow: 0 0 10px 2px #30d158;
+}
+.qr-slot.scanning .qr-scan-line { opacity: 1; animation: p2pScanLine 0.8s ease-in-out infinite alternate; }
+.qr-slot-toast {
+  position: absolute; left: 0; right: 0; bottom: 0; padding: 4px 0; text-align: center; pointer-events: none;
+  font-size: 10px; font-weight: 700; color: #fff; background: rgba(0, 0, 0, 0.78); transform: translateY(100%); transition: transform 0.18s ease;
+}
+.qr-slot.copied .qr-slot-toast { transform: none; }
+.qr-slot.pop { animation: p2pCodeIn 0.34s cubic-bezier(0.2, 0.8, 0.2, 1); }
+@keyframes p2pScanLine { from { top: 0; } to { top: calc(100% - 2px); } }
+.island.no-anim .qr-slot.pop, .island.no-anim .qr-slot.scanning .qr-scan-line { animation: none; }
+
+/* P2P with no peers: just the one-line hint, so the list never scrolls (Classic and Control Deck) */
+#p2p-peers-list.is-empty {
+  flex: none; overflow: hidden; padding: 0 8px; margin: 0;
+  -webkit-mask-image: none; mask-image: none;
+}
+#p2p-peers-list.is-empty .empty-hint { margin: 0; font-size: 9.5px; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#view-p2p .p2p-body { overflow: hidden; }
+
+/* Inex Drop / P2P panels (Classic + Control Deck): never show a scrollbar, even for a moment while the side rail switches Quick Share <-> P2P.
+   Long device lists still scroll with the wheel. */
+#view-inexdrop .drop-body,
+#view-inexdrop .smooth-scroll-list,
+#view-p2p .p2p-body,
+#view-p2p .smooth-scroll-list {
+  scrollbar-width: none;
+  overflow-x: hidden;
+}
+#view-inexdrop .drop-body::-webkit-scrollbar,
+#view-inexdrop .smooth-scroll-list::-webkit-scrollbar,
+#view-p2p .p2p-body::-webkit-scrollbar,
+#view-p2p .smooth-scroll-list::-webkit-scrollbar {
+  display: none; width: 0; height: 0;
+}
+
+/* Side rail (Quick Share <-> P2P) in the Control Deck: the right-hand mount used to flash a scrollbar while the panel
+   slid / animated in (the rise animation briefly overflows it). Those two panels never need to scroll there. */
+.mx-sub-mount.no-scroll { overflow: hidden; scrollbar-width: none; }
+.mx-sub-mount.no-scroll::-webkit-scrollbar { display: none; width: 0; height: 0; }
+#view-inexdrop.in-deck-sub,
+#view-p2p.in-deck-sub { overflow: hidden; scrollbar-width: none; }
+#view-inexdrop.in-deck-sub::-webkit-scrollbar,
+#view-p2p.in-deck-sub::-webkit-scrollbar { display: none; width: 0; height: 0; }
+
+/* "Nearby devices" sits in the Back line (next to the on/off switch), so the device list is never squeezed into a scroll */
+.qs-header-right .qs-scan-hint {
+  margin: 0; padding: 0; flex: 0 1 auto; min-width: 0; max-width: 150px;
+  font-size: 9.5px; white-space: nowrap; color: var(--menu-fg-dim);
+}
+.qs-header-right .qs-scan-hint #qs-scan-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.qs-header-right .qs-scan-hint.idle,
+.qs-header-right .qs-scan-hint.off { display: none; }
+
+/* Control Deck tray: tick / untick files (click), clean neutral frosted look matching classic tray */
+.mt-file.sel {
+  border: 1px solid color-mix(in srgb, var(--menu-fg, #ffffff) 28%, transparent);
+  background: color-mix(in srgb, var(--menu-fg, #ffffff) 14%, transparent);
+  box-shadow: none;
+}
+.mt-file .mt-check {
+  display: none; position: absolute; top: 3px; left: 3px; width: 15px; height: 15px; border-radius: 50%;
+  background: color-mix(in srgb, var(--menu-fg, #ffffff) 30%, transparent);
+  color: var(--menu-fg, #ffffff);
+  font-size: 10px; font-weight: 900; line-height: 1;
+  align-items: center; justify-content: center;
+}
+.mt-file.sel .mt-check { display: flex; }
+
+/* Control Deck tray: Inex Drop is a slim button on the far left (click it = send the ticked files), the tray gets the rest */
+.mt-drop { flex: 0 0 64px; width: 64px; padding: 0 2px; gap: 2px; }
+.mt-drop .mt-ico { width: 24px; height: 24px; }
+.mt-drop b { font-size: 9px; margin-top: 2px; text-align: center; line-height: 1.15; white-space: nowrap; }
+.mt-drop small { display: none; }
+
+/* Wi-Fi / Bluetooth tile of an adapter that is not in this PC (no dongle): blocked */
+.ctrl-tile.unavailable, .mx-tile.unavailable {
+  opacity: 0.42; filter: grayscale(1); cursor: not-allowed;
+}
+.ctrl-tile.unavailable:hover, .mx-tile.unavailable:hover { background: inherit; }
+.ctrl-tile.unavailable:active, .mx-tile.unavailable:active { transform: none; }
+.ctrl-tile.unavailable .chev, .mx-tile.unavailable .mx-tile-chev { pointer-events: none; opacity: 0.4; }
+
+
+/* ==================================================================
+   AUTO CONTRAST FOR LIGHT ISLAND COLORS
+   applyTheme() (shared.js) sets --notch-fg / --notch-fg-rgb to the opposite of the island colour
+   and tags <html data-notch-tone="light"> when the island is light. Status icons that use fixed
+   colours (lock / unlock, biometric, charging, Bluetooth, transfer, clock chips) get darker
+   variants there so they never wash out on a white or light island.
+   Ghost mode is transparent over the desktop, so it keeps the light foreground.
+   ================================================================== */
+.island[data-mode="ghost"].state-compact {
+  --notch-fg: #f5f5f7;
+  --notch-fg-dim: #8e8e98;
+  --notch-fg-rgb: 245, 245, 247;
+  --notch-ok: #30d158;
+}
+:root[data-notch-tone="light"] { --notch-ok: #16a34a; }
+:root[data-notch-tone="light"] .island[data-mode="ghost"].state-compact { --notch-ok: #30d158; }
+
+:root[data-notch-tone="light"] .island:not([data-mode="ghost"]) {
+  --notch-ok: #16a34a;
+}
+/* toast / lock status icons */
+:root[data-notch-tone="light"] .island:not([data-mode="ghost"]) .c-toast.t-bolt .c-toast-ico,
+:root[data-notch-tone="light"] .island:not([data-mode="ghost"]) .c-toast.t-unlock .c-toast-ico,
+:root[data-notch-tone="light"] .island:not([data-mode="ghost"]) .c-toast.t-face .c-toast-ico,
+:root[data-notch-tone="light"] .island:not([data-mode="ghost"]) .c-toast.t-fingerprint .c-toast-ico,
+:root[data-notch-tone="light"] .island:not([data-mode="ghost"]) .c-toast.t-phone .c-toast-ico,
+:root[data-notch-tone="light"] .island:not([data-mode="ghost"]) .c-toast.t-done .c-toast-ico { color: #16a34a; }
+:root[data-notch-tone="light"] .island:not([data-mode="ghost"]) .c-toast.t-low .c-toast-ico,
+:root[data-notch-tone="light"] .island:not([data-mode="ghost"]) .c-toast.t-wrong .c-toast-ico { color: #dc2626; }
+:root[data-notch-tone="light"] .island:not([data-mode="ghost"]) .c-toast.t-lock .c-toast-ico { color: #d97706; }
+:root[data-notch-tone="light"] .island:not([data-mode="ghost"]) .c-toast.t-unphone .c-toast-ico { color: #64748b; }
+:root[data-notch-tone="light"] .island:not([data-mode="ghost"]) .c-toast.t-mic .c-toast-ico { color: #0891b2; }
+:root[data-notch-tone="light"] .island:not([data-mode="ghost"]) .c-toast.t-mic .c-toast-ico svg { filter: drop-shadow(0 0 4px rgba(8, 145, 178, 0.45)); }
+/* biometric scan line + success */
+:root[data-notch-tone="light"] .island:not([data-mode="ghost"]) :is(.bio-scan-svg, .bio-face-svg) .bio-scan {
+  fill: #16a34a; filter: drop-shadow(0 0 4px rgba(22, 163, 74, 0.6));
+}
+/* Bluetooth / charging HUD */
+:root[data-notch-tone="light"] .island:not([data-mode="ghost"]) .bt-hud-icon.green { background: rgba(22, 163, 74, 0.14); color: #16a34a; }
+:root[data-notch-tone="light"] .island:not([data-mode="ghost"]) .bt-hud-icon.amber { background: rgba(217, 119, 6, 0.14); color: #d97706; }
+:root[data-notch-tone="light"] .island:not([data-mode="ghost"]) .bt-hud-icon.red { background: rgba(220, 38, 38, 0.14); color: #dc2626; }
+:root[data-notch-tone="light"] .island:not([data-mode="ghost"]) .bt-hud-icon svg { filter: none; }
+:root[data-notch-tone="light"] .island:not([data-mode="ghost"]) .bt-ring-fg { stroke: #16a34a; }
+:root[data-notch-tone="light"] .island:not([data-mode="ghost"]) .bt-ring-fg.amber { stroke: #d97706; }
+:root[data-notch-tone="light"] .island:not([data-mode="ghost"]) .bt-ring-fg.low { stroke: #dc2626; }
+:root[data-notch-tone="light"] .island:not([data-mode="ghost"]) .bt-batt.charging .bt-batt-fill { background: #16a34a; }
+:root[data-notch-tone="light"] .island:not([data-mode="ghost"]) .bt-batt-fill.amber { background: #d97706; }
+:root[data-notch-tone="light"] .island:not([data-mode="ghost"]) .bt-batt-fill.low { background: #dc2626; }
+/* file transfer */
+:root[data-notch-tone="light"] .island:not([data-mode="ghost"]) .xfer-glyph { color: #0a84ff; }
+/* live stat chips next to the clock */
+:root[data-notch-tone="light"] .island:not([data-mode="ghost"]) #c-clock .c-stat-chip.is-weather svg { color: #d97706; }
+:root[data-notch-tone="light"] .island:not([data-mode="ghost"]) #c-clock .c-stat-chip.is-night svg { color: #0284c7; }
+:root[data-notch-tone="light"] .island:not([data-mode="ghost"]) #c-clock .c-stat-chip.is-cpu svg { color: #0284c7; }
+:root[data-notch-tone="light"] .island:not([data-mode="ghost"]) #c-clock .c-stat-chip.is-ram svg { color: #7c3aed; }
+:root[data-notch-tone="light"] .island:not([data-mode="ghost"]) #c-clock .c-stat-chip.is-bat svg { color: #16a34a; }
+:root[data-notch-tone="light"] .island:not([data-mode="ghost"]) #c-clock .c-stat-chip.is-warn,
+:root[data-notch-tone="light"] .island:not([data-mode="ghost"]) #c-clock .c-stat-chip.is-warn svg { color: #d97706; }
+:root[data-notch-tone="light"] .island:not([data-mode="ghost"]) #c-clock .c-stat-chip.is-crit,
+:root[data-notch-tone="light"] .island:not([data-mode="ghost"]) #c-clock .c-stat-chip.is-crit svg { color: #dc2626; }
+
+
+/* ==================== CONTROL DECK: WIDGETS TAB ==================== */
+.mx-top-right { gap: 4px; }
+.mx-time { min-width: 0; }
+.mx-time span { overflow: hidden; text-overflow: ellipsis; }
+
+/* 2-segment sliding pill */
+.mx-view-switcher {
+  position: relative; display: inline-grid; grid-template-columns: 1fr 1fr; height: 22px; padding: 2px;
+  box-sizing: border-box; border-radius: 11px; isolation: isolate;
+  background: color-mix(in srgb, var(--menu-fg) 9%, transparent);
+}
+.mx-view-switcher.hidden { display: none !important; }
+.mx-view-switcher::before {
+  content: ""; position: absolute; top: 2px; bottom: 2px; left: 2px; width: calc(50% - 2px); z-index: -1;
+  border-radius: 9px; background: color-mix(in srgb, var(--menu-fg) 20%, transparent);
+  transition: transform 0.15s ease;
+}
+.mx-view-switcher[data-active="widgets"]::before { transform: translateX(100%); }
+.mx-view-switcher button {
+  display: grid; place-items: center; width: 23px; padding: 0; height: 18px;
+  color: var(--menu-fg-dim); transition: color 0.15s ease;
+}
+.mx-view-switcher button.active { color: var(--menu-fg); }
+
+/* Show / hide */
+#view-control-deck.widgets-open > .mx-body { display: none; }
+#view-control-deck.widgets-open > #mx-widgets-body { display: grid; }
+#view-control-deck.tray-open > #mx-widgets-body { display: none; }
+
+/* 2x2 grid: 478 wide, matching .mx-body */
+#mx-widgets-body {
+  display: none;
+  flex: 1; min-height: 0; max-height: 174px; width: 478px; margin-left: calc(50% - 239px);
+  box-sizing: border-box; padding: 0; gap: 8px;
+  grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr;
+  --menu-fg: #f5f5f7; --menu-fg-dim: #9a9aa6;
+}
+.mx-widget-card {
+  position: relative; min-width: 0; min-height: 0; box-sizing: border-box; overflow: hidden;
+  padding: 7px 9px; display: flex; flex-direction: column; gap: 5px; border-radius: 16px;
+  background: #000;                                   /* true black */
+  border: 1px solid rgba(255,255,255,.09);
+  box-shadow: none;                                   /* no glow, no inner highlight */
+}
+.mx-widget-card.wg-click { cursor: pointer; }
+.wg-head { flex: none; height: 14px; gap: 5px; display: flex; align-items: center; justify-content: space-between; font-size: 10px; color: var(--menu-fg-dim); }
+.wg-head > b { flex: none; font-weight: 600; letter-spacing: 0.01em; }
+.wg-live { font-size: 9px; font-weight: 600; color: #30d158; }
+.wg-pill {
+  height: 16px; padding: 0 9px; border-radius: 8px; font-size: 9.5px; font-weight: 700;
+  color: var(--menu-fg); background: rgba(255,255,255,.10);
+}
+.wg-pill:hover { background: rgba(255,255,255,.18); }
+.wg-pill-ico { width: 22px; padding: 0; font-size: 11px; }
+
+/* Micro-interactions: ONLY when Settings > Micro-Interactions is on (island has no .no-anim) */
+.island:not(.no-anim) .mx-widget-card { transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease; }
+.island:not(.no-anim) .mx-widget-card.wg-click:hover { transform: scale(1.015); border-color: rgba(255,255,255,.22); box-shadow: 0 4px 12px rgba(0,0,0,0.25); }
+.island:not(.no-anim) .mx-widget-card.wg-click:active { transform: scale(0.985); }
+.island:not(.no-anim) .wg-go:hover { transform: scale(1.06); box-shadow: 0 4px 14px rgba(10, 132, 255, 0.5); }
+.island:not(.no-anim) .wg-go:active { transform: scale(0.95); }
+.island:not(.no-anim) .wg-ring-fg { transition: stroke-dashoffset 0.6s cubic-bezier(.2,.8,.2,1); }
+.island:not(.no-anim) #wg-cur-swap { transition: transform 0.3s ease; }
+
+/* ---- Screen Time: one ring per top app + top 3 list ---- */
+.wg-st { flex: 1; min-height: 0; display: flex; align-items: center; gap: 12px; }
+.wg-ring { position: relative; flex: none; width: 54px; height: 54px; }
+.wg-ring svg { width: 100%; height: 100%; display: block; }
+.wg-ring-bg { fill: none; stroke: rgba(255,255,255,.08); stroke-width: 4; }
+.wg-ring-fg { fill: none; stroke-width: 4; stroke-linecap: round; }
+.wg-st-list { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.wg-st-app { display: flex; align-items: center; gap: 6px; height: 14px; font-size: 10px; line-height: 14px; }
+.wg-st-app i { flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--dc, #8e8e98); }
+.wg-st-app img { flex: none; width: 14px; height: 14px; border-radius: 4px; display: block; }
+.wg-st-app span { flex: 1; min-width: 0; color: var(--menu-fg); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wg-st-app em { flex: none; font-style: normal; color: var(--menu-fg-dim); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.wg-tip {
+  position: absolute; z-index: 5; display: none; pointer-events: none; padding: 2px 7px; border-radius: 6px;
+  font-size: 9.5px; font-weight: 600; white-space: nowrap; color: #f5f5f7;
+  background: #1c1c1e; border: 1px solid rgba(255,255,255,.14);
+}
+
+/* Screen Time switched off in Settings: it disappears and the other 3 cards expand */
+#mx-widgets-body.wg-3 #wg-screentime { display: none; }
+#mx-widgets-body.wg-3 #wg-speed { grid-column: 1 / -1; }
+#mx-widgets-body.wg-3 .wg-speed-grid strong { font-size: 17px; }
+#mx-widgets-body.wg-3 .wg-speed-grid small, #mx-widgets-body.wg-3 .wg-speed-grid em { font-size: 10px; }
+
+/* ---- Speed Test: flat button, flat arc, no glow ---- */
+.wg-phase { margin-left: auto; font-size: 9px; font-weight: 600; color: var(--menu-fg-dim); white-space: nowrap; }
+#wg-speed.done .wg-phase { color: #30d158; }
+.wg-sp { flex: 1; min-height: 0; display: flex; align-items: center; gap: 10px; }
+.wg-go {
+  position: relative; flex: none; width: 42px; height: 42px; margin-left: 3px; border-radius: 50%; padding: 0;
+  display: grid; place-items: center; cursor: pointer;
+  background: #0a84ff; color: #fff; box-shadow: 0 2px 10px rgba(10, 132, 255, 0.35); border: 0;
+  transition: transform 0.16s ease, background 0.16s ease, box-shadow 0.16s ease;
+}
+.wg-go svg { position: absolute; inset: -3px; width: 48px; height: 48px; pointer-events: none; }
+.wg-go-track { fill: none; stroke: transparent; stroke-width: 2.5; }
+.wg-go-arc { fill: none; stroke: #0a84ff; stroke-width: 2.5; stroke-linecap: round; stroke-dasharray: 138.23; stroke-dashoffset: 138.23; opacity: 0; transition: stroke-dashoffset 0.25s linear, opacity 0.2s ease; }
+.wg-go > span { position: relative; font-size: 14px; font-weight: 700; letter-spacing: 0.04em; font-variant-numeric: tabular-nums; }
+#wg-speed.testing .wg-go { background: #1c1c1e; }
+#wg-speed.testing .wg-go > span { font-size: 12px; color: #f5f5f7; }
+#wg-speed.testing .wg-go-track { stroke: rgba(255,255,255,.10); }
+#wg-speed.testing .wg-go-arc, #wg-speed.done .wg-go-arc { opacity: 1; }
+.wg-speed-grid { flex: 1; min-width: 0; min-height: 0; display: grid; grid-template-columns: repeat(3, 1fr); align-items: center; }
+.wg-speed-grid > div { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.wg-speed-grid small { font-size: 8.5px; color: var(--menu-fg-dim); white-space: nowrap; }
+.wg-speed-grid strong { font-size: 15px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.1; color: var(--menu-fg); font-variant-numeric: tabular-nums; }
+.wg-speed-grid em { font-style: normal; font-size: 8.5px; color: var(--menu-fg-dim); }
+
+/* ---- Currency: plain black card, neutral native-style fields ---- */
+.wg-rate {
+  margin-left: auto; min-width: 0; max-width: 112px; padding: 1px 6px; border-radius: 7px; font-size: 8.5px; font-weight: 600;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums;
+  color: var(--menu-fg-dim); background: rgba(255,255,255,.07);
+}
+.wg-cur-row { flex: none; display: flex; gap: 4px; height: 21px; }
+.wg-cur-row input {
+  height: 21px; box-sizing: border-box; border-radius: 8px; outline: none; font: inherit; font-size: 11.5px; font-weight: 600;
+  color: var(--menu-fg); background-color: #111113; border: 1px solid rgba(255,255,255,.10); box-shadow: none;
+}
+.wg-cur-amt { flex: 1; min-width: 0; padding: 0 8px; font-variant-numeric: tabular-nums; }
+.wg-cur-code {
+  flex: none; width: 48px; text-align: center; text-transform: uppercase; font-weight: 700; font-size: 11px;
+  padding: 0 2px; letter-spacing: 0.04em; cursor: text;
+}
+.wg-cur-row input:focus { border-color: rgba(255,255,255,.28); box-shadow: none; }
+
+/* ---- Markets ---- */
+.wg-mk-row { flex: none; height: 21px; display: flex; align-items: center; gap: 5px; font-size: 11px; font-variant-numeric: tabular-nums; }
+.wg-sym {
+  flex: none; width: 56px; height: 19px; line-height: 19px; box-sizing: border-box; padding: 0 2px;
+  font-size: 11px; font-weight: 700; letter-spacing: -0.01em; color: var(--menu-fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.wg-sym-sel, .wg-sym-input {
+  flex: none; width: 52px; height: 19px; box-sizing: border-box; padding: 0 2px; border-radius: 6px; outline: none; font: inherit; font-size: 11px; font-weight: 600;
+  color: var(--menu-fg); background: transparent; border: 1px solid transparent; cursor: pointer; appearance: none; -webkit-appearance: none;
+}
+.wg-sym-sel:hover, .wg-sym-sel:focus { background: rgba(255,255,255,.08); border-color: rgba(255,255,255,.12); }
+.wg-sym-sel option, .wg-sym-sel optgroup { background: #1c1c1e; color: #f5f5f7; }
+.wg-sym-input { cursor: text; padding: 0 4px; text-transform: uppercase; background: rgba(255,255,255,.08); border-color: rgba(255,255,255,.25); }
+.wg-sym-input.bad { border-color: #ff453a; }
+.wg-spark { flex: none; width: 44px; height: 16px; overflow: visible; }
+.wg-spark path.l { fill: none; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+.wg-px { flex: 1; min-width: 0; color: var(--menu-fg); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: right; }
+.wg-chg { flex: none; min-width: 46px; text-align: center; font-size: 9.5px; font-weight: 600; padding: 1px 5px; border-radius: 7px; white-space: nowrap; color: var(--menu-fg-dim); }
+.wg-chg.up { color: #30d158; background: transparent; }      /* green = up   */
+.wg-chg.down { color: #ff453a; background: transparent; }    /* red   = down */
+
+/* Widgets tab robustness: no entrance animation on the grid, and the global
+   "input/select { background: #0c0c10 }" rule must not recolour the controls */
+#view-control-deck > #mx-widgets-body, #mx-widgets-body > .mx-widget-card { animation: none; }
+#mx-widgets-body .wg-cur-row input { background-color: #111113; color: #f5f5f7; }
+#mx-widgets-body .wg-sym-sel { background-color: transparent; color: #f5f5f7; }
+#mx-widgets-body .wg-sym-sel:hover, #mx-widgets-body .wg-sym-sel:focus { background-color: rgba(255,255,255,.08); }
+#mx-widgets-body .wg-sym-input { background-color: rgba(255,255,255,.08); color: #f5f5f7; }
+#mx-widgets-body .wg-sym-sel option, #mx-widgets-body .wg-cur-row option { background-color: #1c1c1e; color: #f5f5f7; }
+
+@media (prefers-reduced-motion: reduce) {
+  .wg-ring-fg, #wg-cur-swap { transition: none; }
+}
+
+/* ==================== PRAYER & SOLAR DECK (optional, Settings > Notch > Prayer Times) ==================== */
+/* Same surface rules as the Widgets deck: true black cards, 1px hairline, no glow, no gradients. */
+#deck-prayer-btn.on { background: color-mix(in srgb, var(--menu-fg) 22%, transparent); color: var(--menu-fg); }
+
+#mx-prayer-body { display: none; }
+#view-control-deck.prayer-open > .mx-body { display: none; }
+#view-control-deck.prayer-open > #mx-prayer-body { display: grid; }
+#view-control-deck.widgets-open > #mx-prayer-body,
+#view-control-deck.tray-open > #mx-prayer-body { display: none; }
+
+#view-control-deck > #mx-prayer-body {
+  flex: 1; min-height: 0; max-height: 174px; width: 478px; min-width: 478px; margin-left: calc(50% - 239px);
+  box-sizing: border-box; padding: 0; gap: 8px; animation: none;
+  grid-template-columns: 1fr 1fr; grid-template-rows: 1fr;
+  --menu-fg: #f5f5f7; --menu-fg-dim: #9a9aa6; --pr-sun: #e0c068; --pr-calm: #9ccaae;
+  font-family: Inter, system-ui, -apple-system, "Segoe UI", "Noto Sans Bengali", sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+#mx-prayer-body > .mx-widget-card { padding: 7px 9px 8px; gap: 4px; animation: none; }
+#mx-prayer-body .wg-head > span { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* left: sun arc */
+#pr-arc { display: block; width: 100%; height: 66px; flex: none; overflow: visible; }
+#pr-arc .pr-horizon { stroke: rgba(255,255,255,.12); stroke-width: 1; }
+#pr-arc .pr-arc-base { fill: none; stroke: rgba(255,255,255,.16); stroke-width: 1.4; stroke-linecap: round; stroke-dasharray: 2.2 2.6; }
+#pr-arc .pr-arc-prog { fill: none; stroke: var(--pr-sun); stroke-opacity: .75; stroke-width: 1.6; stroke-linecap: round; transition: stroke-dasharray .6s ease; }
+#pr-arc .pr-mk { fill: rgba(255,255,255,.55); }
+#pr-arc .pr-mk.past { fill: rgba(255,255,255,.22); }
+#pr-arc .pr-mk.next { fill: #000; stroke: var(--pr-calm); stroke-width: 1.4; }
+#pr-arc .pr-sun-halo { fill: var(--pr-sun); fill-opacity: .16; }          /* flat soft ring, no blur */
+#pr-arc .pr-sun-dot { fill: var(--pr-sun); }
+#pr-arc .pr-sun-dot.night { fill: #c9ced9; fill-opacity: .8; }              /* below the horizon: pale, quiet */
+#pr-arc .pr-tl { fill: var(--menu-fg-dim); font-size: 8.5px; font-weight: 500; }
+.pr-now { display: flex; align-items: baseline; gap: 6px; line-height: 1.1; margin-top: 1px; }
+.pr-now b { font-size: 20px; font-weight: 650; letter-spacing: -0.02em; color: var(--menu-fg); }
+.pr-now em { font-style: normal; font-size: 12px; font-weight: 500; color: var(--menu-fg-dim); }
+.pr-sub { font-size: 11px; font-weight: 500; color: var(--menu-fg-dim); }
+
+/* right: timeline */
+.pr-list { display: flex; flex-direction: column; gap: 1px; margin-top: 2px; }
+.pr-row { display: flex; align-items: center; height: 21px; padding: 0 7px; margin: 0 -7px; border-radius: 8px; font-size: 11.5px; color: var(--menu-fg); }
+.pr-row .pr-n { flex: 1; font-weight: 500; }
+.pr-row .pr-t { font-weight: 500; letter-spacing: 0.01em; }
+.pr-row.minor { font-size: 10.5px; color: var(--menu-fg-dim); }
+.pr-row.past { opacity: .36; }
+.pr-row.next { background: rgba(255,255,255,.075); }
+.pr-row.next .pr-n, .pr-row.next .pr-t { font-weight: 650; }
+.pr-badge { margin-right: 7px; padding: 1px 6px; border-radius: 6px; font-size: 8px; font-weight: 700; letter-spacing: .07em; color: var(--pr-calm); background: rgba(156,202,174,.14); }
+
+/* Adhan island alert: re-uses the timer-end card, calmer and slightly wider */
+.island.state-compact.alarm-active.alarm-prayer { width: 262px; box-shadow: 0 0 0 1px rgba(var(--notch-fg-rgb, 245, 245, 247), .12); }
+.c-alarm-hud .pr-icon, .c-alarm-hud .pr-bars { display: none; }
+.c-alarm-hud.pr-alert .alarm-icon-wrap { background: rgba(var(--notch-fg-rgb, 245, 245, 247), .08); color: var(--notch-fg, #f5f5f7); }
+.c-alarm-hud.pr-alert .alarm-icon-wrap > svg:not(.pr-icon) { display: none; }
+.c-alarm-hud.pr-alert .alarm-icon-wrap > .pr-icon { display: block; filter: none; animation: none; }
+.c-alarm-hud.pr-alert .alarm-pulse { border-color: rgba(var(--notch-fg-rgb, 245, 245, 247), .32); animation-duration: 3.4s; }
+.c-alarm-hud.pr-alert .alarm-pulse.p2 { animation-delay: 1.9s; }
+.c-alarm-hud.pr-alert .pr-bars { display: flex; align-items: center; gap: 2px; height: 14px; flex: none; }
+.pr-bars i { display: block; width: 2px; height: 14px; border-radius: 1px; background: rgba(var(--notch-fg-rgb, 245, 245, 247), .6); background: var(--notch-fg-dim, rgba(var(--notch-fg-rgb, 245, 245, 247), .6)); transform-origin: 50% 50%; animation: prBar 1.5s ease-in-out infinite; }
+.pr-bars i:nth-child(2) { animation-delay: .25s; }
+.pr-bars i:nth-child(3) { animation-delay: .5s; }
+.pr-bars i:nth-child(4) { animation-delay: .75s; }
+@keyframes prBar { 0%, 100% { transform: scaleY(.3); } 50% { transform: scaleY(1); } }
+.c-alarm-hud.pr-alert.pr-quiet .pr-bars i { animation-play-state: paused; opacity: .25; }
+.c-alarm-hud.pr-alert .alarm-stop-btn { padding: 0 9px; font-size: 10px; background: rgba(var(--notch-fg-rgb, 245, 245, 247), .10); color: var(--notch-fg, #f5f5f7); }
+.c-alarm-hud.pr-alert .alarm-stop-btn:hover { background: rgba(var(--notch-fg-rgb, 245, 245, 247), .18); }
+
+/* Adhan alert on a white / light island: guarantee dark, readable controls even if a variable is overridden */
+:root[data-notch-tone="light"] .island:not([data-mode="ghost"]) .c-alarm-hud.pr-alert { --notch-fg: #111; --notch-fg-dim: rgba(0, 0, 0, 0.75); --notch-fg-rgb: 17, 17, 17; }
+:root[data-notch-tone="light"] .island:not([data-mode="ghost"]) .c-alarm-hud.pr-alert .alarm-stop-btn { background: rgba(0, 0, 0, 0.08); color: #111; }
+:root[data-notch-tone="light"] .island:not([data-mode="ghost"]) .c-alarm-hud.pr-alert .alarm-stop-btn:hover { background: rgba(0, 0, 0, 0.16); }
+:root[data-notch-tone="light"] .island:not([data-mode="ghost"]) .c-alarm-hud.pr-alert .pr-bars i { background: rgba(0, 0, 0, 0.75); }
+
+

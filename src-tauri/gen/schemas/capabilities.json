@@ -1,0 +1,1 @@
+{"default":{"identifier":"default","description":"Event + webview access for the island and settings windows (needed for native file drop and live events).","local":true,"windows":["main","settings"],"permissions":["core:default","core:event:default","core:webview:default","core:window:default","updater:default"]}}

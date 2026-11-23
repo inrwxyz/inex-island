@@ -1,0 +1,225 @@
+/* ==================== QUICK SHARE UI ENHANCEMENTS ==================== */
+.dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #30d158; }
+.dot.pulse { animation: dotPulse 1.6s infinite; }
+@keyframes dotPulse { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.35; transform: scale(0.85); } }
+
+.radar { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--deck-accent);
+         box-shadow: 0 0 0 0 var(--deck-accent); animation: radarRipple 1.6s infinite; flex-shrink: 0; }
+@keyframes radarRipple { 0% { box-shadow: 0 0 0 0 rgba(74, 158, 255, 0.55); } 100% { box-shadow: 0 0 0 10px rgba(74, 158, 255, 0); } }
+.qs-clear-btn {
+  background: transparent; border: 0; color: var(--menu-fg-dim); cursor: pointer;
+  font-size: 11px; padding: 0 4px; line-height: 1;
+}
+.qs-clear-btn:hover { color: #ff453a; }
+
+.qs-scan-hint {
+  font-size: 10px; color: var(--menu-fg-dim); display: flex; align-items: center; gap: 6px;
+  margin: 4px 0 6px;
+}
+
+.qs-devices-list {
+  flex: 1; min-height: 0; max-height: none; overflow-y: auto; scrollbar-width: none;
+  display: flex; flex-direction: column; gap: 3px; width: 100%; box-sizing: border-box; padding-bottom: 0;
+}
+.qs-devices-list::-webkit-scrollbar { display: none; width: 0; }
+.qs-device-item {
+  display: flex; align-items: center; gap: 8px; padding: 4px 8px; border-radius: 9px;
+  background: color-mix(in srgb, var(--menu-fg) 6%, transparent);
+  border: 1px solid rgba(255, 255, 255, 0.05); cursor: pointer;
+  transition: all 0.15s ease; width: 100%; box-sizing: border-box; text-align: left;
+}
+.qs-device-item:hover {
+  background: color-mix(in srgb, var(--deck-accent) 22%, transparent);
+  border-color: var(--deck-accent);
+}
+.qs-device-avatar {
+  width: 22px; height: 22px; border-radius: 50%; font-size: 11px;
+  background: color-mix(in srgb, var(--deck-accent) 22%, transparent);
+  color: var(--deck-accent); display: grid; place-items: center; flex-shrink: 0;
+}
+.qs-device-avatar svg { width: 12px; height: 12px; }
+.qs-device-name {
+  font-size: 11px; font-weight: 600; color: var(--menu-fg);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 200px;
+}
+
+.qs-transfer-box {
+  width: 100%; padding: 8px 10px; border-radius: 12px;
+  background: color-mix(in srgb, var(--menu-fg) 8%, transparent);
+  margin-top: 0; text-align: left; box-sizing: border-box;
+}
+
+
+/* ==================== INEX DROP: compact layout ==================== */
+/* The window is resized to 268px for this view, so the island itself must be that tall too
+   (before, the island stayed 204px and the bottom of the view was cut off). */
+/* Inex Drop uses the normal sub-menu size (same as P2P): .island.state-sub = 204px */
+
+.drop-body.has-active {
+  justify-content: flex-start; align-items: stretch;
+  flex: 1; min-height: 0; overflow: hidden; padding: 0 12px 10px;
+}
+.drop-body.has-active > .drop-state-box { flex: 1; min-height: 0; align-items: stretch; }
+
+.qs-active { display: flex; flex-direction: column; gap: 6px; text-align: left; }
+.qs-active.hidden { display: none !important; }
+
+.qs-status-line { display: flex; align-items: center; gap: 6px; min-width: 0; padding: 0 2px; flex: none; }
+.qs-status-line .dot { width: 6px; height: 6px; flex: none; }
+.qs-status-text {
+  flex: 1; min-width: 0; font-size: 10px; color: var(--menu-fg-dim);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.qs-status-text b { color: var(--menu-fg); font-weight: 600; }
+.qs-mini-ico {
+  flex: none; width: 20px; height: 20px; border: 0; border-radius: 6px; cursor: pointer;
+  display: grid; place-items: center; background: transparent; color: var(--menu-fg-dim);
+}
+.qs-mini-ico:hover { background: color-mix(in srgb, var(--menu-fg) 10%, transparent); color: var(--menu-fg); }
+
+.qs-pick-area { display: flex; flex-direction: column; gap: 6px; flex: 1; min-height: 0; }
+.qs-active.is-xfer .qs-pick-area { display: none; }
+
+.qs-pick-row { display: flex; gap: 6px; flex: none; }
+.qs-pick-btn {
+  flex: 1; height: 24px; border: 0; border-radius: 8px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; gap: 5px;
+  font-size: 10.5px; font-weight: 600; color: var(--menu-fg);
+  background: color-mix(in srgb, var(--menu-fg) 8%, transparent);
+  transition: background 0.15s ease;
+}
+.qs-pick-btn:hover { background: color-mix(in srgb, var(--deck-accent) 24%, transparent); }
+
+.qs-sel-chip {
+  display: flex; align-items: center; justify-content: space-between; gap: 4px; flex: none;
+  height: 22px; padding: 0 4px 0 8px; border-radius: 8px;
+  background: color-mix(in srgb, var(--menu-fg) 5%, transparent);
+}
+.qs-sel-toggle {
+  flex: 1; min-width: 0; display: flex; align-items: center; gap: 5px; border: 0; padding: 0;
+  background: transparent; color: var(--menu-fg); font-size: 10.5px; cursor: pointer; text-align: left;
+}
+.qs-sel-toggle span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.qs-chev { flex: none; opacity: 0.55; transition: transform 0.2s ease; }
+.qs-sel-chip.open .qs-chev { transform: rotate(180deg); }
+.qs-sel-list {
+  flex: none; max-height: 58px; overflow-y: auto; padding: 2px 8px; border-radius: 8px;
+  background: color-mix(in srgb, var(--menu-fg) 4%, transparent);
+}
+.qs-sel-row { font-size: 10px; line-height: 1.7; color: var(--menu-fg-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.qs-scan-hint { margin: 0; flex: none; padding: 0 2px; font-size: 9.5px; }
+.qs-scan-hint.idle .radar { display: none; }
+.qs-scan-hint .radar { width: 6px; height: 6px; }
+
+
+
+/* ==================== EVERY STATUS POPUP (transfer, toast, prompt, incoming file): exactly the Bluetooth HUD size ==================== */
+/* same width / height / corners / spring as .bt-hud-active; attached notch follows Settings > Corner Roundness */
+.island.state-compact:is(.transferring, .has-toast, .incoming-open):not(.biometric-active):not(.bt-hud-active):not(.alarm-active) {
+  width: 220px; height: 37px; border-radius: 19px; top: 7px;
+  background: var(--notch-bg); color: var(--notch-fg); border: 0;
+  box-shadow: none;
+  transition: width 0.65s var(--spring-pop), height 0.6s var(--spring-pop),
+              top 0.45s var(--ease-close), border-radius 0.5s var(--ease-close);
+}
+.island:not([data-style="floating"]).state-compact:is(.transferring, .has-toast, .incoming-open):not(.biometric-active):not(.bt-hud-active):not(.alarm-active) {
+  top: 0; height: 40px;
+  border-radius: 0 0 var(--radius) var(--radius);
+  box-shadow: none;
+}
+.island.state-compact:is(.transferring, .has-toast, .incoming-open):not(.biometric-active):not(.bt-hud-active):not(.alarm-active) .compact-bar {
+  padding: 0 12px 0 9px; height: 100%; justify-content: center;
+}
+.island.state-compact.transferring.xfer-live .compact-bar { padding: 0 12px 0 9px; height: 100%; justify-content: center; }
+.island.state-compact.transferring.xfer-live #c-center-trigger { flex: 1 1 auto; min-width: 0; }
+.island.state-compact.transferring.xfer-live #c-transfer-anim { width: 100%; min-width: 0; }
+.xfer-label { overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.xfer-pct { white-space: nowrap; }
+
+/* cancel: soft grey circle, turns red on hover */
+.island.state-compact.transferring.xfer-live .c-transfer-cancel-btn {
+  width: 20px; height: 20px; margin-left: auto;
+  background: rgba(var(--notch-fg-rgb, 245, 245, 247), 0.14); color: rgba(var(--notch-fg-rgb, 245, 245, 247), 0.85);
+}
+.island.state-compact.transferring.xfer-live .c-transfer-cancel-btn svg { width: 9px; height: 9px; }
+.island.state-compact.transferring.xfer-live .c-transfer-cancel-btn:hover { background: rgba(255, 69, 58, 0.9); color: #fff; transform: none; }
+.island.state-compact.transferring.xfer-live .c-transfer-cancel-btn:active { transform: scale(0.92); }
+
+/* clipboard: tile for copied videos (no frame preview) */
+
+/* clipboard: image / file items = same height as a text item, small thumbnail in front, details beside it */
+.clipboard-item.clip-media .clip-media-row { display: flex; align-items: center; gap: 9px; min-width: 0; }
+.clip-thumb {
+  flex: none; width: 40px; height: 40px; border-radius: 8px; overflow: hidden;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--menu-fg-dim); background: color-mix(in srgb, var(--menu-fg) 8%, transparent);
+}
+.clip-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; pointer-events: none; }
+.clip-media-info { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.clip-media-info .clipboard-item-header { margin: 0; }
+.clip-media-name { font-size: 11px; color: var(--menu-fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ==================== INEX DROP SIDE RAIL (Quick Share <-> P2P) ==================== */
+.drop-rail {
+  position: absolute; right: 8px; top: calc(50% - 33px); z-index: 6;   /* vertically centred */
+  width: 34px; padding: 3px; box-sizing: border-box;
+  display: none; flex-direction: column; gap: 4px;
+  border-radius: 17px;
+  background: color-mix(in srgb, var(--menu-fg) 9%, transparent);
+  --i: 0;
+}
+.island:not(.state-compact).has-rail .drop-rail { display: flex; animation: railIn 0.34s var(--spring) backwards; }
+.island.state-compact .drop-rail { display: none !important; }
+@keyframes railIn { from { opacity: 0; transform: translateX(8px); } to { opacity: 1; transform: none; } }
+.drop-rail-ind {
+  position: absolute; left: 3px; top: 3px; width: 28px; height: 28px; border-radius: 50%;
+  background: var(--color-tile-on-bg);
+  transform: translateY(calc(var(--i) * 32px));
+  transition: transform 0.35s var(--spring-pop);
+}
+.rail-btn {
+  position: relative; z-index: 1; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 50%;
+  background: transparent; color: var(--menu-fg-dim); cursor: pointer;
+  display: grid; place-items: center; transition: color 0.2s ease;
+}
+.rail-btn svg { width: 15px; height: 15px; }
+.rail-btn.on { color: var(--color-tile-on-fg); }
+.rail-btn.offer:not(.on) { color: #ff9f0a; }
+.rail-badge {
+  position: absolute; top: -3px; right: -4px; min-width: 13px; height: 13px; padding: 0 3px; box-sizing: border-box;
+  border-radius: 7px; background: #30d158; color: #000; font-size: 8.5px; font-weight: 700; line-height: 13px; text-align: center;
+}
+/* content is centred on the whole panel: equal space left and right (the rail floats in the right gap) */
+.island.has-rail #view-inexdrop .drop-body,
+.island.has-rail #view-p2p .p2p-body { margin: 0; padding-left: 44px; padding-right: 44px; }
+
+
+/* ==================== INEX DROP + P2P: one menu size, everything centred ==================== */
+.drop-body { flex: 1; min-height: 0; overflow: hidden; }
+/* Off state: only the Quick Share icon + name, dead centre of the whole panel (the header is ~38px, so lift by half of it) */
+#drop-state-idle { margin-top: -38px; }
+.drop-idle-title { margin: 0; width: 100%; text-align: center; }
+.p2p-body .p2p-top-actions { justify-content: center; }
+.gen-code-btn { padding: 6px 8px; }
+.empty-hint { width: 100%; margin-left: auto; margin-right: auto; }
+/* incoming offer inside the (smaller) menu */
+#drop-state-prompt .drop-prompt-icon-bubble { display: none; }
+#drop-state-prompt .drop-prompt-card { margin-bottom: 0; padding: 6px 12px; }
+
+/* Tile: the P2P icon shows when P2P is the selected Inex Drop mode */
+.ctrl-tile .ico-p2p-alt { display: none; }
+.ctrl-tile.mode-p2p .ico-drop { display: none; }
+.ctrl-tile.mode-p2p .ico-p2p-alt { display: block; }
+
+/* File Tray: a single "Inex Drop" button (follows the selected mode) */
+.tray-share-actions { grid-template-columns: 1fr; }
+
+/* ==================== P2P LINK: one code box, no server ==================== */
+.p2p-top-actions { flex-wrap: wrap; justify-content: center; }
+.gen-code-btn.busy { pointer-events: none; animation: p2pGenPulse 0.9s ease-in-out infinite; }
+@keyframes p2pGenPulse { 0%, 100% { opacity: 0.5; } 50% { opacity: 1; } }
+@keyframes p2pCodeIn { from { opacity: 0; transform: translateY(4px) scale(0.96); filter: blur(3px); } to { opacity: 1; transform: none; filter: none; } }
+.island.no-anim .gen-code-btn.busy { animation: none; }
+
+

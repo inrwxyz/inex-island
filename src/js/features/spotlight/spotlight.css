@@ -1,0 +1,41 @@
+/* Spotlight Search card (deck menu, left column). Brand colours are the browsers' own, no animated colour. */
+.mx-spotlight { flex: 1; min-height: 0; padding: 8px; display: flex; flex-direction: column; gap: 6px; box-sizing: border-box; overflow: hidden; }
+.sp-bar { flex: none; display: flex; align-items: center; gap: 4px; height: 30px; padding: 0 8px 0 2px; border-radius: 12px; background: color-mix(in srgb, var(--menu-fg) 10%, transparent); }
+.sp-go { flex: none; width: 26px; height: 26px; border-radius: 9px; display: grid; place-items: center; color: var(--menu-fg-dim); cursor: pointer; outline: none; transition: color 0.15s ease, background 0.15s ease; }
+.sp-go:hover, .sp-go:focus-visible { color: var(--menu-fg); background: color-mix(in srgb, var(--menu-fg) 12%, transparent); }
+.sp-input { flex: 1; min-width: 0; height: 100%; padding: 0; border: 0; outline: 0; background: transparent; color: var(--menu-fg); font: inherit; font-size: 12px; }
+.sp-input::placeholder { color: var(--menu-fg-dim); }
+
+/* The scrollbar only appears when there are more browsers than fit. */
+.sp-list { flex: 1; min-height: 0; overflow-y: hidden; overflow-x: hidden; display: flex; flex-direction: column; gap: 1px; }
+.sp-list.can-scroll { overflow-y: auto; scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--menu-fg) 28%, transparent) transparent; }
+.sp-list.can-scroll::-webkit-scrollbar { width: 3px; }
+.sp-list.can-scroll::-webkit-scrollbar-track { background: transparent; }
+.sp-list.can-scroll::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--menu-fg) 28%, transparent); border-radius: 2px; }
+.sp-row { flex: none; display: flex; align-items: center; gap: 8px; height: 24px; padding: 0 6px; border-radius: 8px; font-size: 12px; color: var(--menu-fg); cursor: pointer; user-select: none; }
+.sp-row:hover { background: color-mix(in srgb, var(--menu-fg) 8%, transparent); }
+.sp-row.sel { background: color-mix(in srgb, var(--sp-c) 18%, transparent); }
+.sp-name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sp-check { flex: none; width: 12px; height: 12px; color: var(--sp-c); }
+.sp-empty { padding: 6px; font-size: 11px; color: var(--menu-fg-dim); }
+
+/* Browser logos */
+.sp-logo { position: relative; flex: none; width: 14px; height: 14px; border-radius: 50%; display: block; }
+.sp-logo i, .sp-logo b { position: absolute; display: block; }
+.sp-chrome { background: conic-gradient(#EA4335 0 120deg, #34A853 120deg 240deg, #FBBC05 240deg); }
+.sp-chrome i { inset: 3.5px; border-radius: 50%; background: #fff; }
+.sp-chrome b { inset: 5px; border-radius: 50%; background: #4285F4; }
+.sp-edge { background: #0F7BC8; }
+.sp-edge i { left: 2px; right: 1px; bottom: 1px; height: 6px; border-radius: 0 0 7px 7px; background: #35C98B; }
+.sp-edge b { inset: 4px 3px 4px 4px; border-radius: 50%; background: #0A4F8F; }
+.sp-firefox { background: #FF7139; }
+.sp-firefox i { left: 1px; top: 1px; width: 8px; height: 8px; border-radius: 50%; background: #FFC24A; }
+.sp-firefox b { inset: 3px; border-radius: 50%; background: #7A3FD0; opacity: 0.9; }
+.sp-brave { border-radius: 0; background: #FB542B; clip-path: polygon(18% 6%, 82% 6%, 98% 30%, 86% 82%, 50% 98%, 14% 82%, 2% 30%); }
+.sp-brave i { inset: 4px 3.5px 3px; background: #fff; clip-path: polygon(50% 0, 100% 30%, 90% 80%, 50% 100%, 10% 80%, 0 30%); }
+.sp-opera { background: #FF1B2D; }
+.sp-opera i { left: 4px; right: 4px; top: 2px; bottom: 2px; border-radius: 50%; background: #fff; }
+.sp-opera b { left: 5.5px; right: 5.5px; top: 3.5px; bottom: 3.5px; border-radius: 50%; background: #FF1B2D; }
+.sp-vivaldi { background: #EF3939; }
+.sp-vivaldi i { left: 3.5px; top: 3.5px; width: 7px; height: 4px; border-left: 1.6px solid #fff; border-right: 1.6px solid #fff; transform: skewX(0deg); }
+.sp-vivaldi b { left: 5.5px; top: 7px; width: 3px; height: 3.5px; background: #fff; border-radius: 0 0 2px 2px; }

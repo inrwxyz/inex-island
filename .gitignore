@@ -1,0 +1,69 @@
+# Rust & Tauri Build Artifacts
+src-tauri/target/
+**/target/
+**/*.rs.bk
+*.pdb
+
+# Node.js & Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.pnpm-store/
+
+# Build Outputs, Packages & Installers
+dist/
+dist-isolation/
+build/
+*.exe
+*.msi
+*.zip
+*.tar.gz
+*.tgz
+*.7z
+*.rar
+*.dmg
+*.deb
+*.rpm
+*.AppImage
+
+# Temporary, Cache & Log Files
+*.log
+*.tmp
+*.bak
+*.swp
+*.swo
+temp/
+tmp/
+.cache/
+test-output/
+scratch/
+reference/
+
+# OS-Specific Files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# IDE & Editor Files
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Environment & Secrets
+.env
+.env.*
+!.env.example
+*.key
+*.key.pub
