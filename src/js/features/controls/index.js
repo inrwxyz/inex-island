@@ -292,29 +292,78 @@ export function renderQuickActionTiles() {
   suspendInactiveFeatures();
 }
 
+export function shortAudioLabel(rawName) {
+  const s = (rawName || '').trim();
+  if (!s) return 'This PC';
+  const m = s.match(/^([^(]+)\(([^)]+)\)/);
+  if (m) {
+    const kind = m[1].trim();
+    const detail = m[2].trim();
+    const low = kind.toLowerCase();
+    if (low.includes('headphone') || low.includes('headset') || low.includes('earphone') || low.includes('buds')) {
+      return detail && !/realtek|high definition|usb|bluetooth/i.test(detail) ? detail : kind;
+    }
+    return kind;
+  }
+  return s;
+}
+
+export async function refreshActiveAudioName() {
+  try {
+    const devices = await invokeTauri('get_audio_devices');
+    if (!Array.isArray(devices) || !devices.length) return '';
+    const active = devices.find((d) => d.is_default) || devices[0];
+    const next = shortAudioLabel(active?.name);
+    if (next && next !== appState.activeAudioName) {
+      appState.activeAudioName = next;
+      bus.emit('audio:device-updated', next);
+    }
+    return next;
+  } catch {
+    return '';
+  }
+}
+
 export function openAudioView() {
   lastAudioOrigin = (appState.currentView === 'view-media') ? 'view-media' : 'view-control';
-  switchView('view-audio', 'state-sub', 316, 215);
-  loadAudioDeviceList();
+  switchView('view-audio', 'state-sub', 316, 166);
+  loadAudioDeviceList(false);
 }
+
+let _lastAudioSig = '';
 
 export async function loadAudioDeviceList(spin) {
   const listEl = document.getElementById('audio-device-list');
   const refBtn = document.getElementById('btn-refresh-audio');
   if (!listEl) return;
   if (spin && refBtn) refBtn.classList.add('spin');
-  listEl.innerHTML = '<div class="empty-hint">Scanning audio outputs\u2026</div>';
+  const hasRows = !!listEl.querySelector('.list-row-item');
+  if (!hasRows) {
+    listEl.innerHTML = '<div class="empty-hint">Scanning audio outputs\u2026</div>';
+  }
 
   try {
     const devices = await invokeTauri('get_audio_devices');
     if (spin && refBtn) setTimeout(() => refBtn.classList.remove('spin'), 400);
 
     if (!Array.isArray(devices) || devices.length === 0) {
+      _lastAudioSig = '';
       listEl.innerHTML = '<div class="empty-hint">No audio outputs detected</div>';
       return;
     }
 
-    listEl.innerHTML = '';
+    const activeDev = devices.find((d) => d.is_default) || devices[0];
+    const activeShort = shortAudioLabel(activeDev?.name);
+    if (activeShort && activeShort !== appState.activeAudioName) {
+      appState.activeAudioName = activeShort;
+      bus.emit('audio:device-updated', activeShort);
+    }
+
+    const sig = devices.map((d) => `${d.id}|${d.name}|${d.is_default ? '1' : '0'}`).join('\n');
+    if (hasRows && sig === _lastAudioSig) return;
+    _lastAudioSig = sig;
+
+    const frag = document.createDocumentFragment();
     devices.forEach((d) => {
       const row = document.createElement('div');
       row.className = 'list-row-item' + (d.is_default ? ' on active-audio' : '');
@@ -352,15 +401,16 @@ export async function loadAudioDeviceList(spin) {
         sub.textContent = 'Switching\u2026';
         await invokeTauri('set_default_audio_device', { id: d.id });
         setTimeout(() => {
-          if (appState.currentView === 'view-audio') loadAudioDeviceList();
+          if (appState.currentView === 'view-audio') loadAudioDeviceList(false);
         }, 200);
       });
 
-      listEl.appendChild(row);
+      frag.appendChild(row);
     });
+    listEl.replaceChildren(frag);
   } catch {
     if (spin && refBtn) refBtn.classList.remove('spin');
-    listEl.innerHTML = '<div class="empty-hint">Failed to load audio devices</div>';
+    if (!hasRows) listEl.innerHTML = '<div class="empty-hint">Failed to load audio devices</div>';
   }
 }
 
@@ -419,6 +469,8 @@ export function closeDeckSub() {
 
 export function openDeckSub(viewId, title, from) {
   if ((viewId === 'view-bt' && appState.btPresent === false) || (viewId === 'view-wifi' && appState.wifiPresent === false)) return;
+  bus.emit('prayer:close');
+  bus.emit('weather:close-deck');
   closeDeckTrayPane();
   closeDeckSub();
   const src = document.getElementById(viewId);

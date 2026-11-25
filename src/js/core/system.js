@@ -8,7 +8,8 @@ import {
   isDeckLayout,
   applyPresence,
   applyRadio,
-  loadAudioDeviceList
+  loadAudioDeviceList,
+  refreshActiveAudioName
 } from '../features/controls/index.js';
 import { setVolumeUI } from '../features/volume/index.js';
 import {
@@ -88,7 +89,7 @@ export async function syncDeckStatsUI() {
     if (showBat) {
       const pctEl = document.getElementById('deck-bat-pct');
       if (pctEl) pctEl.textContent = `${s.battery_pct}%`;
-      const lvl = Math.max(1, Math.min(10, Math.round((s.battery_pct / 100) * 10)));
+      const lvl = (Math.max(0.08, Math.min(1, s.battery_pct / 100)) * 13.4).toFixed(1);
       const lvlEl = document.getElementById('deck-bat-level');
       if (lvlEl) lvlEl.setAttribute('width', String(lvl));
       const bolt = document.getElementById('deck-bat-bolt');
@@ -375,6 +376,7 @@ export function initSystemPolling() {
 
   onTauriEvent('audio-device-changed', () => {
     if (appState.currentView === 'view-audio') loadAudioDeviceList(false);
+    else refreshActiveAudioName();
   });
 
   onTauriEvent('radio-changed', () => {
@@ -519,7 +521,7 @@ export function initSystemPolling() {
         if (appState.currentView !== 'view-compact') {
           goCompact();
         }
-      }, 140);
+      }, 220);
     });
   }
 

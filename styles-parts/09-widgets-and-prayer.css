@@ -125,8 +125,13 @@
 :root[data-notch-tone="light"] .island:not([data-mode="ghost"]) .c-toast.t-phone .c-toast-ico,
 :root[data-notch-tone="light"] .island:not([data-mode="ghost"]) .c-toast.t-done .c-toast-ico { color: #16a34a; }
 :root[data-notch-tone="light"] .island:not([data-mode="ghost"]) .c-toast.t-low .c-toast-ico,
-:root[data-notch-tone="light"] .island:not([data-mode="ghost"]) .c-toast.t-wrong .c-toast-ico { color: #dc2626; }
-:root[data-notch-tone="light"] .island:not([data-mode="ghost"]) .c-toast.t-lock .c-toast-ico { color: #d97706; }
+:root[data-notch-tone="light"] .island:not([data-mode="ghost"]) .c-toast.t-wrong .c-toast-ico,
+:root[data-notch-tone="light"] .island:not([data-mode="ghost"]) .c-toast.t-error .c-toast-ico { color: #dc2626; }
+:root[data-notch-tone="light"] .island:not([data-mode="ghost"]) .c-toast.t-lock .c-toast-ico,
+:root[data-notch-tone="light"] .island:not([data-mode="ghost"]) .c-toast.t-warn .c-toast-ico,
+:root[data-notch-tone="light"] .island:not([data-mode="ghost"]) .c-toast.t-alert .c-toast-ico,
+:root[data-notch-tone="light"] .island:not([data-mode="ghost"]) .c-toast.t-cloud .c-toast-ico { color: #d97706; }
+:root[data-notch-tone="light"] .island:not([data-mode="ghost"]) .c-toast.t-info .c-toast-ico { color: #0284c7; }
 :root[data-notch-tone="light"] .island:not([data-mode="ghost"]) .c-toast.t-unphone .c-toast-ico { color: #64748b; }
 :root[data-notch-tone="light"] .island:not([data-mode="ghost"]) .c-toast.t-mic .c-toast-ico { color: #0891b2; }
 :root[data-notch-tone="light"] .island:not([data-mode="ghost"]) .c-toast.t-mic .c-toast-ico svg { filter: drop-shadow(0 0 4px rgba(8, 145, 178, 0.45)); }
@@ -170,7 +175,7 @@
   box-sizing: border-box; border-radius: 11px; isolation: isolate;
   background: color-mix(in srgb, var(--menu-fg) 9%, transparent);
 }
-.mx-view-switcher.hidden { display: none !important; }
+#island .mx-view-switcher.hidden { display: none; }
 .mx-view-switcher::before {
   content: ""; position: absolute; top: 2px; bottom: 2px; left: 2px; width: calc(50% - 2px); z-index: -1;
   border-radius: 9px; background: color-mix(in srgb, var(--menu-fg) 20%, transparent);

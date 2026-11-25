@@ -112,18 +112,10 @@ export async function detectIpLocation() {
       return null;
     },
     async () => {
-      const res = await wxFetch('https://ipwho.is/');
-      if (res.ok) {
-        const d = await res.json();
+      const r = await wxFetch('https://ipwho.is/');
+      if (r.ok) {
+        const d = await r.json();
         if (d && d.success !== false) return { lat: +d.latitude, lon: +d.longitude, city: d.city || '', cc: String(d.country_code || '').toUpperCase() };
-      }
-      return null;
-    },
-    async () => {
-      const res = await wxFetch('http://ip-api.com/json/?fields=status,lat,lon,city,countryCode');
-      if (res.ok) {
-        const d = await res.json();
-        if (d && d.status === 'success') return { lat: +d.lat, lon: +d.lon, city: d.city || '', cc: String(d.countryCode || '').toUpperCase() };
       }
       return null;
     },
@@ -414,7 +406,9 @@ export async function weatherCheckAlerts(loc, code, windKmh) {
   } catch (err) {
     console.warn('Storage write failed:', err);
   }
-  bus.emit('toast:show', { icon: a.icon, title: a.title, ms: 4000 });
+  if (!appState.transferring && !appState.prompting && !appState.lockerPrompting && !document.getElementById('anim-radar-card')) {
+    bus.emit('toast:show', { icon: a.icon, title: a.title, ms: 4000 });
+  }
 }
 
 export async function refreshWeather() {

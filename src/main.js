@@ -84,3 +84,12 @@ initWidgets();
 // 20 - Prayer & Solar Deck
 // Extracted to ES Module: src/js/features/prayer/index.js
 initPrayer();
+// 21 - Animations System
+// Extracted to ES Module: src/js/features/animations/index.js
+import { initAnimations } from './js/features/animations/index.js';
+
+initAnimations();
+// Glass media card (optional card style, chosen in Settings > Music). Self-contained module at src/js/features/media-glass/.
+import { initGlassMedia } from './js/features/media-glass/index.js';
+
+initGlassMedia();

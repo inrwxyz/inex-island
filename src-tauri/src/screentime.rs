@@ -32,7 +32,7 @@ fn paths_lock() -> MutexGuard<'static, HashMap<String, String>> {
 }
 
 fn history_path() -> std::path::PathBuf {
-    crate::data_dir().join("screentime_30d.json")
+    crate::startup::data_dir().join("screentime_30d.json")
 }
 
 fn read_disk_history() -> Vec<DayTime> {
@@ -568,7 +568,7 @@ pub fn on_foreground(_hwnd: isize) {
 
 pub fn start() {
     SESSION_START.get_or_init(Instant::now);
-    let enabled_path = crate::data_dir().join("screentime_enabled.txt");
+    let enabled_path = crate::startup::data_dir().join("screentime_enabled.txt");
     if let Ok(content) = std::fs::read_to_string(&enabled_path) {
         if content.trim() == "0" {
             ENABLED.store(false, Ordering::Relaxed);
@@ -715,7 +715,7 @@ pub fn get_screen_time_history() -> Vec<DayTime> {
 #[tauri::command]
 pub fn set_screen_time_enabled(on: bool) {
     ENABLED.store(on, Ordering::Relaxed);
-    let path = crate::data_dir().join("screentime_enabled.txt");
+    let path = crate::startup::data_dir().join("screentime_enabled.txt");
     let _ = std::fs::write(path, if on { "1" } else { "0" });
     if on {
         let mut last_g = LAST_INSTANT.lock().unwrap_or_else(|e| e.into_inner());
@@ -947,7 +947,7 @@ fn extract_icon_png(_path: &str) -> Option<Vec<u8>> {
 
 fn icons_for(exes: Vec<String>) -> HashMap<String, String> {
     let mut out = HashMap::new();
-    let dir = crate::data_dir().join("icons");
+    let dir = crate::startup::data_dir().join("icons");
     let _ = std::fs::create_dir_all(&dir);
     #[cfg(target_os = "windows")]
     let com = unsafe { sys::CoInitializeEx(std::ptr::null_mut(), 2) };
@@ -978,7 +978,7 @@ fn icons_for(exes: Vec<String>) -> HashMap<String, String> {
             }
         };
         if let Some(b) = bytes {
-            out.insert(exe, format!("data:image/png;base64,{}", crate::base64_encode(&b)));
+            out.insert(exe, format!("data:image/png;base64,{}", crate::media::base64_encode(&b)));
         }
     }
     #[cfg(target_os = "windows")]

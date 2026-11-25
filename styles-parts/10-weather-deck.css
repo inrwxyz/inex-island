@@ -22,23 +22,10 @@
   padding: 7px 9px 8px;
   gap: 3px;
   animation: none;
-  transition: background 0.35s ease, border-color 0.35s ease;
-  background: linear-gradient(180deg, var(--wxd-card-a, #161b26), var(--wxd-card-b, #0c0f16));
-  border: 1px solid var(--wxd-card-border, rgba(255, 255, 255, 0.08));
+  background: #000;
+  border: 1px solid rgba(255, 255, 255, 0.09);
   border-radius: 14px;
 }
-
-/* Atmospheric weather card palettes for all 3 cards */
-#mx-weather-body.k-rain.is-day > .mx-widget-card   { --wxd-card-a: #1c2738; --wxd-card-b: #0d141e; --wxd-card-border: rgba(140, 175, 220, 0.16); }
-#mx-weather-body.k-rain.is-night > .mx-widget-card { --wxd-card-a: #131d2e; --wxd-card-b: #080d16; --wxd-card-border: rgba(115, 150, 205, 0.14); }
-#mx-weather-body.k-clear.is-day > .mx-widget-card  { --wxd-card-a: #182845; --wxd-card-b: #0c1526; --wxd-card-border: rgba(150, 195, 255, 0.18); }
-#mx-weather-body.k-stars > .mx-widget-card,
-#mx-weather-body.k-clear.is-night > .mx-widget-card { --wxd-card-a: #111a30; --wxd-card-b: #080d1c; --wxd-card-border: rgba(130, 155, 225, 0.15); }
-#mx-weather-body.k-cloud.is-day > .mx-widget-card  { --wxd-card-a: #202735; --wxd-card-b: #10141c; --wxd-card-border: rgba(175, 190, 215, 0.14); }
-#mx-weather-body.k-cloud.is-night > .mx-widget-card { --wxd-card-a: #141926; --wxd-card-b: #0a0d14; --wxd-card-border: rgba(135, 150, 175, 0.12); }
-#mx-weather-body.k-snow.is-day > .mx-widget-card   { --wxd-card-a: #1e2838; --wxd-card-b: #0e141e; --wxd-card-border: rgba(195, 215, 245, 0.18); }
-#mx-weather-body.k-snow.is-night > .mx-widget-card { --wxd-card-a: #131b28; --wxd-card-b: #090e16; --wxd-card-border: rgba(155, 180, 215, 0.14); }
-#mx-weather-body.k-fog > .mx-widget-card           { --wxd-card-a: #262930; --wxd-card-b: #111317; --wxd-card-border: rgba(185, 190, 200, 0.14); }
 #mx-weather-body .wg-head > span { max-width: 92px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* TEMP + AQI card (second) */
@@ -218,15 +205,15 @@
 @keyframes wxdBoltA { 0% { opacity: 0; } 6% { opacity: .62; } 20% { opacity: .12; } 30% { opacity: .5; } 55% { opacity: 0; } 100% { opacity: 0; } }
 
 /* no animation: static scene (sun / moon, colours and textures still correct) */
-@media (prefers-reduced-motion: reduce) { .wxd-bg i, .wxd-bg b, .wxd-bg i::before, .wxd-bg i::after, .wxd-bg b::before, .wxd-bg b::after { animation: none !important; transition: none !important; } }
-.island.no-anim .wxd-bg i, .island.no-anim .wxd-bg b, .island.no-anim .wxd-bg i::before, .island.no-anim .wxd-bg i::after, .island.no-anim .wxd-bg b::before, .island.no-anim .wxd-bg b::after { animation: none !important; transition: none !important; }
+@media (prefers-reduced-motion: reduce) { #island .wxd-bg i, #island .wxd-bg b, #island .wxd-bg i::before, #island .wxd-bg i::after, #island .wxd-bg b::before, #island .wxd-bg b::after { animation: none; transition: none; } }
+#island.island.no-anim .wxd-bg i, #island.island.no-anim .wxd-bg b, #island.island.no-anim .wxd-bg i::before, #island.island.no-anim .wxd-bg i::after, #island.island.no-anim .wxd-bg b::before, #island.island.no-anim .wxd-bg b::after { animation: none; transition: none; }
 /* sunny day = bright blue sky: keep the Sun card text readable */
 #mx-weather-body.k-clear.is-day .wxd-time-val { text-shadow: 0 1px 3px rgba(10,40,90,.55); }
 
 /* Pause all weather deck background animations when deck is closed to save RAM and GPU */
-#view-control-deck:not(.weather-open) .wxd-bg i,
-#view-control-deck:not(.weather-open) .wxd-bg b,
-.island:not(.state-weather) .wxd-bg i,
-.island:not(.state-weather) .wxd-bg b {
-  animation-play-state: paused !important;
+#island #view-control-deck:not(.weather-open) .wxd-bg i,
+#island #view-control-deck:not(.weather-open) .wxd-bg b,
+#island.island:not(.state-control-deck) .wxd-bg i,
+#island.island:not(.state-control-deck) .wxd-bg b {
+  animation-play-state: paused;
 }

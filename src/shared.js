@@ -14,8 +14,8 @@ export const DEFAULTS = {
     fontStyle: 'mono', scale: 125, animations: true
   },
   notch: {
-    mode: 'smart', style: 'curved', compactContent: 'clock', musicMode: true, compactMode: true, ambientGlow: true, compactGlow: true,
-    calendarTimer: true, timerSound: true, eqSync: true, eqSensitivity: 100
+    mode: 'smart', style: 'curved', compactContent: 'clock', musicMode: true, compactMode: true, mediaCard: 'glass', ambientGlow: true, compactGlow: true,
+    calendarTimer: true, timerSound: true, eqSync: true, eqStyle: 'bottom', eqSensitivity: 100
   },
   sounds: {
     enabled: true,
@@ -44,7 +44,13 @@ export const DEFAULTS = {
   overlays: { btBattery: true, privacyDot: true },
   companion: { enabled: false, skin: 'eyes', monogram: false, tracking: true, peekMinMin: 25, peekMaxMin: 60, activityPeekMin: 45 },
   wellness: { enabled: false, water: true, waterEvery: 45, eye: true, eyeEvery: 20, stretch: true, stretchEvery: 60, idleReset: 30 },
-  share: { deviceName: '' }
+  share: { deviceName: '' },
+  animations: {
+    enabled: false,
+    tray: { enabled: false, id: 'bounce' },
+    receive: { enabled: false, id: 'radar' },
+    send: { enabled: false, id: 'beam' }
+  }
 };
 
 export const MAX_ACTION_TILES = 7;   // the classic menu row fits 7 circles; more would be cut off
@@ -81,9 +87,9 @@ const FONT_MAP = {
   grotesk: "'Space Grotesk', sans-serif"
 };
 
-// "24.2741, 87.8230" (what Google Maps copies) -> { lat, lon }; null when the text is not a coordinate pair.
+// "24.2741, 87.8230" or "24.2741, 87.8230, West Bengal" -> { lat, lon }; null when the text is not a coordinate pair.
 export function parseCoords(text) {
-  const m = /^\s*([+-]?\d{1,2}(?:\.\d+)?)\s*°?\s*[,;\s]\s*([+-]?\d{1,3}(?:\.\d+)?)\s*°?\s*$/.exec(String(text || ''));
+  const m = /^\s*([+-]?\d{1,2}(?:\.\d+)?)\s*°?\s*[,;\s]\s*([+-]?\d{1,3}(?:\.\d+)?)\s*°?(?:\s*,\s*[^0-9\n]+)?\s*$/.exec(String(text || ''));
   if (!m) return null;
   const lat = +m[1];
   const lon = +m[2];
@@ -140,6 +146,9 @@ export function load() {
         if (!saved.deckMenu) {
           base.deckMenu = { ...base.deckMenu, ...saved.macMenu };
         }
+      }
+      if (base.animations && base.animations.receive && !['radar', 'notch'].includes(base.animations.receive.id)) {
+        base.animations.receive.id = 'radar';
       }
     }
     delete base.macMenu;

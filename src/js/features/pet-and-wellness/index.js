@@ -16,6 +16,7 @@ const W0 = { enabled: false, water: true, waterEvery: 45, eye: true, eyeEvery: 2
 function cc() {
   const SET = loadSettings();
   const c = Object.assign({}, C0, SET.companion || {});
+  if (!SET.animations || !SET.animations.enabled) c.enabled = false;
   c.pinned = false;
   if (c.enabled && SET.notch && SET.notch.compactContent === 'pet') {
     c.pinned = true;

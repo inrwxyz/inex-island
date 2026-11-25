@@ -492,6 +492,101 @@ pub async fn read_image_file(path: String) -> Result<tauri::ipc::Response, Strin
     .map_err(|e| e.to_string())?
 }
 
+// Windows bumps this number every time anything is copied (any app): the island polls it to show the "Copied" popup.
+#[tauri::command]
+pub fn clipboard_seq() -> u32 {
+    #[cfg(windows)]
+    {
+        unsafe { windows::Win32::System::DataExchange::GetClipboardSequenceNumber() }
+    }
+    #[cfg(not(windows))]
+    {
+        0
+    }
+}
+
+#[tauri::command]
+pub fn get_clipboard_text() -> String {
+    #[cfg(windows)]
+    unsafe {
+        use windows::Win32::Foundation::{HGLOBAL, HWND};
+        use windows::Win32::System::DataExchange::{CloseClipboard, GetClipboardData, OpenClipboard};
+        use windows::Win32::System::Memory::{GlobalLock, GlobalUnlock};
+        const CF_UNICODETEXT: u32 = 13;
+        for _ in 0..5 {
+            if OpenClipboard(HWND::default()).is_ok() {
+                let mut result = String::new();
+                if let Ok(h) = GetClipboardData(CF_UNICODETEXT) {
+                    if !h.0.is_null() {
+                        let ptr = GlobalLock(HGLOBAL(h.0)) as *const u16;
+                        if !ptr.is_null() {
+                            let len = (0..).take_while(|&i| *ptr.add(i) != 0).count();
+                            let slice = std::slice::from_raw_parts(ptr, len);
+                            result = String::from_utf16_lossy(slice);
+                            let _ = GlobalUnlock(HGLOBAL(h.0));
+                        }
+                    }
+                }
+                let _ = CloseClipboard();
+                if !result.is_empty() {
+                    return result;
+                }
+            }
+            std::thread::sleep(std::time::Duration::from_millis(25));
+        }
+    }
+    String::new()
+}
+
+#[tauri::command]
+pub fn set_clipboard_text(window: tauri::WebviewWindow, text: String) -> bool {
+    #[cfg(windows)]
+    unsafe {
+        use windows::Win32::Foundation::{GlobalFree, HANDLE, HWND};
+        use windows::Win32::System::DataExchange::{
+            CloseClipboard, EmptyClipboard, OpenClipboard, SetClipboardData,
+        };
+        use windows::Win32::System::Memory::{GlobalAlloc, GlobalLock, GlobalUnlock, GMEM_MOVEABLE};
+        const CF_UNICODETEXT: u32 = 13;
+
+        // Use our own window as the clipboard owner (a NULL owner can make some apps' right-click Paste ignore the text).
+        let owner = match window.hwnd() {
+            Ok(h) => HWND(h.0 as *mut core::ffi::c_void),
+            Err(_) => HWND::default(),
+        };
+        let wide: Vec<u16> = text.encode_utf16().chain(std::iter::once(0)).collect();
+        let bytes_len = wide.len() * 2;
+        let hg = match GlobalAlloc(GMEM_MOVEABLE, bytes_len) {
+            Ok(h) => h,
+            Err(_) => return false,
+        };
+        let dst = GlobalLock(hg) as *mut u16;
+        if dst.is_null() {
+            let _ = GlobalFree(hg);
+            return false;
+        }
+        std::ptr::copy_nonoverlapping(wide.as_ptr(), dst, wide.len());
+        let _ = GlobalUnlock(hg);
+
+        for _ in 0..5 {
+            if OpenClipboard(owner).is_ok() {
+                let _ = EmptyClipboard();
+                let res = SetClipboardData(CF_UNICODETEXT, HANDLE(hg.0));
+                let _ = CloseClipboard();
+                return res.is_ok();
+            }
+            std::thread::sleep(std::time::Duration::from_millis(25));
+        }
+        let _ = GlobalFree(hg);
+        false
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = (window, text);
+        false
+    }
+}
+
 use tauri::AppHandle;
 
 #[cfg(test)]

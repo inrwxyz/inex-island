@@ -37,3 +37,12 @@
 #view-media .m-eq span {
   background: var(--menu-fg);
 }
+
+.island[data-eq-style="center"] .c-equalizer,
+.island[data-eq-style="center"] .m-eq {
+  align-items: center;
+}
+.island[data-eq-style="center"] .c-equalizer span,
+.island[data-eq-style="center"] .m-eq span {
+  transform-origin: 50% 50%;
+}

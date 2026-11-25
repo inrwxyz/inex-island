@@ -30,7 +30,7 @@ function realHitWidth(nominalW) {
 }
 
 export function isMenuView(viewId) {
-  return !!viewId && viewId !== 'view-compact' && viewId !== 'view-media' && viewId !== 'view-timer-live';
+  return !!viewId && viewId !== 'view-compact' && viewId !== 'view-media' && viewId !== 'view-audio' && viewId !== 'view-timer-live';
 }
 
 export function reportIslandSize(size) {

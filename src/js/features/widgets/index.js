@@ -1,5 +1,6 @@
 // Control Deck: Widgets tab (Screen Time ring, Speed Test, Currency converter, Markets with sparklines)
 import { appState } from '../../core/state.js';
+import { bus } from '../../core/bus.js';
 import { loadSettings } from '../../core/settings.js';
 import { invokeTauri } from '../../core/tauri.js';
 import { closeDeckTrayPane } from '../tray/index.js';
@@ -48,6 +49,7 @@ export function wgSetTab(name) {
   const deck = wgEl('view-control-deck');
   if (!deck) return;
   const w = name === 'widgets';
+  bus.emit('prayer:close');
   if (w) {
     closeDeckTrayPane();
     if (typeof window.closeDeckSub === 'function') window.closeDeckSub();

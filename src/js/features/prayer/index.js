@@ -6,8 +6,6 @@ import { invokeTauri, listenTauri } from '../../core/tauri.js';
 import { triggerTimerAlarm, dismissTimerAlarm } from '../timer/index.js';
 import { wxdCloseDeck } from '../weather/index.js';
 
-let _activeAdhanHtmlAudio = null;
-
 export const prayer = {
   open: false,
   ui: 0,
@@ -20,20 +18,16 @@ export const prayer = {
   dayKey: '',
   days: null,
   audio: null,
-  loop: 0,
+  stopTimer: 0,
   cardTok: 0,
   fired: ''
 };
-
-// Gap between two sounds while a prayer alert is on screen (same as the timer alarm).
-const PR_LOOP_MS = 2400;
 
 export const PR_ANGLE = { fajr: 18, isha: 18 };
 export const PR_ADJ_MIN = { dhuhr: 1, maghrib: 0 };
 export const PR_NAMES = { fajr: 'Fajr', sunrise: 'Sunrise', dhuhr: 'Dhuhr', asr: 'Asr', maghrib: 'Maghrib', isha: 'Isha' };
 export const PR_ORDER = ['fajr', 'sunrise', 'dhuhr', 'asr', 'maghrib', 'isha'];
 export const PR_FIVE = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'];
-export const PR_SOUNDS = { madinah: 'audio/adhan-short.mp3', short: 'audio/adhan-short.mp3', beep: 'audio/chime.wav' };
 export const PR_FIRED_KEY = 'inex.prayer.fired';
 export const PR_LOC_KEY = 'inex.prayer.loc';
 
@@ -377,21 +371,20 @@ export function prRenderState() {
 }
 
 export function prStopAudio() {
-  clearInterval(prayer.loop);
-  prayer.loop = 0;
+  clearTimeout(prayer.stopTimer);
+  prayer.stopTimer = 0;
   prayer.audio = null;
-  if (_activeAdhanHtmlAudio) {
-    try {
-      _activeAdhanHtmlAudio.pause();
-      _activeAdhanHtmlAudio.currentTime = 0;
-    } catch {}
-    _activeAdhanHtmlAudio = null;
-  }
+  invokeTauri('stop_alarm_sound').catch((err) => console.warn('Tauri invoke error:', err));
 }
 
 export function prPlay() {
   prayer.audio = 'chime';
   invokeTauri('play_alarm_sound').catch((err) => console.warn('Tauri invoke error:', err));
+}
+
+export function prStartLoop() {
+  prayer.audio = 'chime';
+  invokeTauri('start_alarm_loop', { gapMs: 350 }).catch((err) => console.warn('Tauri invoke error:', err));
 }
 
 export function prQuiet(q) {
@@ -450,16 +443,13 @@ export function prAnnounce(ev, preview) {
 
   if (sound) {
     prStopAudio();
-    prPlay();
-    // The sound repeats for as long as this alert is on screen. It stops with Dismiss, Mute,
-    // or when the card times out (all of them end in prStopAudio).
+    // Play full alarm sound end-to-end and repeat sequentially until Dismiss, Mute, or card timeout.
     if (ownCard) {
-      prayer.loop = setInterval(() => {
-        if (tok === prayer.cardTok && appState.alarmActive && !appState.alarmClosing) prPlay();
-        else prStopAudio();
-      }, PR_LOOP_MS);
+      prStartLoop();
+    } else {
+      prPlay();
     }
-    setTimeout(() => {
+    prayer.stopTimer = setTimeout(() => {
       if (tok === prayer.cardTok && appState.alarmActive) {
         prStopAudio();
         dismissTimerAlarm();
@@ -528,6 +518,7 @@ export function prOpenDeck() {
   const deck = prEl('view-control-deck');
   if (!deck || !prOn()) return;
   wxdCloseDeck();
+  if (typeof window.closeDeckSub === 'function') window.closeDeckSub();
   bus.emit('deck:close-other-panels', 'prayer');
   deck.classList.add('prayer-open');
   prEl('deck-prayer-btn')?.classList.add('on');
@@ -576,8 +567,12 @@ export function prayerApplySettings() {
 
 export function initPrayer() {
   prEl('deck-prayer-btn')?.addEventListener('click', () => {
-    if (prayer.open) prCloseDeck();
-    else prOpenDeck();
+    if (prayer.open) {
+      prCloseDeck();
+    } else {
+      if (typeof window.wgSetTab === 'function') window.wgSetTab('controls');
+      prOpenDeck();
+    }
   });
 
   listenTauri('system-resumed', () => {
@@ -610,6 +605,9 @@ export function initPrayer() {
 
   bus.on('prayer:open', () => prOpenDeck());
   bus.on('prayer:close', () => prCloseDeck());
+  bus.on('deck:close-other-panels', (who) => {
+    if (who !== 'prayer' && prayer.open) prCloseDeck();
+  });
   bus.on('prayer:apply-settings', () => prayerApplySettings());
   bus.on('deck:reset', () => deckPrayerReset());
   bus.on('view:change', (view) => {

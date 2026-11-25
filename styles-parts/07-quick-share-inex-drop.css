@@ -62,7 +62,7 @@
 .drop-body.has-active > .drop-state-box { flex: 1; min-height: 0; align-items: stretch; }
 
 .qs-active { display: flex; flex-direction: column; gap: 6px; text-align: left; }
-.qs-active.hidden { display: none !important; }
+#island .qs-active.hidden { display: none; }
 
 .qs-status-line { display: flex; align-items: center; gap: 6px; min-width: 0; padding: 0 2px; flex: none; }
 .qs-status-line .dot { width: 6px; height: 6px; flex: none; }
@@ -118,7 +118,7 @@
 /* same width / height / corners / spring as .bt-hud-active; attached notch follows Settings > Corner Roundness */
 .island.state-compact:is(.transferring, .has-toast, .incoming-open):not(.biometric-active):not(.bt-hud-active):not(.alarm-active) {
   width: 220px; height: 37px; border-radius: 19px; top: 7px;
-  background: var(--notch-bg); color: var(--notch-fg); border: 0;
+  background: var(--notch-bg); color: var(--notch-fg); border-color: transparent;
   box-shadow: none;
   transition: width 0.65s var(--spring-pop), height 0.6s var(--spring-pop),
               top 0.45s var(--ease-close), border-radius 0.5s var(--ease-close);
@@ -170,7 +170,7 @@
   --i: 0;
 }
 .island:not(.state-compact).has-rail .drop-rail { display: flex; animation: railIn 0.34s var(--spring) backwards; }
-.island.state-compact .drop-rail { display: none !important; }
+#island.island.state-compact .drop-rail { display: none; }
 @keyframes railIn { from { opacity: 0; transform: translateX(8px); } to { opacity: 1; transform: none; } }
 .drop-rail-ind {
   position: absolute; left: 3px; top: 3px; width: 28px; height: 28px; border-radius: 50%;

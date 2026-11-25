@@ -439,9 +439,14 @@
 .c-toast.t-phone .c-toast-ico { color: #22c55e; }
 .c-toast.t-unphone .c-toast-ico { color: #94a3b8; }
 
-.c-toast.t-wrong .c-toast-ico {
+.c-toast.t-wrong .c-toast-ico,
+.c-toast.t-error .c-toast-ico {
   color: #ef4444;
 }
+.c-toast.t-warn .c-toast-ico,
+.c-toast.t-alert .c-toast-ico,
+.c-toast.t-cloud .c-toast-ico { color: #ff9f0a; }
+.c-toast.t-info .c-toast-ico { color: #64d2ff; }
 
 
 /* Bluetooth rows: type icon, name + battery under it */

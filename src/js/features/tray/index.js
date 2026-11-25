@@ -74,6 +74,8 @@ export function openDeckTrayPane() {
     return;
   }
   if (typeof window.closeDeckSub === 'function') window.closeDeckSub();
+  bus.emit('prayer:close');
+  bus.emit('weather:close-deck');
   deckTrayHome = { parent: tray.parentNode, next: tray.nextSibling };
   deck.appendChild(tray);
   tray.classList.add('active', 'in-deck-tray');
@@ -279,9 +281,17 @@ export async function addDroppedPaths(paths, target) {
   if (isDeckMenu()) {
     if (target === 'drop') deckSendToInexDrop();
     else openDeckTrayView(false);
-    return;
+  } else {
+    openTrayView();
   }
-  openTrayView();
+  if (added > 0 && target !== 'drop') {
+    requestAnimationFrame(() => {
+      bus.emit('anim:tray-drop', {
+        menuLayout: isDeckMenu() ? 'deck' : 'classic',
+        addedPaths: metas.slice(0, added).map((m) => m.path)
+      });
+    });
+  }
 }
 
 let dropLeaveTimeout = null;

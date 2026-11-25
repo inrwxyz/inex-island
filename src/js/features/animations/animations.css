@@ -1,0 +1,325 @@
+/* Animations System CSS: transform, opacity, and SVG stroke-dashoffset only. */
+
+.anim-stage {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 90;
+  overflow: visible;
+}
+
+.anim-fx {
+  position: fixed;
+  pointer-events: none;
+  z-index: 95;
+}
+
+/* Radar Drop expanded Accept / Decline card inside island (matches Floating or Bezel style) */
+.island.state-compact.anim-radar-card-open:not(.smart-hidden):not(.biometric-active):not(.alarm-active),
+.island.state-compact.anim-radar-card-open:not(.smart-hidden):not(.biometric-active):not(.alarm-active):hover {
+  width: 268px;
+  height: 104px;
+  border-color: transparent;
+  transition: width 0.55s var(--spring-pop), height 0.5s var(--spring-pop),
+              top 0.4s var(--ease-close), border-radius 0.45s var(--ease-close);
+}
+.island[data-style="floating"].state-compact.anim-radar-card-open:not(.smart-hidden):not(.biometric-active):not(.alarm-active) {
+  top: 7px;
+  border-radius: 22px;
+}
+.island:not([data-style="floating"]).state-compact.anim-radar-card-open:not(.smart-hidden):not(.biometric-active):not(.alarm-active) {
+  top: 0;
+  border-radius: 0 0 22px 22px;
+}
+.island.state-compact.anim-radar-card-open .compact-bar {
+  padding: 0;
+  justify-content: center;
+  height: 100%;
+  pointer-events: auto;
+}
+.island.state-compact.anim-radar-card-open :is(.c-left, .c-center, .c-right, .c-bt-hud, .c-biometric-hud, .c-alarm-hud, .c-timer-chip) {
+  display: none;
+}
+.island.state-compact.anim-radar-card-open.has-curved-ears::before,
+.island.state-compact.anim-radar-card-open.has-curved-ears::after {
+  display: none;
+}
+.anim-radar-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 9px;
+  width: 100%;
+  height: 100%;
+  padding: 10px 14px;
+  box-sizing: border-box;
+  pointer-events: auto;
+  position: relative;
+  z-index: 4;
+  animation: animRadarCardIn 0.34s var(--ease-close) both;
+}
+@keyframes animRadarCardIn {
+  from { opacity: 0; transform: scale(0.92); }
+  to { opacity: 1; transform: scale(1); }
+}
+.anim-rc-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.anim-rc-ico {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: linear-gradient(#5ac8fa, #0a84ff);
+  color: #ffffff;
+  display: grid;
+  place-items: center;
+}
+.anim-rc-ico svg {
+  width: 16px;
+  height: 16px;
+}
+.anim-rc-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  text-align: left;
+}
+.anim-rc-meta b {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--notch-fg, #f5f5f7);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.anim-rc-meta span {
+  font-size: 9.5px;
+  font-weight: 500;
+  color: var(--notch-fg-dim, #8e8e98);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.anim-rc-actions {
+  display: flex;
+  gap: 8px;
+}
+.anim-rc-btn {
+  flex: 1;
+  border-width: 0;
+  padding: 6px 0;
+  border-radius: 9px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  pointer-events: auto;
+  position: relative;
+  z-index: 5;
+  transition: transform 0.14s ease, opacity 0.14s ease, filter 0.14s ease;
+}
+.anim-rc-btn:hover {
+  filter: brightness(1.08);
+}
+.anim-rc-btn.decline {
+  background: rgba(255, 255, 255, 0.11);
+  color: var(--notch-fg, #f5f5f7);
+}
+.anim-rc-btn.accept {
+  background: #30d158;
+  color: #ffffff;
+}
+.anim-rc-btn.is-pressed {
+  transform: scale(0.88);
+}
+
+/* Tray Soft Bounce falling file card */
+.anim-drop-doc {
+  width: 26px;
+  height: 32px;
+  border-radius: 5px;
+  background: linear-gradient(160deg, #ffffff, #cfe0ff);
+  display: grid;
+  place-items: center;
+}
+.anim-drop-doc::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 8px;
+  height: 8px;
+  background: #0a84ff;
+  border-radius: 0 5px 0 4px;
+}
+.anim-doc-tag {
+  font-size: 7px;
+  font-weight: 700;
+  color: #0a84ff;
+  letter-spacing: 0.02em;
+}
+
+/* Radar Drop expanding sonar rings anchored cleanly OUTSIDE the island (Floating or Curved/Bezel) */
+.anim-radar-ring {
+  border: 2px solid #64d2ff;
+  opacity: 0;
+  box-sizing: border-box;
+}
+.anim-radar-ring.is-bezel {
+  border-top-width: 0;
+  border-radius: 0 0 18px 18px;
+  transform-origin: 50% 0%;
+}
+.anim-radar-ring.is-floating {
+  border-radius: 999px;
+  transform-origin: 50% 18%;
+}
+
+/* Flying document card (Receive downward drop animations) */
+.anim-fly-doc {
+  width: 44px;
+  height: 54px;
+  border-radius: 7px;
+  background: linear-gradient(160deg, #ffffff, #dfe8ff);
+  display: grid;
+  place-items: center;
+  color: #0a84ff;
+  font-size: 9px;
+  font-weight: 700;
+}
+.anim-fly-doc::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 13px;
+  height: 13px;
+  background: #0a84ff;
+  border-radius: 0 7px 0 7px;
+}
+
+/* Launch Beam inside #c-transfer-anim: keeps identical 220x37/40 status HUD size */
+.island.anim-send-beam .xfer-ring-wrap,
+.island.anim-send-beam .xfer-text {
+  display: none;
+}
+.anim-beam-ui {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 auto;
+  min-width: 0;
+  padding-right: 4px;
+}
+.anim-b-disc {
+  width: 21px;
+  height: 21px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  flex: none;
+}
+.anim-b-disc svg {
+  width: 11px;
+  height: 11px;
+}
+.anim-b-disc.is-src {
+  background: rgba(10, 132, 255, 0.22);
+  color: #4da3ff;
+}
+.anim-b-disc.is-dst {
+  background: rgba(191, 90, 242, 0.22);
+  color: #bf5af2;
+}
+.anim-b-track {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 56px;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+}
+.anim-b-fill {
+  position: absolute;
+  inset: 0;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #0a84ff, #bf5af2, #ff375f);
+  transform-origin: left center;
+  transform: scaleX(0);
+  transition: transform 0.14s linear;
+}
+.anim-b-sheen {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 30px;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.85), transparent);
+  animation: animBeamSheen 0.85s linear infinite;
+}
+@keyframes animBeamSheen {
+  from { transform: translateX(-32px); }
+  to { transform: translateX(102px); }
+}
+.anim-b-pct {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--notch-fg, #f5f5f7);
+  font-variant-numeric: tabular-nums;
+  min-width: 28px;
+}
+
+.anim-confetti-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+}
+
+/* Edge Trace SVG perimeter overlay (overflow visible so Floating/Attached stroke never clips) */
+.island.anim-edge-trace {
+  overflow: visible;
+}
+.island.anim-edge-trace > .view {
+  overflow: hidden;
+  border-radius: inherit;
+}
+.anim-edge-svg {
+  position: absolute;
+  overflow: visible;
+  pointer-events: none;
+  z-index: 120;
+}
+.anim-trace-track {
+  stroke: rgba(255, 255, 255, 0.12);
+  stroke-width: 2;
+}
+.anim-trace-fg {
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.14s linear;
+}
+.anim-trace-pulse {
+  stroke-width: 2.8;
+  stroke-linecap: round;
+  opacity: 0.72;
+  animation: animTraceSweep 1.35s linear infinite;
+}
+.island.anim-trace-done .anim-trace-pulse {
+  opacity: 0;
+}
+@keyframes animTraceSweep {
+  from { stroke-dashoffset: 100; }
+  to { stroke-dashoffset: -100; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .anim-b-sheen,
+  .anim-trace-pulse {
+    animation: none;
+  }
+}

@@ -16,21 +16,24 @@ export function fmtTime(sec) {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
+export function getMediaPositionSec() {
+  const dur = appState.mediaDuration || 0;
+  let p = appState.mediaProgressSec || 0;
+  if (appState.mediaPlaying && !appState.mediaSeeking) {
+    const elapsed = Math.max(0, (Date.now() - mediaBackendTime) / 1000);
+    const computed = mediaBackendPos + elapsed;
+    p = dur > 0 ? Math.min(dur, computed) : computed;
+  }
+  p = Math.max(0, dur > 0 ? Math.min(dur, p) : p);
+  return p;
+}
+
 export function renderMediaProgress(pos) {
   let p = pos;
   if (p === undefined) {
-    if (appState.mediaPlaying && !appState.mediaSeeking && appState.mediaDuration > 0) {
-      const now = Date.now();
-      const elapsed = Math.max(0, (now - mediaBackendTime) / 1000);
-      const computed = Math.min(appState.mediaDuration, mediaBackendPos + elapsed);
-      if (appState.mediaProgressSec && computed < appState.mediaProgressSec && (appState.mediaProgressSec - computed) < 6.0) {
-        p = appState.mediaProgressSec;
-      } else {
-        p = computed;
-        appState.mediaProgressSec = p;
-      }
-    } else {
-      p = appState.mediaProgressSec || 0;
+    p = getMediaPositionSec();
+    if (appState.mediaPlaying && !appState.mediaSeeking) {
+      appState.mediaProgressSec = p;
     }
   }
   const dur = appState.mediaDuration || 0;
@@ -38,6 +41,7 @@ export function renderMediaProgress(pos) {
 
   const pct = dur > 0 ? Math.min(100, (p / dur) * 100) : 0;
   if (appState.currentView !== 'view-media') return;
+  bus.emit('media:tick', p);
 
   const curTimeEl = $('m-cur-time');
   const totTimeEl = $('m-tot-time');
@@ -65,7 +69,7 @@ export function renderMediaProgress(pos) {
 let mediaTickT = null;
 let mediaTickMs = 0;
 export function syncMediaTick() {
-  const want = appState.currentView === 'view-media' && appState.mediaPlaying && appState.mediaDuration > 0;
+  const want = appState.currentView === 'view-media' && appState.mediaPlaying;
   const ms = 250;
   if (want && mediaTickT && mediaTickMs !== ms) {
     clearInterval(mediaTickT);
@@ -318,10 +322,12 @@ export async function refreshMedia() {
   const mArtist = $('m-artist');
   const mEqBars = $('m-eq-bars');
 
+  const prevPlaying = !!appState.mediaPlaying;
   const hasMedia = !!(media && media.title && media.title.trim());
   const isPlaying = !!(hasMedia && media.playing);
 
   appState.mediaPlaying = isPlaying;
+  if (prevPlaying !== isPlaying) bus.emit('media:playback-change', isPlaying);
   $('view-media')?.classList.toggle('is-playing', isPlaying);
 
   if (!hasMedia) {
@@ -332,7 +338,13 @@ export async function refreshMedia() {
   updateSourceBadge('m-source-badge', 'm-source-ico', 'm-source-name', media.source || '');
   if (appState.currentView === 'view-media') syncMediaAppVolume();
 
-  if (media.duration > 0) appState.mediaDuration = media.duration;
+  const key = media.title + '|' + (media.artist || '') + '|' + (media.source || '');
+  const isNewTrack = key !== appState.mediaTitleKey;
+  if (isNewTrack) {
+    appState.mediaDuration = media.duration > 0 ? media.duration : 0;
+  } else if (media.duration > 0) {
+    appState.mediaDuration = media.duration;
+  }
   syncMediaTick();
 
   if (isPlaying) {
@@ -349,10 +361,7 @@ export async function refreshMedia() {
       if (mediaBtn) mediaBtn.classList.add('hidden');
     }
 
-    const key = media.title + '|' + (media.artist || '');
-    const isNewTrack = key !== appState.mediaTitleKey;
-    const now = media.updated_at || Date.now();
-
+    const now = Date.now();
     if (isNewTrack) {
       appState.mediaTitleKey = key;
       appState.loadedArtUrl = '';
@@ -362,14 +371,16 @@ export async function refreshMedia() {
       loadMediaArt();
       setTimeout(loadMediaArt, 400);
       setTimeout(loadMediaArt, 1200);
+    } else if (!prevPlaying) {
+      mediaBackendPos = Math.max(0, media.position >= 0 ? media.position : (appState.mediaProgressSec || 0));
+      mediaBackendTime = now;
+      appState.mediaProgressSec = mediaBackendPos;
     } else if (!appState.mediaSeeking && media.position >= 0) {
       const currentExtrapolated = mediaBackendPos + Math.max(0, (now - mediaBackendTime) / 1000);
-      const forwardJump = media.position - currentExtrapolated;
-      const backwardJump = currentExtrapolated - media.position;
-
-      if (backwardJump > 6.0 || forwardJump > 1.2) {
+      if (Math.abs(media.position - currentExtrapolated) > 1.2) {
         mediaBackendPos = media.position;
         mediaBackendTime = now;
+        appState.mediaProgressSec = mediaBackendPos;
       }
     }
     renderMediaProgress();
@@ -384,6 +395,11 @@ export async function refreshMedia() {
 
     if (mTitle) mTitle.textContent = media.title;
     if (mArtist) mArtist.textContent = media.artist ? `${media.artist} (Paused)` : 'Paused on PC';
+    if (isNewTrack) {
+      appState.mediaTitleKey = key;
+      appState.loadedArtUrl = '';
+      loadMediaArt();
+    }
     if (!appState.mediaSeeking && media.position >= 0) {
       mediaBackendPos = media.position;
       mediaBackendTime = Date.now();
@@ -392,6 +408,7 @@ export async function refreshMedia() {
     renderMediaProgress();
   }
 
+  bus.emit('media:updated', media);
   updateCompactStateClasses();
   syncEq();
 }

@@ -163,6 +163,7 @@ export function switchView(viewId, stateClass, winWidth, winHeight) {
     'state-tray', 'state-tray-deck', 'state-sub', 'state-media', 'state-calendar'
   );
   island.classList.add(stateClass);
+  island.classList.toggle('audio-view', viewId === 'view-audio');
   appState.currentView = viewId;
 
   const scale = (SET.appearance && SET.appearance.scale) ? SET.appearance.scale : 125;

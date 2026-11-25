@@ -83,6 +83,7 @@ export function applySettings() {
   island.dataset.theme = validTheme;
   island.setAttribute('data-mode', SET.notch.mode);
   island.setAttribute('data-style', SET.notch.style || 'attached');
+  island.setAttribute('data-eq-style', SET.notch?.eqStyle === 'center' ? 'center' : 'bottom');
   island.setAttribute('data-theme', validTheme);
   const curvedEars = SET.notch && SET.notch.style === 'curved';
   island.classList.toggle('has-curved-ears', !!curvedEars);

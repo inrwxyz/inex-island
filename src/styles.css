@@ -74,13 +74,13 @@ body {
   color: var(--notch-fg);
   border-radius: 0 0 var(--radius) var(--radius);
   border: 1px solid var(--notch-line, var(--line));
-  border-top: none;
+  border-top-width: 0;
   margin-top: 0;
   top: 0;
   transform-origin: top center;
   transition: width 0.55s var(--spring), height 0.55s var(--spring),
               transform 0.28s var(--spring), opacity 0.22s ease,
-              border-color 0.22s ease, background 0.25s ease,
+              background 0.25s ease,
               border-radius 0.4s var(--ease-close),
               top 0.28s var(--spring);   /* zoom is transitioned in the state rules below: the menu is always 1.10 and the pill follows the Notch UI scale, so a switch between them has to animate or the box jumps in size */
   transition-timing-function: initial;
@@ -125,16 +125,13 @@ body {
 }
 /* The faint top highlight line stops at the island edge and made the ears look cut off: no highlight with ears */
 .island.has-curved-ears:not(.state-compact) { box-shadow: none; }
-/* no ears while hidden / intro / status pills / popups that open from the notch (plain pills) */
-.island:is(.smart-hidden, .intro-pre, .biometric-active, .has-status, .state-status, [data-status-active="true"]).has-curved-ears::before,
-.island:is(.smart-hidden, .intro-pre, .biometric-active, .has-status, .state-status, [data-status-active="true"]).has-curved-ears::after,
+/* no ears while hidden / intro / status pills / popups that open from the notch (plain pills), plus media & audio switcher */
+.island:is(.smart-hidden, .intro-pre, .biometric-active, .has-status, .state-status, [data-status-active="true"], .state-media, .state-sub.audio-view).has-curved-ears::before,
+.island:is(.smart-hidden, .intro-pre, .biometric-active, .has-status, .state-status, [data-status-active="true"], .state-media, .state-sub.audio-view).has-curved-ears::after,
 .island.state-compact:is(.bt-hud-active, .alarm-active, .transferring, .has-toast, .incoming-open, .hud-pre, .hud-back).has-curved-ears::before,
 .island.state-compact:is(.bt-hud-active, .alarm-active, .transferring, .has-toast, .incoming-open, .hud-pre, .hud-back).has-curved-ears::after {
   display: none;
 }
-/* media popup: the border is invisible, so the ears sit flush with the panel edge */
-.island.state-media.has-curved-ears::before { left: calc(0px - var(--ear-size) + var(--ear-overlap, 0.5px)); }
-.island.state-media.has-curved-ears::after  { right: calc(0px - var(--ear-size) + var(--ear-overlap, 0.5px)); }
 
 /* Growing = spring (tiny overshoot, Dynamic Island feel). Shrinking = smooth ease-out, no bounce. */
 .island.state-drop, .island.state-control, .island.state-control-deck, .island.state-tray,
@@ -147,17 +144,17 @@ body {
 .island.state-compact {
   transition: width 0.44s var(--ease-close), height 0.44s var(--ease-close),
               border-radius 0.44s var(--ease-close), opacity 0.22s ease,
-              border-color 0.22s ease, background 0.25s ease, top 0.4s var(--ease-close),
+              background 0.25s ease, top 0.4s var(--ease-close),
               zoom 0.44s var(--ease-close);
 }
 /* compact pill growing (hover / media / badges / toast) gets the little spring */
-.island.state-compact:hover:not(.no-hover-expand):not(.timer-live):not(.media-active):not(.transferring):not(.incoming-open):not(.alarm-active):not(.biometric-active):not(.bio-hud):not(.bt-hud-active):not(.has-status):not(.state-status):not([data-status-active="true"]):not(.hud-back):not(.hud-out):not(.hud-pre),
+.island.state-compact:hover:not(.no-hover-expand):not(.timer-live):not(.media-active):not(.transferring):not(.incoming-open):not(.anim-radar-card-open):not(.alarm-active):not(.biometric-active):not(.bio-hud):not(.bt-hud-active):not(.has-status):not(.state-status):not([data-status-active="true"]):not(.hud-back):not(.hud-out):not(.hud-pre),
 .island.state-compact.has-badges, .island.state-compact.media-active,
 .island.state-compact.has-toast, .island.state-compact.transferring,
 .island.state-compact.incoming-open {
   transition: width 0.62s var(--spring-pop), height 0.5s var(--spring-pop),
               border-radius 0.45s var(--ease-close), opacity 0.25s ease,
-              border-color 0.22s ease, background 0.25s ease, top 0.4s var(--ease-close);
+              background 0.25s ease, top 0.4s var(--ease-close);
 }
 
 /* Menu -> pill (media player closing etc.): always the smooth no-bounce close curve.
@@ -165,10 +162,11 @@ body {
    when shrinking it undershoots the target size and bounces back, which showed as a jerk after the
    island had returned to its place. menu-closing is set by switchView() for the length of the shrink. */
 .island.state-compact.menu-closing {
+  border-color: transparent;
   transition: width 0.5s var(--ease-close), height 0.5s var(--ease-close),
               transform 0.32s cubic-bezier(0.16, 1, 0.3, 1),
               border-radius 0.45s var(--ease-close), opacity 0.25s ease,
-              border-color 0.22s ease, background 0.25s ease, top 0.4s var(--ease-close),
+              background 0.25s ease, top 0.4s var(--ease-close),
               zoom 0.5s var(--ease-close);
 }
 
@@ -247,7 +245,7 @@ body {
   color: #f5f5f7;
   backdrop-filter: none;
   border: 1px solid var(--ghost-line);
-  border-top: none;
+  border-top-width: 0;
   box-shadow: none;
 }
 
@@ -260,16 +258,16 @@ body {
 .island.state-compact.media-active {
   width: 192px;
 }
-.island.state-compact:hover:not(.no-hover-expand):not(.timer-live):not(.media-active):not(.transferring):not(.incoming-open):not(.alarm-active):not(.biometric-active):not(.bio-hud):not(.bt-hud-active):not(.has-status):not(.state-status):not([data-status-active="true"]):not(.hud-back):not(.hud-out):not(.hud-pre) {
+.island.state-compact:hover:not(.no-hover-expand):not(.timer-live):not(.media-active):not(.transferring):not(.incoming-open):not(.anim-radar-card-open):not(.alarm-active):not(.biometric-active):not(.bio-hud):not(.bt-hud-active):not(.has-status):not(.state-status):not([data-status-active="true"]):not(.hud-back):not(.hud-out):not(.hud-pre) {
   width: 256px;
 }
 .island.state-compact.incoming-open {
   width: 236px;
 }
 .island.state-compact.transferring {
-  width: 186px;
+  width: 220px;
 }
-.island.state-compact.transferring.xfer-live { width: 226px; }
+.island.state-compact.transferring.xfer-live { width: 220px; }
 .island.state-compact.has-toast {
   width: 196px;
 }
@@ -359,15 +357,16 @@ body {
 .island.state-calendar {
   border-radius: 0 0 var(--radius-menu) var(--radius-menu);
   border: 1px solid var(--line);
-  border-top: none;
+  border-top-width: 0;
   box-shadow: none;
 }
 
-.island.state-drop     { width: 195px; height: 86px; border-style: none dashed dashed dashed; border-top: none; }
+.island.state-drop     { width: 195px; height: 86px; border-style: none dashed dashed dashed; border-top-width: 0; }
 .island.state-control  { width: 312px; height: 288px; }
 .island.state-tray     { width: 312px; height: 214px; }
 .island.state-tray.picker-open { height: 248px; }
 .island.state-sub      { width: 312px; height: 204px; }
+.island.state-sub.audio-view { width: 312px; height: 162px; }
 .island.state-media    { width: 312px; height: 162px; }
 .island.state-media.vol-open { height: 218px; }
 .island.state-calendar { width: 342px; height: 206px; }
@@ -409,7 +408,7 @@ body {
   display: flex;
   flex-direction: column;
 }
-.hidden { display: none !important; }
+.hidden, #island .hidden.hidden { display: none; }
 .sr:not(.ctrl-tile .sr) { display: none; }
 
 /* ==================== 1. COMPACT BAR ==================== */
@@ -457,7 +456,7 @@ body {
   white-space: nowrap;
   transition: opacity 0.2s ease, max-width 0.2s ease;
 }
-.island.state-compact:hover:not(.media-active):not(.transferring):not(.incoming-open):not(.biometric-active):not(.bio-hud):not(.bt-hud-active):not(.has-status):not(.state-status):not([data-status-active="true"]):not(.hud-back):not(.hud-out):not(.hud-pre) .c-hover-info {
+.island.state-compact:hover:not(.media-active):not(.transferring):not(.incoming-open):not(.anim-radar-card-open):not(.biometric-active):not(.bio-hud):not(.bt-hud-active):not(.has-status):not(.state-status):not([data-status-active="true"]):not(.hud-back):not(.hud-out):not(.hud-pre) .c-hover-info {
   opacity: 1;
   max-width: 78px;
 }
@@ -610,7 +609,7 @@ body {
   display: block;
   border-radius: inherit;
 }
-.hidden.art-img { display: none !important; }
+#island .hidden.art-img { display: none; }
 
 /* ==================== 2. DROP PROMPT ==================== */
 .drop-prompt {
@@ -691,7 +690,7 @@ body {
 .ctrl-tile:active, .q-icon-btn:active {
   transform: scale(0.96);
 }
-.ctrl-tile.hidden { display: none !important; }
+#island .ctrl-tile.hidden { display: none; }
 .ctrl-tile.active,
 .ctrl-tile.active:hover {
   background: color-mix(in srgb, var(--menu-fg) 9%, transparent);
@@ -916,6 +915,11 @@ body {
 .icon-ghost-btn.round:hover { background: rgba(150, 150, 160, 0.15); }
 .icon-ghost-btn.spin svg { animation: spin 0.8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+#view-audio { position: relative; }
+#view-audio .subview-header { padding: 9px 14px 4px; position: relative; z-index: 2; }
+#view-audio .smooth-scroll-list { padding: 2px 12px 10px; gap: 4px; position: relative; z-index: 2; }
+#view-audio .list-row-item { padding: 6px 10px; }
 
 .smooth-scroll-list {
   padding: 6px 14px 14px;
@@ -1968,9 +1972,14 @@ body {
 .c-toast.t-phone .c-toast-ico { color: #22c55e; }
 .c-toast.t-unphone .c-toast-ico { color: #94a3b8; }
 
-.c-toast.t-wrong .c-toast-ico {
+.c-toast.t-wrong .c-toast-ico,
+.c-toast.t-error .c-toast-ico {
   color: #ef4444;
 }
+.c-toast.t-warn .c-toast-ico,
+.c-toast.t-alert .c-toast-ico,
+.c-toast.t-cloud .c-toast-ico { color: #ff9f0a; }
+.c-toast.t-info .c-toast-ico { color: #64d2ff; }
 
 
 /* Bluetooth rows: type icon, name + battery under it */
@@ -2101,7 +2110,7 @@ body {
 /* NOTE: Face ID / Touch ID keeps its ORIGINAL look and timing (92px square, 33px radius, original spring). */
 .island.state-compact.biometric-active {
   width: 92px; height: 92px; border-radius: 33px; top: 10px;
-  background: var(--notch-bg); color: var(--notch-fg); border: 0;
+  background: var(--notch-bg); color: var(--notch-fg); border-color: transparent;
   box-shadow: none;
   transition: width 0.6s cubic-bezier(0.34, 1.5, 0.64, 1), height 0.6s cubic-bezier(0.34, 1.5, 0.64, 1),
               top 0.5s cubic-bezier(0.22, 1, 0.36, 1), border-radius 0.5s cubic-bezier(0.22, 1, 0.36, 1);
@@ -2188,7 +2197,7 @@ body {
 /* ---------- Device HUD (Bluetooth connect / charger) ---------- */
 .island.state-compact.bt-hud-active {
   width: 220px; height: 37px; border-radius: 19px; top: 7px;
-  background: var(--notch-bg); color: var(--notch-fg); border: 0;
+  background: var(--notch-bg); color: var(--notch-fg); border-color: transparent;
   box-shadow: none;
   transition: width 0.65s var(--spring-pop), height 0.6s var(--spring-pop),
               top 0.45s var(--ease-close), border-radius 0.5s var(--ease-close);
@@ -2269,7 +2278,7 @@ body {
   top: 7px;
   background: var(--notch-bg);
   color: var(--notch-fg);
-  border: 0;
+  border-color: transparent;
   box-shadow: 0 0 0 1px rgba(255, 159, 10, 0.4);   /* amber border only, no glow */
   transition: width 0.65s var(--spring-pop), height 0.6s var(--spring-pop),
               top 0.45s var(--ease-close), border-radius 0.5s var(--ease-close);
@@ -2675,7 +2684,7 @@ body {
 .drop-body.has-active > .drop-state-box { flex: 1; min-height: 0; align-items: stretch; }
 
 .qs-active { display: flex; flex-direction: column; gap: 6px; text-align: left; }
-.qs-active.hidden { display: none !important; }
+#island .qs-active.hidden { display: none; }
 
 .qs-status-line { display: flex; align-items: center; gap: 6px; min-width: 0; padding: 0 2px; flex: none; }
 .qs-status-line .dot { width: 6px; height: 6px; flex: none; }
@@ -2731,7 +2740,7 @@ body {
 /* same width / height / corners / spring as .bt-hud-active; attached notch follows Settings > Corner Roundness */
 .island.state-compact:is(.transferring, .has-toast, .incoming-open):not(.biometric-active):not(.bt-hud-active):not(.alarm-active) {
   width: 220px; height: 37px; border-radius: 19px; top: 7px;
-  background: var(--notch-bg); color: var(--notch-fg); border: 0;
+  background: var(--notch-bg); color: var(--notch-fg); border-color: transparent;
   box-shadow: none;
   transition: width 0.65s var(--spring-pop), height 0.6s var(--spring-pop),
               top 0.45s var(--ease-close), border-radius 0.5s var(--ease-close);
@@ -2783,7 +2792,7 @@ body {
   --i: 0;
 }
 .island:not(.state-compact).has-rail .drop-rail { display: flex; animation: railIn 0.34s var(--spring) backwards; }
-.island.state-compact .drop-rail { display: none !important; }
+#island.island.state-compact .drop-rail { display: none; }
 @keyframes railIn { from { opacity: 0; transform: translateX(8px); } to { opacity: 1; transform: none; } }
 .drop-rail-ind {
   position: absolute; left: 3px; top: 3px; width: 28px; height: 28px; border-radius: 50%;
@@ -2846,7 +2855,7 @@ body {
               zoom 0.55s var(--spring-menu);
   border-radius: 0 0 var(--radius-menu) var(--radius-menu);
   border: 1px solid var(--line);
-  border-top: none;
+  border-top-width: 0;
   box-shadow: none;
 }
 /* Transparent glass */
@@ -2875,7 +2884,7 @@ body {
 #view-control-deck .mx-tile {
   background: var(--color-tile-bg, color-mix(in srgb, var(--menu-fg) 9%, transparent));
 }
-#view-control-deck [data-deck].hidden { display: none !important; }
+#island #view-control-deck [data-deck].hidden { display: none; }
 
 /* Top strip (24px) */
 .mx-top { flex: none; height: 24px; display: flex; align-items: center; justify-content: space-between; padding: 0 2px; }
@@ -2895,13 +2904,22 @@ body {
 .mx-weather:hover { color: var(--menu-fg); background: color-mix(in srgb, var(--menu-fg) 8%, transparent); transform: translateY(-1px) scale(1.06); }
 .mx-weather:active { transform: scale(0.94); transition-duration: 0.08s; }
 .mx-battery {
-  display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 8px;
-  border-radius: 11px; font-size: 10px; font-weight: 700; color: var(--menu-fg);
-  background: color-mix(in srgb, var(--menu-fg) 9%, transparent);
-  transition: background 0.16s ease, transform 0.16s cubic-bezier(0.16, 1, 0.3, 1);
+  display: inline-flex; align-items: center; gap: 3px; height: 22px; padding: 0 4px;
+  border-radius: 6px; font-size: 9.5px; font-weight: 650; font-variant-numeric: tabular-nums;
+  color: var(--menu-fg);
+  background: transparent;
+  transition: background 0.16s ease, opacity 0.16s ease, transform 0.16s cubic-bezier(0.16, 1, 0.3, 1);
 }
-.mx-battery:hover { background: color-mix(in srgb, var(--menu-fg) 14%, transparent); transform: translateY(-1px) scale(1.06); }
-#deck-bat-ico { display: inline-flex; align-items: center; gap: 1px; }
+.mx-battery.charging { color: var(--menu-fg); }
+.mx-battery.low { opacity: 0.72; }
+.mx-battery:hover { background: color-mix(in srgb, var(--menu-fg) 8%, transparent); transform: translateY(-1px) scale(1.04); }
+#deck-bat-ico { position: relative; display: inline-flex; align-items: center; justify-content: center; flex: none; }
+#deck-bat-ico .bat-body { display: block; opacity: 0.92; }
+#deck-bat-ico .bat-bolt {
+  position: absolute; left: 42%; top: 50%; transform: translate(-50%, -50%);
+  color: var(--menu-fg); stroke: var(--menu-bg); stroke-width: 3.6px; stroke-linejoin: round;
+  paint-order: stroke fill; pointer-events: none;
+}
 .mx-icon-btn,
 #view-control-deck .mx-icon-btn {
   width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center;
@@ -2928,7 +2946,7 @@ body {
   width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: space-between;
   transition: opacity 0.16s ease;
 }
-.mx-right-panel.hidden { display: none !important; }
+#island .mx-right-panel.hidden { display: none; }
 
 /* In-place Sub-panel header & mount */
 .mx-sub-bar {
@@ -3149,7 +3167,7 @@ body {
   min-width: 0;
   box-sizing: border-box;
 }
-.mx-stat-bt.hidden { display: none !important; }
+#island .mx-stat-bt.hidden { display: none; }
 .mx-bt-ico {
   flex: none;
   width: 24px;
@@ -3359,7 +3377,7 @@ body {
 .src-corner.src-apple   { background: #fa243c; color: #ffffff; }
 .src-corner.src-vlc     { background: #ff6b00; color: #ffffff; }
 .src-corner.src-browser { background: #1d6ef2; color: #ffffff; }
-.src-corner.hidden { display: none !important; }
+#island .src-corner.hidden { display: none; }
 
 /* ============================================================
    Resting compact pill: native SF-style icon + metric
@@ -3440,9 +3458,10 @@ body {
   transform: perspective(80px) rotateY(-16deg) rotateX(8deg);
 }
 
-/* Notch-opened media: no edge, blend into the player. */
-.island.state-media {
-  border: none;
+/* Notch-opened media & sound device switcher: no edge, blend into the panel. */
+.island.state-media,
+.island.state-sub.audio-view {
+  border-color: transparent;
   background: #060608;
   box-shadow: none;
 }
@@ -3464,7 +3483,8 @@ body {
 /* ==================== NOTCH MEDIA POPUP: follows Island Color like the Control Deck media card ==================== */
 /* Surface, text and ears all come from the menu colour (= Island Color). The album glow stays, but fades out towards the top edge
    so the bezel ears (plain menu colour) meet the panel without a visible seam. */
-.island.state-media {
+.island.state-media,
+.island.state-sub.audio-view {
   background: var(--menu-bg);
   color: var(--menu-fg);
 }
@@ -3500,11 +3520,10 @@ body {
   animation-delay: 0s;
 }
 
-/* The thin light "line" that flashed when the island shrank back to the notch:
-   "border: none / 0" resets the border colour to currentColor (the light menu text colour), and the 0.22s border-color transition then
-   faded that colour out on the notch edge. Keep the border colour transparent in every popup state so there is nothing to fade. */
+/* Keep the notch border transparent across every HUD, status popup, and return transition so no light edge flashes while shrinking. */
 .island.state-media,
-.island.state-compact:is(.bt-hud-active, .alarm-active, .transferring, .has-toast, .incoming-open, .biometric-active) {
+.island.state-sub.audio-view,
+.island.state-compact:is(.bt-hud-active, .alarm-active, .transferring, .has-toast, .incoming-open, .biometric-active, .bio-hud, .wellness-hud-active, .anim-radar-card-open, .hud-pre, .hud-out, .hud-back, .menu-closing) {
   border-color: transparent;
 }
 
@@ -3537,7 +3556,7 @@ body {
   font-size: 8px; font-weight: 700; line-height: 12px; text-align: center;
   background: var(--deck-accent, #0a84ff); color: var(--deck-accent-fg, #fff);
 }
-.mx-tray-badge.hidden { display: none !important; }
+#island .mx-tray-badge.hidden { display: none; }
 
 /* ===== Control Deck: Tray + Inex Drop two-panel view (500 x 172) ===== */
 .island.state-tray-deck { width: 500px; height: 172px; }
@@ -3548,7 +3567,7 @@ body {
               zoom 0.55s var(--spring-menu);
   border-radius: 0 0 var(--radius-menu) var(--radius-menu);
   border: 1px solid var(--line);
-  border-top: none;
+  border-top-width: 0;
   box-shadow: none;
 }
 .island[data-menu="transparent"].state-tray-deck {
@@ -3586,7 +3605,7 @@ body {
   flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
   font-size: 11.5px; font-weight: 600; color: var(--menu-fg-dim);
 }
-.mt-empty.hidden, .mt-filled.hidden { display: none !important; }
+#island .mt-empty.hidden, #island .mt-filled.hidden { display: none; }
 .mt-filled { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 8px 10px 8px; gap: 6px; }
 .mt-head { flex: none; display: flex; align-items: center; justify-content: space-between; font-size: 11px; font-weight: 600; color: var(--menu-fg-dim); }
 .mt-files { flex: 1; min-height: 0; display: flex; gap: 8px; overflow-x: auto; overflow-y: hidden; align-items: stretch; scrollbar-width: none; }
@@ -3878,8 +3897,13 @@ body {
 :root[data-notch-tone="light"] .island:not([data-mode="ghost"]) .c-toast.t-phone .c-toast-ico,
 :root[data-notch-tone="light"] .island:not([data-mode="ghost"]) .c-toast.t-done .c-toast-ico { color: #16a34a; }
 :root[data-notch-tone="light"] .island:not([data-mode="ghost"]) .c-toast.t-low .c-toast-ico,
-:root[data-notch-tone="light"] .island:not([data-mode="ghost"]) .c-toast.t-wrong .c-toast-ico { color: #dc2626; }
-:root[data-notch-tone="light"] .island:not([data-mode="ghost"]) .c-toast.t-lock .c-toast-ico { color: #d97706; }
+:root[data-notch-tone="light"] .island:not([data-mode="ghost"]) .c-toast.t-wrong .c-toast-ico,
+:root[data-notch-tone="light"] .island:not([data-mode="ghost"]) .c-toast.t-error .c-toast-ico { color: #dc2626; }
+:root[data-notch-tone="light"] .island:not([data-mode="ghost"]) .c-toast.t-lock .c-toast-ico,
+:root[data-notch-tone="light"] .island:not([data-mode="ghost"]) .c-toast.t-warn .c-toast-ico,
+:root[data-notch-tone="light"] .island:not([data-mode="ghost"]) .c-toast.t-alert .c-toast-ico,
+:root[data-notch-tone="light"] .island:not([data-mode="ghost"]) .c-toast.t-cloud .c-toast-ico { color: #d97706; }
+:root[data-notch-tone="light"] .island:not([data-mode="ghost"]) .c-toast.t-info .c-toast-ico { color: #0284c7; }
 :root[data-notch-tone="light"] .island:not([data-mode="ghost"]) .c-toast.t-unphone .c-toast-ico { color: #64748b; }
 :root[data-notch-tone="light"] .island:not([data-mode="ghost"]) .c-toast.t-mic .c-toast-ico { color: #0891b2; }
 :root[data-notch-tone="light"] .island:not([data-mode="ghost"]) .c-toast.t-mic .c-toast-ico svg { filter: drop-shadow(0 0 4px rgba(8, 145, 178, 0.45)); }
@@ -3923,7 +3947,7 @@ body {
   box-sizing: border-box; border-radius: 11px; isolation: isolate;
   background: color-mix(in srgb, var(--menu-fg) 9%, transparent);
 }
-.mx-view-switcher.hidden { display: none !important; }
+#island .mx-view-switcher.hidden { display: none; }
 .mx-view-switcher::before {
   content: ""; position: absolute; top: 2px; bottom: 2px; left: 2px; width: calc(50% - 2px); z-index: -1;
   border-radius: 9px; background: color-mix(in srgb, var(--menu-fg) 20%, transparent);
@@ -4174,23 +4198,10 @@ body {
   padding: 7px 9px 8px;
   gap: 3px;
   animation: none;
-  transition: background 0.35s ease, border-color 0.35s ease;
-  background: linear-gradient(180deg, var(--wxd-card-a, #161b26), var(--wxd-card-b, #0c0f16));
-  border: 1px solid var(--wxd-card-border, rgba(255, 255, 255, 0.08));
+  background: #000;
+  border: 1px solid rgba(255, 255, 255, 0.09);
   border-radius: 14px;
 }
-
-/* Atmospheric weather card palettes for all 3 cards */
-#mx-weather-body.k-rain.is-day > .mx-widget-card   { --wxd-card-a: #1c2738; --wxd-card-b: #0d141e; --wxd-card-border: rgba(140, 175, 220, 0.16); }
-#mx-weather-body.k-rain.is-night > .mx-widget-card { --wxd-card-a: #131d2e; --wxd-card-b: #080d16; --wxd-card-border: rgba(115, 150, 205, 0.14); }
-#mx-weather-body.k-clear.is-day > .mx-widget-card  { --wxd-card-a: #182845; --wxd-card-b: #0c1526; --wxd-card-border: rgba(150, 195, 255, 0.18); }
-#mx-weather-body.k-stars > .mx-widget-card,
-#mx-weather-body.k-clear.is-night > .mx-widget-card { --wxd-card-a: #111a30; --wxd-card-b: #080d1c; --wxd-card-border: rgba(130, 155, 225, 0.15); }
-#mx-weather-body.k-cloud.is-day > .mx-widget-card  { --wxd-card-a: #202735; --wxd-card-b: #10141c; --wxd-card-border: rgba(175, 190, 215, 0.14); }
-#mx-weather-body.k-cloud.is-night > .mx-widget-card { --wxd-card-a: #141926; --wxd-card-b: #0a0d14; --wxd-card-border: rgba(135, 150, 175, 0.12); }
-#mx-weather-body.k-snow.is-day > .mx-widget-card   { --wxd-card-a: #1e2838; --wxd-card-b: #0e141e; --wxd-card-border: rgba(195, 215, 245, 0.18); }
-#mx-weather-body.k-snow.is-night > .mx-widget-card { --wxd-card-a: #131b28; --wxd-card-b: #090e16; --wxd-card-border: rgba(155, 180, 215, 0.14); }
-#mx-weather-body.k-fog > .mx-widget-card           { --wxd-card-a: #262930; --wxd-card-b: #111317; --wxd-card-border: rgba(185, 190, 200, 0.14); }
 #mx-weather-body .wg-head > span { max-width: 92px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* TEMP + AQI card (second) */
@@ -4370,17 +4381,344 @@ body {
 @keyframes wxdBoltA { 0% { opacity: 0; } 6% { opacity: .62; } 20% { opacity: .12; } 30% { opacity: .5; } 55% { opacity: 0; } 100% { opacity: 0; } }
 
 /* no animation: static scene (sun / moon, colours and textures still correct) */
-@media (prefers-reduced-motion: reduce) { .wxd-bg i, .wxd-bg b, .wxd-bg i::before, .wxd-bg i::after, .wxd-bg b::before, .wxd-bg b::after { animation: none !important; transition: none !important; } }
-.island.no-anim .wxd-bg i, .island.no-anim .wxd-bg b, .island.no-anim .wxd-bg i::before, .island.no-anim .wxd-bg i::after, .island.no-anim .wxd-bg b::before, .island.no-anim .wxd-bg b::after { animation: none !important; transition: none !important; }
+@media (prefers-reduced-motion: reduce) { #island .wxd-bg i, #island .wxd-bg b, #island .wxd-bg i::before, #island .wxd-bg i::after, #island .wxd-bg b::before, #island .wxd-bg b::after { animation: none; transition: none; } }
+#island.island.no-anim .wxd-bg i, #island.island.no-anim .wxd-bg b, #island.island.no-anim .wxd-bg i::before, #island.island.no-anim .wxd-bg i::after, #island.island.no-anim .wxd-bg b::before, #island.island.no-anim .wxd-bg b::after { animation: none; transition: none; }
 /* sunny day = bright blue sky: keep the Sun card text readable */
 #mx-weather-body.k-clear.is-day .wxd-time-val { text-shadow: 0 1px 3px rgba(10,40,90,.55); }
 
 /* Pause all weather deck background animations when deck is closed to save RAM and GPU */
-#view-control-deck:not(.weather-open) .wxd-bg i,
-#view-control-deck:not(.weather-open) .wxd-bg b,
-.island:not(.state-weather) .wxd-bg i,
-.island:not(.state-weather) .wxd-bg b {
-  animation-play-state: paused !important;
+#island #view-control-deck:not(.weather-open) .wxd-bg i,
+#island #view-control-deck:not(.weather-open) .wxd-bg b,
+#island.island:not(.state-control-deck) .wxd-bg i,
+#island.island:not(.state-control-deck) .wxd-bg b {
+  animation-play-state: paused;
+}
+
+/* Feature: animations/animations.css */
+/* Animations System CSS: transform, opacity, and SVG stroke-dashoffset only. */
+
+.anim-stage {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 90;
+  overflow: visible;
+}
+
+.anim-fx {
+  position: fixed;
+  pointer-events: none;
+  z-index: 95;
+}
+
+/* Radar Drop expanded Accept / Decline card inside island (matches Floating or Bezel style) */
+.island.state-compact.anim-radar-card-open:not(.smart-hidden):not(.biometric-active):not(.alarm-active),
+.island.state-compact.anim-radar-card-open:not(.smart-hidden):not(.biometric-active):not(.alarm-active):hover {
+  width: 268px;
+  height: 104px;
+  border-color: transparent;
+  transition: width 0.55s var(--spring-pop), height 0.5s var(--spring-pop),
+              top 0.4s var(--ease-close), border-radius 0.45s var(--ease-close);
+}
+.island[data-style="floating"].state-compact.anim-radar-card-open:not(.smart-hidden):not(.biometric-active):not(.alarm-active) {
+  top: 7px;
+  border-radius: 22px;
+}
+.island:not([data-style="floating"]).state-compact.anim-radar-card-open:not(.smart-hidden):not(.biometric-active):not(.alarm-active) {
+  top: 0;
+  border-radius: 0 0 22px 22px;
+}
+.island.state-compact.anim-radar-card-open .compact-bar {
+  padding: 0;
+  justify-content: center;
+  height: 100%;
+  pointer-events: auto;
+}
+.island.state-compact.anim-radar-card-open :is(.c-left, .c-center, .c-right, .c-bt-hud, .c-biometric-hud, .c-alarm-hud, .c-timer-chip) {
+  display: none;
+}
+.island.state-compact.anim-radar-card-open.has-curved-ears::before,
+.island.state-compact.anim-radar-card-open.has-curved-ears::after {
+  display: none;
+}
+.anim-radar-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 9px;
+  width: 100%;
+  height: 100%;
+  padding: 10px 14px;
+  box-sizing: border-box;
+  pointer-events: auto;
+  position: relative;
+  z-index: 4;
+  animation: animRadarCardIn 0.34s var(--ease-close) both;
+}
+@keyframes animRadarCardIn {
+  from { opacity: 0; transform: scale(0.92); }
+  to { opacity: 1; transform: scale(1); }
+}
+.anim-rc-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.anim-rc-ico {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: linear-gradient(#5ac8fa, #0a84ff);
+  color: #ffffff;
+  display: grid;
+  place-items: center;
+}
+.anim-rc-ico svg {
+  width: 16px;
+  height: 16px;
+}
+.anim-rc-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  text-align: left;
+}
+.anim-rc-meta b {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--notch-fg, #f5f5f7);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.anim-rc-meta span {
+  font-size: 9.5px;
+  font-weight: 500;
+  color: var(--notch-fg-dim, #8e8e98);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.anim-rc-actions {
+  display: flex;
+  gap: 8px;
+}
+.anim-rc-btn {
+  flex: 1;
+  border-width: 0;
+  padding: 6px 0;
+  border-radius: 9px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  pointer-events: auto;
+  position: relative;
+  z-index: 5;
+  transition: transform 0.14s ease, opacity 0.14s ease, filter 0.14s ease;
+}
+.anim-rc-btn:hover {
+  filter: brightness(1.08);
+}
+.anim-rc-btn.decline {
+  background: rgba(255, 255, 255, 0.11);
+  color: var(--notch-fg, #f5f5f7);
+}
+.anim-rc-btn.accept {
+  background: #30d158;
+  color: #ffffff;
+}
+.anim-rc-btn.is-pressed {
+  transform: scale(0.88);
+}
+
+/* Tray Soft Bounce falling file card */
+.anim-drop-doc {
+  width: 26px;
+  height: 32px;
+  border-radius: 5px;
+  background: linear-gradient(160deg, #ffffff, #cfe0ff);
+  display: grid;
+  place-items: center;
+}
+.anim-drop-doc::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 8px;
+  height: 8px;
+  background: #0a84ff;
+  border-radius: 0 5px 0 4px;
+}
+.anim-doc-tag {
+  font-size: 7px;
+  font-weight: 700;
+  color: #0a84ff;
+  letter-spacing: 0.02em;
+}
+
+/* Radar Drop expanding sonar rings anchored cleanly OUTSIDE the island (Floating or Curved/Bezel) */
+.anim-radar-ring {
+  border: 2px solid #64d2ff;
+  opacity: 0;
+  box-sizing: border-box;
+}
+.anim-radar-ring.is-bezel {
+  border-top-width: 0;
+  border-radius: 0 0 18px 18px;
+  transform-origin: 50% 0%;
+}
+.anim-radar-ring.is-floating {
+  border-radius: 999px;
+  transform-origin: 50% 18%;
+}
+
+/* Flying document card (Receive downward drop animations) */
+.anim-fly-doc {
+  width: 44px;
+  height: 54px;
+  border-radius: 7px;
+  background: linear-gradient(160deg, #ffffff, #dfe8ff);
+  display: grid;
+  place-items: center;
+  color: #0a84ff;
+  font-size: 9px;
+  font-weight: 700;
+}
+.anim-fly-doc::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 13px;
+  height: 13px;
+  background: #0a84ff;
+  border-radius: 0 7px 0 7px;
+}
+
+/* Launch Beam inside #c-transfer-anim: keeps identical 220x37/40 status HUD size */
+.island.anim-send-beam .xfer-ring-wrap,
+.island.anim-send-beam .xfer-text {
+  display: none;
+}
+.anim-beam-ui {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 auto;
+  min-width: 0;
+  padding-right: 4px;
+}
+.anim-b-disc {
+  width: 21px;
+  height: 21px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  flex: none;
+}
+.anim-b-disc svg {
+  width: 11px;
+  height: 11px;
+}
+.anim-b-disc.is-src {
+  background: rgba(10, 132, 255, 0.22);
+  color: #4da3ff;
+}
+.anim-b-disc.is-dst {
+  background: rgba(191, 90, 242, 0.22);
+  color: #bf5af2;
+}
+.anim-b-track {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 56px;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+}
+.anim-b-fill {
+  position: absolute;
+  inset: 0;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #0a84ff, #bf5af2, #ff375f);
+  transform-origin: left center;
+  transform: scaleX(0);
+  transition: transform 0.14s linear;
+}
+.anim-b-sheen {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 30px;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.85), transparent);
+  animation: animBeamSheen 0.85s linear infinite;
+}
+@keyframes animBeamSheen {
+  from { transform: translateX(-32px); }
+  to { transform: translateX(102px); }
+}
+.anim-b-pct {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--notch-fg, #f5f5f7);
+  font-variant-numeric: tabular-nums;
+  min-width: 28px;
+}
+
+.anim-confetti-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+}
+
+/* Edge Trace SVG perimeter overlay (overflow visible so Floating/Attached stroke never clips) */
+.island.anim-edge-trace {
+  overflow: visible;
+}
+.island.anim-edge-trace > .view {
+  overflow: hidden;
+  border-radius: inherit;
+}
+.anim-edge-svg {
+  position: absolute;
+  overflow: visible;
+  pointer-events: none;
+  z-index: 120;
+}
+.anim-trace-track {
+  stroke: rgba(255, 255, 255, 0.12);
+  stroke-width: 2;
+}
+.anim-trace-fg {
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.14s linear;
+}
+.anim-trace-pulse {
+  stroke-width: 2.8;
+  stroke-linecap: round;
+  opacity: 0.72;
+  animation: animTraceSweep 1.35s linear infinite;
+}
+.island.anim-trace-done .anim-trace-pulse {
+  opacity: 0;
+}
+@keyframes animTraceSweep {
+  from { stroke-dashoffset: 100; }
+  to { stroke-dashoffset: -100; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .anim-b-sheen,
+  .anim-trace-pulse {
+    animation: none;
+  }
 }
 
 /* Feature: battery/battery.css */
@@ -4390,17 +4728,20 @@ body {
 }
 
 .mx-battery #deck-bat-ico {
+  position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 2px;
+  justify-content: center;
+  flex: none;
 }
 
 .mx-battery.charging {
-  color: #30d158;
+  color: var(--menu-fg);
 }
 
 .mx-battery.low {
-  color: #ff453a;
+  color: var(--menu-fg);
+  opacity: 0.72;
 }
 
 /* Feature: equalizer/equalizer.css */
@@ -4443,6 +4784,201 @@ body {
 #view-media .m-eq span {
   background: var(--menu-fg);
 }
+
+.island[data-eq-style="center"] .c-equalizer,
+.island[data-eq-style="center"] .m-eq {
+  align-items: center;
+}
+.island[data-eq-style="center"] .c-equalizer span,
+.island[data-eq-style="center"] .m-eq span {
+  transform-origin: 50% 50%;
+}
+
+/* Feature: media-glass/media-glass.css */
+/* Glass-style media card & sound switcher. Only active while #view-media / #view-audio has .mgl-mode (setting notch.mediaCard = glass).
+   Independent frosted surface (never synced with notchColor); Floating keeps rounded pill, Bezel/Curved keep clean Classic corners without ears. */
+
+#view-media.mgl-mode > :not(.mgl-card) { display: none; }
+#view-media.mgl-mode::after { display: none; }
+#view-media:not(.mgl-mode) .mgl-card { display: none; }
+#view-audio:not(.mgl-mode) .mgl-audio-bg { display: none; }
+
+/* Shell: independent transparent glass container preserving exact same open/close, corners & height transitions as Classic */
+#island.mgl-on:is(.state-media, .state-sub.audio-view) {
+  background: transparent;
+  color: #fff;
+  border-color: transparent;
+  box-shadow: none;
+}
+#island.mgl-on:is(.state-media, .state-sub.audio-view):not([data-style="floating"]),
+#island.mgl-on:is(.state-media, .state-sub.audio-view):not([data-style="floating"]) :is(.mgl-card, .mgl-audio-bg) {
+  border-radius: 0 0 var(--radius-menu) var(--radius-menu);
+}
+#island[data-style="floating"].mgl-on:is(.state-media, .state-sub.audio-view),
+#island[data-style="floating"].mgl-on:is(.state-media, .state-sub.audio-view) :is(.mgl-card, .mgl-audio-bg) {
+  border-radius: 22px;
+}
+
+.mgl-card,
+.mgl-audio-bg {
+  --mgl-spring: cubic-bezier(.2, .9, .25, 1.12);
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  box-sizing: border-box;
+  color: #fff;
+  background: rgba(14, 10, 24, .78);
+  border: 1px solid rgba(255, 255, 255, .12);
+  border-top-width: 0;
+  font-family: inherit;
+  user-select: none;
+}
+#island[data-style="floating"].mgl-on :is(.mgl-card, .mgl-audio-bg) {
+  border-top-width: 1px;
+}
+.mgl-audio-bg { z-index: 0; pointer-events: none; }
+
+/* Isolated static frosted glass & art layer (no live backdrop-filter avoids DWM/GPU process texture growth) */
+.mgl-bg {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+  contain: strict;
+}
+.mgl-amb,
+.mgl-art,
+.mgl-shade { position: absolute; inset: 0; pointer-events: none; }
+
+.mgl-amb {
+  background:
+    radial-gradient(circle at 30% 35%, rgba(var(--amb, 96, 78, 165), .78) 0%, transparent 60%),
+    radial-gradient(circle at 78% 70%, rgba(var(--amb, 96, 78, 165), .56) 0%, transparent 62%);
+  opacity: 1;
+  transition: opacity .5s ease;
+}
+.mgl-art {
+  background-size: cover;
+  background-position: center;
+  transform: scale(1.12);
+  filter: blur(5px) saturate(1.15);
+  opacity: 0;
+  transition: opacity .5s ease;
+  will-change: opacity;
+}
+.mgl-bg.mgl-has-art .mgl-art,
+.mgl-has-art .mgl-art { opacity: .62; }
+.mgl-bg.mgl-has-art .mgl-amb,
+.mgl-has-art .mgl-amb { opacity: 0; }
+.mgl-shade {
+  background: linear-gradient(180deg, rgba(8, 4, 16, .45) 0%, rgba(8, 4, 16, .20) 55%, rgba(8, 4, 16, .34) 100%);
+}
+
+#view-audio.mgl-mode { color: #fff; }
+#view-audio.mgl-mode .list-row-item {
+  background: rgba(255, 255, 255, .10);
+  border-color: rgba(255, 255, 255, .14);
+  color: #fff;
+}
+#view-audio.mgl-mode .list-row-item:hover { background: rgba(255, 255, 255, .16); }
+#view-audio.mgl-mode .list-row-item.on {
+  border-color: rgba(255, 255, 255, .45);
+  background: rgba(255, 255, 255, .18);
+}
+#view-audio.mgl-mode .icon-ghost-btn.round { border-color: rgba(255, 255, 255, .24); }
+
+/* Header: pinned source logo in top-left corner + artist on top + song title below (never scrolls logo) */
+.mgl-head {
+  position: absolute; left: 16px; right: 16px; top: 11px; height: 34px; z-index: 2;
+  display: flex; align-items: center; gap: 10px;
+}
+.mgl-src {
+  width: 30px; height: 30px; flex: none; border-radius: 9px;
+  display: grid; place-items: center;
+  background: rgba(255, 255, 255, .10);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .16);
+}
+.mgl-src svg { width: 17px; height: 17px; display: block; }
+.mgl-meta { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.mgl-head-top {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  font-size: 10px; line-height: 13px; color: rgba(255, 255, 255, .74);
+}
+.mgl-artist-txt {
+  flex: 1; min-width: 0; font-weight: 500;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.mgl-dev {
+  flex: none; max-width: 96px; font-size: 9px; font-weight: 600;
+  color: rgba(255, 255, 255, .56); letter-spacing: .01em;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.mgl-now { position: relative; height: 18px; overflow: hidden; }
+.mgl-now.mgl-scroll {
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 7%, #000 92%, transparent 100%);
+          mask-image: linear-gradient(90deg, transparent 0, #000 7%, #000 92%, transparent 100%);
+}
+.mgl-track {
+  position: absolute; left: 0; top: 0; display: flex; white-space: nowrap; will-change: transform;
+}
+.mgl-now.mgl-scroll .mgl-track { animation: mgl-slide var(--mgl-dur, 9s) linear infinite; }
+.mgl-title-txt {
+  padding-right: 36px; font-size: 13px; font-weight: 650; line-height: 18px; color: #fff;
+}
+.mgl-now:not(.mgl-scroll) .mgl-title-txt { padding-right: 0; }
+@keyframes mgl-slide { from { transform: translateX(0); } to { transform: translateX(var(--mgl-shift, -300px)); } }
+
+/* Progress hills & seek scrub (padded 8px horizontally so pink thumb glow never clips at left/right edges) */
+.mgl-prog {
+  position: absolute; left: 8px; right: 8px; top: 45px; height: 28px;
+  z-index: 2; touch-action: none; cursor: pointer; contain: strict;
+}
+.mgl-prog canvas { width: 100%; height: 100%; display: block; }
+.mgl-times {
+  position: absolute; left: 16px; right: 16px; top: 79px; z-index: 2; display: flex; justify-content: space-between;
+  font-size: 9.5px; line-height: 11px; color: rgba(255, 255, 255, .82); font-variant-numeric: tabular-nums;
+}
+
+/* Playback controls */
+.mgl-ctrls {
+  position: absolute; left: 0; right: 0; top: 100px; z-index: 3;
+  display: flex; justify-content: center; align-items: center; gap: 11px;
+}
+.mgl-b {
+  width: 36px; height: 36px; padding: 0; border: 0; border-radius: 50%; color: #fff; cursor: pointer;
+  display: grid; place-items: center; background: rgba(255, 255, 255, .16);
+  transition: transform .12s, background .2s;
+}
+.mgl-b:active { transform: scale(.9); }
+.mgl-b svg { width: 16px; height: 16px; }
+.mgl-b.mgl-ghost { width: 32px; height: 32px; background: transparent; }
+.mgl-b.mgl-ghost.mgl-on { background: rgba(255, 255, 255, .2); }
+.mgl-b.mgl-play { width: 40px; height: 40px; background: rgba(255, 255, 255, .24); }
+.mgl-b.mgl-play svg { width: 18px; height: 18px; }
+.mgl-b.mgl-muted { opacity: .6; }
+
+/* Inline volume slider row (no separate extra bottom card) */
+.mgl-vol {
+  position: absolute; left: 18px; right: 18px; top: 164px; height: 34px; z-index: 3;
+  display: flex; align-items: center; gap: 10px;
+  opacity: 0; transform: translateY(10px) scale(.94); transform-origin: center top; pointer-events: none;
+  transition: opacity .25s ease, transform .5s var(--mgl-spring);
+}
+.mgl-vol-open .mgl-vol { opacity: 1; transform: none; pointer-events: auto; transition-delay: .08s; }
+.mgl-vol svg { width: 15px; height: 15px; flex: none; opacity: .9; }
+.mgl-vtrack {
+  position: relative; flex: 1; height: 8px; border-radius: 6px; background: rgba(255, 255, 255, .22);
+  cursor: pointer; touch-action: none;
+}
+.mgl-vfill { position: absolute; left: 0; top: 0; bottom: 0; width: 0; border-radius: 6px; background: rgba(255, 255, 255, .92); }
+.mgl-vthumb {
+  position: absolute; top: 50%; left: 0; width: 16px; height: 16px; border-radius: 50%; background: #fff;
+  transform: translate(-50%, -50%); box-shadow: 0 1px 6px rgba(0, 0, 0, .35); transition: transform .15s;
+}
+.mgl-vtrack:active .mgl-vthumb { transform: translate(-50%, -50%) scale(1.2); }
+.mgl-vval { width: 30px; text-align: right; font-size: 10.5px; font-weight: 600; font-variant-numeric: tabular-nums; opacity: .9; }
 
 /* Feature: privacy-dot/privacy-dot.css */
 /* Privacy Dot Feature CSS */

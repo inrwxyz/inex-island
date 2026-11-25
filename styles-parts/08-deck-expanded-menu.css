@@ -8,7 +8,7 @@
               zoom 0.55s var(--spring-menu);
   border-radius: 0 0 var(--radius-menu) var(--radius-menu);
   border: 1px solid var(--line);
-  border-top: none;
+  border-top-width: 0;
   box-shadow: none;
 }
 /* Transparent glass */
@@ -37,7 +37,7 @@
 #view-control-deck .mx-tile {
   background: var(--color-tile-bg, color-mix(in srgb, var(--menu-fg) 9%, transparent));
 }
-#view-control-deck [data-deck].hidden { display: none !important; }
+#island #view-control-deck [data-deck].hidden { display: none; }
 
 /* Top strip (24px) */
 .mx-top { flex: none; height: 24px; display: flex; align-items: center; justify-content: space-between; padding: 0 2px; }
@@ -57,13 +57,22 @@
 .mx-weather:hover { color: var(--menu-fg); background: color-mix(in srgb, var(--menu-fg) 8%, transparent); transform: translateY(-1px) scale(1.06); }
 .mx-weather:active { transform: scale(0.94); transition-duration: 0.08s; }
 .mx-battery {
-  display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 8px;
-  border-radius: 11px; font-size: 10px; font-weight: 700; color: var(--menu-fg);
-  background: color-mix(in srgb, var(--menu-fg) 9%, transparent);
-  transition: background 0.16s ease, transform 0.16s cubic-bezier(0.16, 1, 0.3, 1);
+  display: inline-flex; align-items: center; gap: 3px; height: 22px; padding: 0 4px;
+  border-radius: 6px; font-size: 9.5px; font-weight: 650; font-variant-numeric: tabular-nums;
+  color: var(--menu-fg);
+  background: transparent;
+  transition: background 0.16s ease, opacity 0.16s ease, transform 0.16s cubic-bezier(0.16, 1, 0.3, 1);
 }
-.mx-battery:hover { background: color-mix(in srgb, var(--menu-fg) 14%, transparent); transform: translateY(-1px) scale(1.06); }
-#deck-bat-ico { display: inline-flex; align-items: center; gap: 1px; }
+.mx-battery.charging { color: var(--menu-fg); }
+.mx-battery.low { opacity: 0.72; }
+.mx-battery:hover { background: color-mix(in srgb, var(--menu-fg) 8%, transparent); transform: translateY(-1px) scale(1.04); }
+#deck-bat-ico { position: relative; display: inline-flex; align-items: center; justify-content: center; flex: none; }
+#deck-bat-ico .bat-body { display: block; opacity: 0.92; }
+#deck-bat-ico .bat-bolt {
+  position: absolute; left: 42%; top: 50%; transform: translate(-50%, -50%);
+  color: var(--menu-fg); stroke: var(--menu-bg); stroke-width: 3.6px; stroke-linejoin: round;
+  paint-order: stroke fill; pointer-events: none;
+}
 .mx-icon-btn,
 #view-control-deck .mx-icon-btn {
   width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center;
@@ -90,7 +99,7 @@
   width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: space-between;
   transition: opacity 0.16s ease;
 }
-.mx-right-panel.hidden { display: none !important; }
+#island .mx-right-panel.hidden { display: none; }
 
 /* In-place Sub-panel header & mount */
 .mx-sub-bar {
@@ -311,7 +320,7 @@
   min-width: 0;
   box-sizing: border-box;
 }
-.mx-stat-bt.hidden { display: none !important; }
+#island .mx-stat-bt.hidden { display: none; }
 .mx-bt-ico {
   flex: none;
   width: 24px;
@@ -521,7 +530,7 @@
 .src-corner.src-apple   { background: #fa243c; color: #ffffff; }
 .src-corner.src-vlc     { background: #ff6b00; color: #ffffff; }
 .src-corner.src-browser { background: #1d6ef2; color: #ffffff; }
-.src-corner.hidden { display: none !important; }
+#island .src-corner.hidden { display: none; }
 
 /* ============================================================
    Resting compact pill: native SF-style icon + metric
@@ -602,9 +611,10 @@
   transform: perspective(80px) rotateY(-16deg) rotateX(8deg);
 }
 
-/* Notch-opened media: no edge, blend into the player. */
-.island.state-media {
-  border: none;
+/* Notch-opened media & sound device switcher: no edge, blend into the panel. */
+.island.state-media,
+.island.state-sub.audio-view {
+  border-color: transparent;
   background: #060608;
   box-shadow: none;
 }
@@ -626,7 +636,8 @@
 /* ==================== NOTCH MEDIA POPUP: follows Island Color like the Control Deck media card ==================== */
 /* Surface, text and ears all come from the menu colour (= Island Color). The album glow stays, but fades out towards the top edge
    so the bezel ears (plain menu colour) meet the panel without a visible seam. */
-.island.state-media {
+.island.state-media,
+.island.state-sub.audio-view {
   background: var(--menu-bg);
   color: var(--menu-fg);
 }
@@ -662,11 +673,10 @@
   animation-delay: 0s;
 }
 
-/* The thin light "line" that flashed when the island shrank back to the notch:
-   "border: none / 0" resets the border colour to currentColor (the light menu text colour), and the 0.22s border-color transition then
-   faded that colour out on the notch edge. Keep the border colour transparent in every popup state so there is nothing to fade. */
+/* Keep the notch border transparent across every HUD, status popup, and return transition so no light edge flashes while shrinking. */
 .island.state-media,
-.island.state-compact:is(.bt-hud-active, .alarm-active, .transferring, .has-toast, .incoming-open, .biometric-active) {
+.island.state-sub.audio-view,
+.island.state-compact:is(.bt-hud-active, .alarm-active, .transferring, .has-toast, .incoming-open, .biometric-active, .bio-hud, .wellness-hud-active, .anim-radar-card-open, .hud-pre, .hud-out, .hud-back, .menu-closing) {
   border-color: transparent;
 }
 
@@ -699,7 +709,7 @@
   font-size: 8px; font-weight: 700; line-height: 12px; text-align: center;
   background: var(--deck-accent, #0a84ff); color: var(--deck-accent-fg, #fff);
 }
-.mx-tray-badge.hidden { display: none !important; }
+#island .mx-tray-badge.hidden { display: none; }
 
 /* ===== Control Deck: Tray + Inex Drop two-panel view (500 x 172) ===== */
 .island.state-tray-deck { width: 500px; height: 172px; }
@@ -710,7 +720,7 @@
               zoom 0.55s var(--spring-menu);
   border-radius: 0 0 var(--radius-menu) var(--radius-menu);
   border: 1px solid var(--line);
-  border-top: none;
+  border-top-width: 0;
   box-shadow: none;
 }
 .island[data-menu="transparent"].state-tray-deck {
@@ -748,7 +758,7 @@
   flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
   font-size: 11.5px; font-weight: 600; color: var(--menu-fg-dim);
 }
-.mt-empty.hidden, .mt-filled.hidden { display: none !important; }
+#island .mt-empty.hidden, #island .mt-filled.hidden { display: none; }
 .mt-filled { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 8px 10px 8px; gap: 6px; }
 .mt-head { flex: none; display: flex; align-items: center; justify-content: space-between; font-size: 11px; font-weight: 600; color: var(--menu-fg-dim); }
 .mt-files { flex: 1; min-height: 0; display: flex; gap: 8px; overflow-x: auto; overflow-y: hidden; align-items: stretch; scrollbar-width: none; }

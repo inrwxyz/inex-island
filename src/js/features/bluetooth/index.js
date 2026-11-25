@@ -473,14 +473,19 @@ export function hudIslandSize() {
   return { width: ISLAND_WIN_W, height: hudIsFloating() ? 64 : 54 };
 }
 
+function isRadarCardOpen() {
+  return !!island?.classList.contains('anim-radar-card-open');
+}
+
 export function popupIsBusy() {
-  return !!(appState.transferring || appState.prompting || appState.lockerPrompting || appState.toast);
+  return !!(appState.transferring || appState.prompting || appState.lockerPrompting || appState.toast || isRadarCardOpen());
 }
 
 let popupSizeOn = false;
 let popupSizeT = null;
 
 export function compactIslandSize(win) {
+  if (isRadarCardOpen()) return { width: 320, height: 124 };
   if (popupIsBusy() && !(island?.classList.contains('alarm-active') || island?.classList.contains('bt-hud-active')
       || island?.classList.contains('biometric-active') || island?.classList.contains('bio-hud'))) {
     popupSizeOn = true;
@@ -491,6 +496,10 @@ export function compactIslandSize(win) {
 
 export function hudRestoreSize() {
   if (!hudCanShow() || appState.alarmActive) return;
+  if (isRadarCardOpen()) {
+    reportIslandSize({ width: 320, height: 124 });
+    return;
+  }
   if (popupIsBusy()) {
     reportIslandSize(hudIslandSize());
     return;
@@ -500,6 +509,11 @@ export function hudRestoreSize() {
 
 export function syncPopupSize(busy) {
   if (appState.currentView !== 'view-compact') return;
+  if (isRadarCardOpen()) {
+    clearTimeout(popupSizeT);
+    reportIslandSize({ width: 320, height: 124 });
+    return;
+  }
   if (appState.alarmActive || island?.classList.contains('bt-hud-active') || island?.classList.contains('hud-pre')
       || island?.classList.contains('biometric-active') || island?.classList.contains('bio-hud')) return;
   clearTimeout(popupSizeT);
@@ -509,8 +523,9 @@ export function syncPopupSize(busy) {
   } else if (popupSizeOn) {
     popupSizeT = setTimeout(() => {
       popupSizeOn = false;
-      if (island?.classList.contains('bio-hud') || island?.classList.contains('biometric-active') || island?.classList.contains('hud-pre')
-          || island?.classList.contains('bt-hud-active') || island?.classList.contains('alarm-active') || appState.alarmActive) return;
+      if (isRadarCardOpen() || island?.classList.contains('bio-hud') || island?.classList.contains('biometric-active')
+          || island?.classList.contains('hud-pre') || island?.classList.contains('bt-hud-active')
+          || island?.classList.contains('alarm-active') || appState.alarmActive) return;
       if (!popupIsBusy()) hudRestoreSize();
     }, 650);
   }

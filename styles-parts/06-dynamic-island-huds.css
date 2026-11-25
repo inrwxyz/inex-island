@@ -28,7 +28,7 @@
 /* NOTE: Face ID / Touch ID keeps its ORIGINAL look and timing (92px square, 33px radius, original spring). */
 .island.state-compact.biometric-active {
   width: 92px; height: 92px; border-radius: 33px; top: 10px;
-  background: var(--notch-bg); color: var(--notch-fg); border: 0;
+  background: var(--notch-bg); color: var(--notch-fg); border-color: transparent;
   box-shadow: none;
   transition: width 0.6s cubic-bezier(0.34, 1.5, 0.64, 1), height 0.6s cubic-bezier(0.34, 1.5, 0.64, 1),
               top 0.5s cubic-bezier(0.22, 1, 0.36, 1), border-radius 0.5s cubic-bezier(0.22, 1, 0.36, 1);
@@ -115,7 +115,7 @@
 /* ---------- Device HUD (Bluetooth connect / charger) ---------- */
 .island.state-compact.bt-hud-active {
   width: 220px; height: 37px; border-radius: 19px; top: 7px;
-  background: var(--notch-bg); color: var(--notch-fg); border: 0;
+  background: var(--notch-bg); color: var(--notch-fg); border-color: transparent;
   box-shadow: none;
   transition: width 0.65s var(--spring-pop), height 0.6s var(--spring-pop),
               top 0.45s var(--ease-close), border-radius 0.5s var(--ease-close);
@@ -196,7 +196,7 @@
   top: 7px;
   background: var(--notch-bg);
   color: var(--notch-fg);
-  border: 0;
+  border-color: transparent;
   box-shadow: 0 0 0 1px rgba(255, 159, 10, 0.4);   /* amber border only, no glow */
   transition: width 0.65s var(--spring-pop), height 0.6s var(--spring-pop),
               top 0.45s var(--ease-close), border-radius 0.5s var(--ease-close);

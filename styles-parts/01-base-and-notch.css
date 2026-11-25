@@ -73,13 +73,13 @@ body {
   color: var(--notch-fg);
   border-radius: 0 0 var(--radius) var(--radius);
   border: 1px solid var(--notch-line, var(--line));
-  border-top: none;
+  border-top-width: 0;
   margin-top: 0;
   top: 0;
   transform-origin: top center;
   transition: width 0.55s var(--spring), height 0.55s var(--spring),
               transform 0.28s var(--spring), opacity 0.22s ease,
-              border-color 0.22s ease, background 0.25s ease,
+              background 0.25s ease,
               border-radius 0.4s var(--ease-close),
               top 0.28s var(--spring);   /* zoom is transitioned in the state rules below: the menu is always 1.10 and the pill follows the Notch UI scale, so a switch between them has to animate or the box jumps in size */
   transition-timing-function: initial;
@@ -124,16 +124,13 @@ body {
 }
 /* The faint top highlight line stops at the island edge and made the ears look cut off: no highlight with ears */
 .island.has-curved-ears:not(.state-compact) { box-shadow: none; }
-/* no ears while hidden / intro / status pills / popups that open from the notch (plain pills) */
-.island:is(.smart-hidden, .intro-pre, .biometric-active, .has-status, .state-status, [data-status-active="true"]).has-curved-ears::before,
-.island:is(.smart-hidden, .intro-pre, .biometric-active, .has-status, .state-status, [data-status-active="true"]).has-curved-ears::after,
+/* no ears while hidden / intro / status pills / popups that open from the notch (plain pills), plus media & audio switcher */
+.island:is(.smart-hidden, .intro-pre, .biometric-active, .has-status, .state-status, [data-status-active="true"], .state-media, .state-sub.audio-view).has-curved-ears::before,
+.island:is(.smart-hidden, .intro-pre, .biometric-active, .has-status, .state-status, [data-status-active="true"], .state-media, .state-sub.audio-view).has-curved-ears::after,
 .island.state-compact:is(.bt-hud-active, .alarm-active, .transferring, .has-toast, .incoming-open, .hud-pre, .hud-back).has-curved-ears::before,
 .island.state-compact:is(.bt-hud-active, .alarm-active, .transferring, .has-toast, .incoming-open, .hud-pre, .hud-back).has-curved-ears::after {
   display: none;
 }
-/* media popup: the border is invisible, so the ears sit flush with the panel edge */
-.island.state-media.has-curved-ears::before { left: calc(0px - var(--ear-size) + var(--ear-overlap, 0.5px)); }
-.island.state-media.has-curved-ears::after  { right: calc(0px - var(--ear-size) + var(--ear-overlap, 0.5px)); }
 
 /* Growing = spring (tiny overshoot, Dynamic Island feel). Shrinking = smooth ease-out, no bounce. */
 .island.state-drop, .island.state-control, .island.state-control-deck, .island.state-tray,
@@ -146,17 +143,17 @@ body {
 .island.state-compact {
   transition: width 0.44s var(--ease-close), height 0.44s var(--ease-close),
               border-radius 0.44s var(--ease-close), opacity 0.22s ease,
-              border-color 0.22s ease, background 0.25s ease, top 0.4s var(--ease-close),
+              background 0.25s ease, top 0.4s var(--ease-close),
               zoom 0.44s var(--ease-close);
 }
 /* compact pill growing (hover / media / badges / toast) gets the little spring */
-.island.state-compact:hover:not(.no-hover-expand):not(.timer-live):not(.media-active):not(.transferring):not(.incoming-open):not(.alarm-active):not(.biometric-active):not(.bio-hud):not(.bt-hud-active):not(.has-status):not(.state-status):not([data-status-active="true"]):not(.hud-back):not(.hud-out):not(.hud-pre),
+.island.state-compact:hover:not(.no-hover-expand):not(.timer-live):not(.media-active):not(.transferring):not(.incoming-open):not(.anim-radar-card-open):not(.alarm-active):not(.biometric-active):not(.bio-hud):not(.bt-hud-active):not(.has-status):not(.state-status):not([data-status-active="true"]):not(.hud-back):not(.hud-out):not(.hud-pre),
 .island.state-compact.has-badges, .island.state-compact.media-active,
 .island.state-compact.has-toast, .island.state-compact.transferring,
 .island.state-compact.incoming-open {
   transition: width 0.62s var(--spring-pop), height 0.5s var(--spring-pop),
               border-radius 0.45s var(--ease-close), opacity 0.25s ease,
-              border-color 0.22s ease, background 0.25s ease, top 0.4s var(--ease-close);
+              background 0.25s ease, top 0.4s var(--ease-close);
 }
 
 /* Menu -> pill (media player closing etc.): always the smooth no-bounce close curve.
@@ -164,10 +161,11 @@ body {
    when shrinking it undershoots the target size and bounces back, which showed as a jerk after the
    island had returned to its place. menu-closing is set by switchView() for the length of the shrink. */
 .island.state-compact.menu-closing {
+  border-color: transparent;
   transition: width 0.5s var(--ease-close), height 0.5s var(--ease-close),
               transform 0.32s cubic-bezier(0.16, 1, 0.3, 1),
               border-radius 0.45s var(--ease-close), opacity 0.25s ease,
-              border-color 0.22s ease, background 0.25s ease, top 0.4s var(--ease-close),
+              background 0.25s ease, top 0.4s var(--ease-close),
               zoom 0.5s var(--ease-close);
 }
 
@@ -246,7 +244,7 @@ body {
   color: #f5f5f7;
   backdrop-filter: none;
   border: 1px solid var(--ghost-line);
-  border-top: none;
+  border-top-width: 0;
   box-shadow: none;
 }
 
@@ -259,16 +257,16 @@ body {
 .island.state-compact.media-active {
   width: 192px;
 }
-.island.state-compact:hover:not(.no-hover-expand):not(.timer-live):not(.media-active):not(.transferring):not(.incoming-open):not(.alarm-active):not(.biometric-active):not(.bio-hud):not(.bt-hud-active):not(.has-status):not(.state-status):not([data-status-active="true"]):not(.hud-back):not(.hud-out):not(.hud-pre) {
+.island.state-compact:hover:not(.no-hover-expand):not(.timer-live):not(.media-active):not(.transferring):not(.incoming-open):not(.anim-radar-card-open):not(.alarm-active):not(.biometric-active):not(.bio-hud):not(.bt-hud-active):not(.has-status):not(.state-status):not([data-status-active="true"]):not(.hud-back):not(.hud-out):not(.hud-pre) {
   width: 256px;
 }
 .island.state-compact.incoming-open {
   width: 236px;
 }
 .island.state-compact.transferring {
-  width: 186px;
+  width: 220px;
 }
-.island.state-compact.transferring.xfer-live { width: 226px; }
+.island.state-compact.transferring.xfer-live { width: 220px; }
 .island.state-compact.has-toast {
   width: 196px;
 }
@@ -358,15 +356,16 @@ body {
 .island.state-calendar {
   border-radius: 0 0 var(--radius-menu) var(--radius-menu);
   border: 1px solid var(--line);
-  border-top: none;
+  border-top-width: 0;
   box-shadow: none;
 }
 
-.island.state-drop     { width: 195px; height: 86px; border-style: none dashed dashed dashed; border-top: none; }
+.island.state-drop     { width: 195px; height: 86px; border-style: none dashed dashed dashed; border-top-width: 0; }
 .island.state-control  { width: 312px; height: 288px; }
 .island.state-tray     { width: 312px; height: 214px; }
 .island.state-tray.picker-open { height: 248px; }
 .island.state-sub      { width: 312px; height: 204px; }
+.island.state-sub.audio-view { width: 312px; height: 162px; }
 .island.state-media    { width: 312px; height: 162px; }
 .island.state-media.vol-open { height: 218px; }
 .island.state-calendar { width: 342px; height: 206px; }
@@ -408,7 +407,7 @@ body {
   display: flex;
   flex-direction: column;
 }
-.hidden { display: none !important; }
+.hidden, #island .hidden.hidden { display: none; }
 .sr:not(.ctrl-tile .sr) { display: none; }
 
 /* ==================== 1. COMPACT BAR ==================== */
@@ -456,7 +455,7 @@ body {
   white-space: nowrap;
   transition: opacity 0.2s ease, max-width 0.2s ease;
 }
-.island.state-compact:hover:not(.media-active):not(.transferring):not(.incoming-open):not(.biometric-active):not(.bio-hud):not(.bt-hud-active):not(.has-status):not(.state-status):not([data-status-active="true"]):not(.hud-back):not(.hud-out):not(.hud-pre) .c-hover-info {
+.island.state-compact:hover:not(.media-active):not(.transferring):not(.incoming-open):not(.anim-radar-card-open):not(.biometric-active):not(.bio-hud):not(.bt-hud-active):not(.has-status):not(.state-status):not([data-status-active="true"]):not(.hud-back):not(.hud-out):not(.hud-pre) .c-hover-info {
   opacity: 1;
   max-width: 78px;
 }
@@ -609,5 +608,5 @@ body {
   display: block;
   border-radius: inherit;
 }
-.hidden.art-img { display: none !important; }
+#island .hidden.art-img { display: none; }
 

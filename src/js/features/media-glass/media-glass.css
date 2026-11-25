@@ -1,0 +1,184 @@
+/* Glass-style media card & sound switcher. Only active while #view-media / #view-audio has .mgl-mode (setting notch.mediaCard = glass).
+   Independent frosted surface (never synced with notchColor); Floating keeps rounded pill, Bezel/Curved keep clean Classic corners without ears. */
+
+#view-media.mgl-mode > :not(.mgl-card) { display: none; }
+#view-media.mgl-mode::after { display: none; }
+#view-media:not(.mgl-mode) .mgl-card { display: none; }
+#view-audio:not(.mgl-mode) .mgl-audio-bg { display: none; }
+
+/* Shell: independent transparent glass container preserving exact same open/close, corners & height transitions as Classic */
+#island.mgl-on:is(.state-media, .state-sub.audio-view) {
+  background: transparent;
+  color: #fff;
+  border-color: transparent;
+  box-shadow: none;
+}
+#island.mgl-on:is(.state-media, .state-sub.audio-view):not([data-style="floating"]),
+#island.mgl-on:is(.state-media, .state-sub.audio-view):not([data-style="floating"]) :is(.mgl-card, .mgl-audio-bg) {
+  border-radius: 0 0 var(--radius-menu) var(--radius-menu);
+}
+#island[data-style="floating"].mgl-on:is(.state-media, .state-sub.audio-view),
+#island[data-style="floating"].mgl-on:is(.state-media, .state-sub.audio-view) :is(.mgl-card, .mgl-audio-bg) {
+  border-radius: 22px;
+}
+
+.mgl-card,
+.mgl-audio-bg {
+  --mgl-spring: cubic-bezier(.2, .9, .25, 1.12);
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  box-sizing: border-box;
+  color: #fff;
+  background: rgba(14, 10, 24, .78);
+  border: 1px solid rgba(255, 255, 255, .12);
+  border-top-width: 0;
+  font-family: inherit;
+  user-select: none;
+}
+#island[data-style="floating"].mgl-on :is(.mgl-card, .mgl-audio-bg) {
+  border-top-width: 1px;
+}
+.mgl-audio-bg { z-index: 0; pointer-events: none; }
+
+/* Isolated static frosted glass & art layer (no live backdrop-filter avoids DWM/GPU process texture growth) */
+.mgl-bg {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+  contain: strict;
+}
+.mgl-amb,
+.mgl-art,
+.mgl-shade { position: absolute; inset: 0; pointer-events: none; }
+
+.mgl-amb {
+  background:
+    radial-gradient(circle at 30% 35%, rgba(var(--amb, 96, 78, 165), .78) 0%, transparent 60%),
+    radial-gradient(circle at 78% 70%, rgba(var(--amb, 96, 78, 165), .56) 0%, transparent 62%);
+  opacity: 1;
+  transition: opacity .5s ease;
+}
+.mgl-art {
+  background-size: cover;
+  background-position: center;
+  transform: scale(1.12);
+  filter: blur(5px) saturate(1.15);
+  opacity: 0;
+  transition: opacity .5s ease;
+  will-change: opacity;
+}
+.mgl-bg.mgl-has-art .mgl-art,
+.mgl-has-art .mgl-art { opacity: .62; }
+.mgl-bg.mgl-has-art .mgl-amb,
+.mgl-has-art .mgl-amb { opacity: 0; }
+.mgl-shade {
+  background: linear-gradient(180deg, rgba(8, 4, 16, .45) 0%, rgba(8, 4, 16, .20) 55%, rgba(8, 4, 16, .34) 100%);
+}
+
+#view-audio.mgl-mode { color: #fff; }
+#view-audio.mgl-mode .list-row-item {
+  background: rgba(255, 255, 255, .10);
+  border-color: rgba(255, 255, 255, .14);
+  color: #fff;
+}
+#view-audio.mgl-mode .list-row-item:hover { background: rgba(255, 255, 255, .16); }
+#view-audio.mgl-mode .list-row-item.on {
+  border-color: rgba(255, 255, 255, .45);
+  background: rgba(255, 255, 255, .18);
+}
+#view-audio.mgl-mode .icon-ghost-btn.round { border-color: rgba(255, 255, 255, .24); }
+
+/* Header: pinned source logo in top-left corner + artist on top + song title below (never scrolls logo) */
+.mgl-head {
+  position: absolute; left: 16px; right: 16px; top: 11px; height: 34px; z-index: 2;
+  display: flex; align-items: center; gap: 10px;
+}
+.mgl-src {
+  width: 30px; height: 30px; flex: none; border-radius: 9px;
+  display: grid; place-items: center;
+  background: rgba(255, 255, 255, .10);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .16);
+}
+.mgl-src svg { width: 17px; height: 17px; display: block; }
+.mgl-meta { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.mgl-head-top {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  font-size: 10px; line-height: 13px; color: rgba(255, 255, 255, .74);
+}
+.mgl-artist-txt {
+  flex: 1; min-width: 0; font-weight: 500;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.mgl-dev {
+  flex: none; max-width: 96px; font-size: 9px; font-weight: 600;
+  color: rgba(255, 255, 255, .56); letter-spacing: .01em;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.mgl-now { position: relative; height: 18px; overflow: hidden; }
+.mgl-now.mgl-scroll {
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 7%, #000 92%, transparent 100%);
+          mask-image: linear-gradient(90deg, transparent 0, #000 7%, #000 92%, transparent 100%);
+}
+.mgl-track {
+  position: absolute; left: 0; top: 0; display: flex; white-space: nowrap; will-change: transform;
+}
+.mgl-now.mgl-scroll .mgl-track { animation: mgl-slide var(--mgl-dur, 9s) linear infinite; }
+.mgl-title-txt {
+  padding-right: 36px; font-size: 13px; font-weight: 650; line-height: 18px; color: #fff;
+}
+.mgl-now:not(.mgl-scroll) .mgl-title-txt { padding-right: 0; }
+@keyframes mgl-slide { from { transform: translateX(0); } to { transform: translateX(var(--mgl-shift, -300px)); } }
+
+/* Progress hills & seek scrub (padded 8px horizontally so pink thumb glow never clips at left/right edges) */
+.mgl-prog {
+  position: absolute; left: 8px; right: 8px; top: 45px; height: 28px;
+  z-index: 2; touch-action: none; cursor: pointer; contain: strict;
+}
+.mgl-prog canvas { width: 100%; height: 100%; display: block; }
+.mgl-times {
+  position: absolute; left: 16px; right: 16px; top: 79px; z-index: 2; display: flex; justify-content: space-between;
+  font-size: 9.5px; line-height: 11px; color: rgba(255, 255, 255, .82); font-variant-numeric: tabular-nums;
+}
+
+/* Playback controls */
+.mgl-ctrls {
+  position: absolute; left: 0; right: 0; top: 100px; z-index: 3;
+  display: flex; justify-content: center; align-items: center; gap: 11px;
+}
+.mgl-b {
+  width: 36px; height: 36px; padding: 0; border: 0; border-radius: 50%; color: #fff; cursor: pointer;
+  display: grid; place-items: center; background: rgba(255, 255, 255, .16);
+  transition: transform .12s, background .2s;
+}
+.mgl-b:active { transform: scale(.9); }
+.mgl-b svg { width: 16px; height: 16px; }
+.mgl-b.mgl-ghost { width: 32px; height: 32px; background: transparent; }
+.mgl-b.mgl-ghost.mgl-on { background: rgba(255, 255, 255, .2); }
+.mgl-b.mgl-play { width: 40px; height: 40px; background: rgba(255, 255, 255, .24); }
+.mgl-b.mgl-play svg { width: 18px; height: 18px; }
+.mgl-b.mgl-muted { opacity: .6; }
+
+/* Inline volume slider row (no separate extra bottom card) */
+.mgl-vol {
+  position: absolute; left: 18px; right: 18px; top: 164px; height: 34px; z-index: 3;
+  display: flex; align-items: center; gap: 10px;
+  opacity: 0; transform: translateY(10px) scale(.94); transform-origin: center top; pointer-events: none;
+  transition: opacity .25s ease, transform .5s var(--mgl-spring);
+}
+.mgl-vol-open .mgl-vol { opacity: 1; transform: none; pointer-events: auto; transition-delay: .08s; }
+.mgl-vol svg { width: 15px; height: 15px; flex: none; opacity: .9; }
+.mgl-vtrack {
+  position: relative; flex: 1; height: 8px; border-radius: 6px; background: rgba(255, 255, 255, .22);
+  cursor: pointer; touch-action: none;
+}
+.mgl-vfill { position: absolute; left: 0; top: 0; bottom: 0; width: 0; border-radius: 6px; background: rgba(255, 255, 255, .92); }
+.mgl-vthumb {
+  position: absolute; top: 50%; left: 0; width: 16px; height: 16px; border-radius: 50%; background: #fff;
+  transform: translate(-50%, -50%); box-shadow: 0 1px 6px rgba(0, 0, 0, .35); transition: transform .15s;
+}
+.mgl-vtrack:active .mgl-vthumb { transform: translate(-50%, -50%) scale(1.2); }
+.mgl-vval { width: 30px; text-align: right; font-size: 10.5px; font-weight: 600; font-variant-numeric: tabular-nums; opacity: .9; }

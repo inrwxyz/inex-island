@@ -22,7 +22,7 @@ export function renderBattery(stats) {
   if (showBat) {
     const pctEl = $('deck-bat-pct');
     if (pctEl) pctEl.textContent = `${stats.battery_pct}%`;
-    const lvl = Math.max(1, Math.min(10, Math.round((stats.battery_pct / 100) * 10)));
+    const lvl = (Math.max(0.08, Math.min(1, stats.battery_pct / 100)) * 13.4).toFixed(1);
     const lvlEl = $('deck-bat-level');
     if (lvlEl) lvlEl.setAttribute('width', lvl);
     const bolt = $('deck-bat-bolt');

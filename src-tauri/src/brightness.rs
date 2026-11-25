@@ -277,3 +277,15 @@ pub fn start(app: AppHandle) {
     #[cfg(not(target_os = "windows"))]
     let _ = app;
 }
+
+// Brightness goes through WMI on a worker thread (brightness.rs): no PowerShell.
+#[tauri::command]
+pub fn set_system_brightness(level: u32) {
+    set(level);
+}
+
+/// Last known brightness, or None when this PC has no controllable panel.
+#[tauri::command]
+pub fn get_system_brightness() -> Option<u32> {
+    current()
+}

@@ -9,15 +9,10 @@ import { hudIsFloating, hudCanShow, hudRestoreSize, showDeviceHud } from '../blu
 import { updateClocks } from '../clock/index.js';
 import { refreshMedia } from '../media/index.js';
 
-let alarmChimeInterval = null;
 let alarmAutoDismissTimeout = null;
 let alarmStartT = null;
 let alarmBackT = null;
 let alarmCleanT = null;
-
-export function playAlarmChime() {
-  invokeTauri('play_alarm_sound').catch((err) => console.warn('Tauri invoke error:', err));
-}
 
 export function alarmClearOtherHuds() {
   island?.classList.remove('bt-hud-active', 'biometric-active', 'bio-hud', 'hud-pre', 'hud-back', 'hud-out');
@@ -43,7 +38,6 @@ export function triggerTimerAlarm(opts) {
   const alarmBox = $('c-alarm-box');
   if (!alarmBox) return;
 
-  clearInterval(alarmChimeInterval);
   clearTimeout(alarmAutoDismissTimeout);
   clearTimeout(alarmStartT);
   clearTimeout(alarmBackT);
@@ -87,14 +81,7 @@ export function triggerTimerAlarm(opts) {
 
   const SET = loadSettings();
   if (!opts.silent && SET.notch?.timerSound !== false) {
-    playAlarmChime();
-    alarmChimeInterval = setInterval(() => {
-      if (appState.alarmActive && !appState.alarmClosing) {
-        playAlarmChime();
-      } else {
-        clearInterval(alarmChimeInterval);
-      }
-    }, 2400);
+    invokeTauri('start_alarm_loop', { gapMs: 350 }).catch((err) => console.warn('Tauri invoke error:', err));
   }
 
   alarmAutoDismissTimeout = setTimeout(() => {
@@ -103,9 +90,9 @@ export function triggerTimerAlarm(opts) {
 }
 
 export function dismissTimerAlarm() {
-  clearInterval(alarmChimeInterval);
   clearTimeout(alarmAutoDismissTimeout);
   clearTimeout(alarmStartT);
+  invokeTauri('stop_alarm_sound').catch((err) => console.warn('Tauri invoke error:', err));
 
   const alarmBox = $('c-alarm-box');
   if (!alarmBox || !appState.alarmActive || appState.alarmClosing) return;

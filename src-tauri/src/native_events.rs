@@ -106,7 +106,7 @@ pub static SHUTTING_DOWN: AtomicBool = AtomicBool::new(false);
 /// Compute the fullscreen state of the foreground window and tell the UI only if it changed.
 /// Called from the WinEvent hooks and WM_DISPLAYCHANGE (no timer).
 fn recheck_fullscreen() {
-    let fs = crate::foreground_is_fullscreen();
+    let fs = crate::sys_stats::foreground_is_fullscreen();
     if LAST_FS.swap(fs, Ordering::Relaxed) != fs {
         if let Ok(guard) = GLOBAL_APP.lock() {
             if let Some(ref app) = *guard {
@@ -119,7 +119,7 @@ fn recheck_fullscreen() {
 fn emit_power() {
     if let Ok(guard) = GLOBAL_APP.lock() {
         if let Some(ref app) = *guard {
-            let current = crate::battery_info();
+            let current = crate::sys_stats::battery_info();
             let _ = app.emit("power-changed", serde_json::json!({
                 "battery_pct": current.0,
                 "charging": current.1
@@ -330,7 +330,7 @@ pub fn setup_native_events(app: AppHandle) {
         *guard = Some(app.clone());
     }
 
-    LAST_FS.store(crate::foreground_is_fullscreen(), Ordering::Relaxed);
+    LAST_FS.store(crate::sys_stats::foreground_is_fullscreen(), Ordering::Relaxed);
 
     // Attach Subclass to Main Window for WTS & Clipboard messages on the UI thread
     let app_for_subclass = app.clone();

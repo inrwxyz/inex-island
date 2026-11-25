@@ -4,15 +4,18 @@
 }
 
 .mx-battery #deck-bat-ico {
+  position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 2px;
+  justify-content: center;
+  flex: none;
 }
 
 .mx-battery.charging {
-  color: #30d158;
+  color: var(--menu-fg);
 }
 
 .mx-battery.low {
-  color: #ff453a;
+  color: var(--menu-fg);
+  opacity: 0.72;
 }

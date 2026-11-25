@@ -77,7 +77,7 @@
 .ctrl-tile:active, .q-icon-btn:active {
   transform: scale(0.96);
 }
-.ctrl-tile.hidden { display: none !important; }
+#island .ctrl-tile.hidden { display: none; }
 .ctrl-tile.active,
 .ctrl-tile.active:hover {
   background: color-mix(in srgb, var(--menu-fg) 9%, transparent);
@@ -302,6 +302,11 @@
 .icon-ghost-btn.round:hover { background: rgba(150, 150, 160, 0.15); }
 .icon-ghost-btn.spin svg { animation: spin 0.8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+#view-audio { position: relative; }
+#view-audio .subview-header { padding: 9px 14px 4px; position: relative; z-index: 2; }
+#view-audio .smooth-scroll-list { padding: 2px 12px 10px; gap: 4px; position: relative; z-index: 2; }
+#view-audio .list-row-item { padding: 6px 10px; }
 
 .smooth-scroll-list {
   padding: 6px 14px 14px;

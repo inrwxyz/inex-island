@@ -91,6 +91,7 @@ export function clearPrompt() {
   currentOffer = null;
   clearTimeout(offerExpireTimer);
   closePromptHud(true);
+  bus.emit('anim:offer-closed');
   const dropBody = document.querySelector('#view-inexdrop .drop-body');
   const subMount = document.querySelector('.mx-sub-mount');
   const dropView = document.getElementById('view-inexdrop');
@@ -346,7 +347,7 @@ export function showTransferBox(title, sub, canPause) {
   }
 }
 
-export function endTransfer(delay = 2800) {
+export function endTransfer(delay = 2800, ok = true) {
   clearTimeout(xferHideTimer);
   xferHideTimer = setTimeout(() => {
     const box = document.getElementById('qs-transfer-box');
@@ -356,7 +357,7 @@ export function endTransfer(delay = 2800) {
     refreshDropUI();
   }, delay);
 
-  bus.emit('transfer:finish');
+  bus.emit('transfer:finish', { ok });
 }
 
 export function activateOfferPrompt(offer) {
@@ -389,14 +390,26 @@ export function activateOfferPrompt(offer) {
 
   refreshDropUI();
 
+  bus.emit('anim:incoming', {
+    fileName: displayTitle,
+    size: offer.total || firstFile.size,
+    sizeText: fmtBytes(offer.total || firstFile.size),
+    sender: offer.device || 'Nearby device',
+    onAccept: () => acceptTransferPrompt(),
+    onDecline: () => declineTransferPrompt()
+  });
+
   const isViewingDrop = (appState.currentView === 'view-inexdrop') ||
     (appState.currentView === 'view-control-deck' && appState.currentDeckSubTarget && appState.currentDeckSubTarget.id === 'view-inexdrop');
+
+  const animCfg = loadSettings()?.animations;
+  const radarCardTakesOver = !!(animCfg?.enabled && animCfg?.receive?.enabled && (animCfg?.receive?.id || 'radar') === 'radar');
 
   if (appState.currentView === 'view-control-deck') {
     if (!isViewingDrop) {
       openDeckDrop('qs');
     }
-  } else if (!isViewingDrop) {
+  } else if (!isViewingDrop && !radarCardTakesOver) {
     showPromptHud({
       name: displayTitle,
       size: offer.total || firstFile.size,
@@ -409,13 +422,25 @@ export function activateOfferPrompt(offer) {
 
 export async function acceptTransferPrompt() {
   if (!currentOffer) return;
+  const firstFile = (currentOffer.files && currentOffer.files[0]) || {};
+  const fName = firstFile.name || 'File';
+  const displayTitle = (currentOffer.count || 1) > 1
+    ? `${currentOffer.count} files (incl. ${fName})`
+    : fName;
+  const offerMeta = {
+    fileName: displayTitle,
+    sizeText: fmtBytes(currentOffer.total || firstFile.size),
+    sender: currentOffer.device || 'Nearby device'
+  };
+
   clearTimeout(offerExpireTimer);
   closePromptHud();
   currentOffer = null;
 
   showTransferBox('Receiving', 'Accepted! Starting transfer...', true);
   appState.xferDir = 'recv';
-  bus.emit('transfer:start');
+  bus.emit('anim:accepted', offerMeta);
+  bus.emit('transfer:start', { dir: 'recv' });
 
   await invokeTauri('respond_quick_share_offer', { accept: true });
   refreshDropUI();
@@ -745,7 +770,7 @@ export function initQuickShare() {
       }
       case 'send_finished': {
         if (p.cancelled) bus.emit('toast:show', { icon: 'warn', title: 'Transfer cancelled' });
-        endTransfer(p.cancelled ? 600 : 3000);
+        endTransfer(p.cancelled ? 600 : 3000, !p.cancelled);
         if (lastSendSuccess || p.cancelled) {
           selectedFiles = [];
           invokeTauri('clear_staged_quick_share_files').catch((err) => console.warn('Clear staged failed:', err));
@@ -783,12 +808,12 @@ export function initQuickShare() {
         } else if (p.error) {
           bus.emit('toast:show', { icon: 'error', title: `Transfer error: ${p.error}`, ms: 4000 });
         }
-        endTransfer(p.cancelled ? 600 : 2500);
+        endTransfer(p.cancelled ? 600 : 2500, !!p.ok);
         break;
       }
       case 'error':
         bus.emit('toast:show', { icon: 'error', title: p.message || 'Quick Share error' });
-        endTransfer(1500);
+        endTransfer(1500, false);
         break;
     }
   });

@@ -240,26 +240,26 @@
           <b id="deck-clock">11:19</b><span id="deck-date">Thu, Nov 12</span>
         </div>
         <div class="mx-top-right">
+          <span id="deck-battery" class="mx-battery hidden" data-deck="battery" title="Laptop Battery">
+            <span id="deck-bat-ico">
+              <svg class="bat-body" viewBox="0 0 22 12" width="15" height="9" fill="none" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="1" y="1.75" width="17.2" height="8.5" rx="2.6"/>
+                <rect x="19.1" y="4.2" width="1.6" height="3.6" rx="0.8" fill="currentColor" stroke="none"/>
+                <rect id="deck-bat-level" x="2.8" y="3.5" width="13.4" height="5" rx="1.2" fill="currentColor" stroke="none"/>
+              </svg>
+              <svg id="deck-bat-bolt" class="bat-bolt hidden" viewBox="0 0 24 24" width="9" height="9" fill="currentColor"><path d="M13.5 1.5 4.5 13.5h5.8L9 22.5 19.5 10.2h-5.8z"/></svg>
+            </span>
+            <span id="deck-bat-pct">100%</span>
+          </span>
           <span id="deck-weather" class="mx-weather" data-deck="weather">
             <svg viewBox="0 0 24 24" width="13" height="13" fill="none" style="display:inline-block;vertical-align:middle;margin-right:2px;flex-shrink:0;"><circle cx="12" cy="12" r="5" fill="#FFB800"/><g stroke="#FF9800" stroke-width="1.8" stroke-linecap="round"><line x1="12" y1="2" x2="12" y2="4.5"/><line x1="12" y1="19.5" x2="12" y2="22"/><line x1="2" y1="12" x2="4.5" y2="12"/><line x1="19.5" y1="12" x2="22" y2="12"/><line x1="4.93" y1="4.93" x2="6.7" y2="6.7"/><line x1="17.3" y1="17.3" x2="19.07" y2="19.07"/><line x1="4.93" y1="19.07" x2="6.7" y2="17.3"/><line x1="17.3" y1="6.7" x2="19.07" y2="4.93"/></g></svg>
             <span id="deck-weather-temp">28°C</span>
-          </span>
-          <span id="deck-battery" class="mx-battery hidden" data-deck="battery" title="Laptop Battery">
-            <span id="deck-bat-pct">100%</span>
-            <span id="deck-bat-ico">
-              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <rect x="2" y="7" width="16" height="10" rx="2"/>
-                <line x1="22" y1="11" x2="22" y2="13"/>
-                <rect id="deck-bat-level" x="4" y="9" width="10" height="6" rx="1" fill="currentColor"/>
-              </svg>
-              <svg id="deck-bat-bolt" class="hidden" viewBox="0 0 24 24" width="10" height="10" fill="currentColor"><path d="M13.2 2 5 13.4h5.6L9.8 22 19 10.2h-5.7z"/></svg>
-            </span>
           </span>
           <div class="mx-view-switcher" data-active="controls">
             <button id="mx-tab-controls" class="active" title="Controls" aria-label="Controls"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg></button>
             <button id="mx-tab-widgets" title="Widgets" aria-label="Widgets"><svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><rect x="3.5" y="3.5" width="7" height="7" rx="1.8"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.8"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.8"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.8"/></svg></button>
           </div>
-          <button id="deck-prayer-btn" class="mx-icon-btn hidden" title="Prayer &amp; Solar Deck (সালাত ও সূর্যের অবস্থান)" aria-label="Prayer and Solar Deck">
+          <button id="deck-prayer-btn" class="mx-icon-btn hidden" title="Prayer &amp; Solar Deck" aria-label="Prayer and Solar Deck">
             <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 20v-6a6 6 0 0 1 12 0v6"/><path d="M12 8V5.2"/><path d="M3 20h18"/><path d="M10 20v-2.5a2 2 0 0 1 4 0V20"/></svg>
           </button>
           <button id="deck-tray-btn" class="mx-icon-btn" title="File Tray">
@@ -387,7 +387,7 @@
 
       <!-- PRAYER & SOLAR DECK (optional: Settings > Notch > Prayer Times; hidden and idle while off) -->
       <div id="mx-prayer-body">
-        <div class="mx-widget-card pr-sun" title="সূর্যের গতিপথ">
+        <div class="mx-widget-card pr-sun" title="Solar Path">
           <div class="wg-head"><b>Solar Path</b><span id="pr-loc">--</span></div>
           <svg id="pr-arc" viewBox="0 0 217 68" aria-hidden="true">
             <line class="pr-horizon" x1="4" y1="54" x2="213" y2="54"/>
@@ -402,7 +402,7 @@
           <div class="pr-now"><b id="pr-next-name">--</b><em id="pr-next-in"></em></div>
           <div class="pr-sub" id="pr-next-sub">--</div>
         </div>
-        <div class="mx-widget-card pr-times" title="সালাতের সময়">
+        <div class="mx-widget-card pr-times" title="Prayer Times">
           <div class="wg-head"><b>Prayer Times</b><span>Today</span></div>
           <div id="pr-list" class="pr-list"></div>
         </div>
