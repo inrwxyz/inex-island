@@ -236,6 +236,7 @@ fn main() {
             clipboard::clipboard_seq,
             clipboard::get_clipboard_text,
             clipboard::set_clipboard_text,
+            clipboard::set_clipboard_image,
             clipboard::get_clipboard_files,
             clipboard::set_clipboard_files,
             clipboard::filter_screenshot_paths,

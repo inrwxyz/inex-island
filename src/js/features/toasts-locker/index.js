@@ -56,6 +56,7 @@ export function showToast(kind, text, ms) {
     renderCenter();
     updateClocks();
     refreshMedia();
+    bus.emit('smart:sync');
   }, duration);
   return true;
 }
@@ -249,6 +250,9 @@ export function startCompactTransferUI() {
 }
 
 export function updateCompactTransferPct(pct, speed, name) {
+  if (typeof pct === 'number' && Number.isFinite(pct)) {
+    lastReportedPct = Math.max(lastReportedPct, pct);
+  }
   const pctEl = document.getElementById('c-transfer-pct');
   if (pctEl) pctEl.textContent = speed ? `${pct}% \u2022 ${speed}` : `${pct}%`;
   const box = document.getElementById('c-transfer-anim');

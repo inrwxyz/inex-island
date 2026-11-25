@@ -72,6 +72,16 @@
   function bytesToCode(b) { return b32enc(b).slice(0, 8); }
   function codeToBytes(c) { return Array.from(b32dec(String(c))).slice(0, 5); }   // 8 symbols = exactly 5 bytes
 
+  function isUsableHostIp(ip) {
+    if (ip[0] === 127 || ip[0] === 0) return false;
+    if (ip[0] === 169 && ip[1] === 254) return false;
+    return true;
+  }
+
+  function isPrivateLan(ip) {
+    return (ip[0] === 192 && ip[1] === 168) || ip[0] === 10 || (ip[0] === 172 && ip[1] >= 16 && ip[1] <= 31);
+  }
+
   /* ---------------- SDP -> info ---------------- */
   function parseSdp(sdp) {
     const info = { ufrag: '', pwd: '', fp: null, passive: false, cands: [], host: false };
@@ -92,12 +102,22 @@
         const ip = t[4].split('.').map(Number);
         const port = Number(t[5]);
         if (ip.length !== 4 || ip.some(n => !(n >= 0 && n <= 255)) || !(port > 0 && port < 65536)) return;
+        if (t[7] === 'host' && !isUsableHostIp(ip)) return;
         const key = ip.join('.') + ':' + port;
         const list = t[7] === 'srflx' ? srflx : (t[7] === 'host' ? host : null);
         if (list && !list.some(c => c.key === key)) list.push({ ip, port, key });
       }
     });
-    const pick = srflx.length ? srflx : host;
+    host.sort((a, b) => (isPrivateLan(b.ip) ? 1 : 0) - (isPrivateLan(a.ip) ? 1 : 0));
+    const lanHosts = host.filter(c => isPrivateLan(c.ip));
+    let pick;
+    if (srflx.length) {
+      // Include up to 2 public srflx candidates + 1 private LAN candidate so same-Wi-Fi peers connect without hairpin NAT
+      pick = srflx.slice(0, lanHosts.length ? MAX_CANDS - 1 : MAX_CANDS);
+      if (lanHosts.length) pick.push(lanHosts[0]);
+    } else {
+      pick = host;
+    }
     info.host = !srflx.length && host.length > 0;
     info.cands = pick.slice(0, MAX_CANDS).map(c => ({ ip: c.ip, port: c.port }));
     if (!info.ufrag || !info.pwd || !info.fp) throw new Error('Could not parse WebRTC connection parameters.');

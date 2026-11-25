@@ -587,6 +587,111 @@ pub fn set_clipboard_text(window: tauri::WebviewWindow, text: String) -> bool {
     }
 }
 
+/// Converts raw RGBA pixels into a bottom-up 32bpp BGRA BITMAPINFOHEADER DIB buffer (`CF_DIB`).
+#[cfg(any(windows, test))]
+pub(crate) fn rgba_to_dib(rgba: &[u8], width: u32, height: u32) -> Option<Vec<u8>> {
+    if width == 0 || height == 0 || width > 4096 || height > 4096 {
+        return None;
+    }
+    let expected = (width as usize).checked_mul(height as usize)?.checked_mul(4)?;
+    if rgba.len() != expected {
+        return None;
+    }
+    let row_bytes = (width as usize) * 4;
+    let mut dib = Vec::with_capacity(40 + expected);
+    // BITMAPINFOHEADER (40 bytes, little-endian)
+    dib.extend_from_slice(&40u32.to_le_bytes()); // biSize
+    dib.extend_from_slice(&(width as i32).to_le_bytes()); // biWidth
+    dib.extend_from_slice(&(height as i32).to_le_bytes()); // biHeight (>0 => bottom-up)
+    dib.extend_from_slice(&1u16.to_le_bytes()); // biPlanes
+    dib.extend_from_slice(&32u16.to_le_bytes()); // biBitCount
+    dib.extend_from_slice(&0u32.to_le_bytes()); // biCompression = BI_RGB
+    dib.extend_from_slice(&(expected as u32).to_le_bytes()); // biSizeImage
+    dib.extend_from_slice(&0i32.to_le_bytes()); // biXPelsPerMeter
+    dib.extend_from_slice(&0i32.to_le_bytes()); // biYPelsPerMeter
+    dib.extend_from_slice(&0u32.to_le_bytes()); // biClrUsed
+    dib.extend_from_slice(&0u32.to_le_bytes()); // biClrImportant
+
+    for y in (0..height as usize).rev() {
+        let row = &rgba[y * row_bytes..(y + 1) * row_bytes];
+        for px in row.chunks_exact(4) {
+            dib.push(px[2]); // B
+            dib.push(px[1]); // G
+            dib.push(px[0]); // R
+            dib.push(px[3]); // A
+        }
+    }
+    Some(dib)
+}
+
+#[tauri::command]
+pub fn set_clipboard_image(
+    window: tauri::WebviewWindow,
+    request: tauri::ipc::Request,
+) -> Result<bool, String> {
+    let hdr = request.headers();
+    let width: u32 = hdr
+        .get("x-width")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|s| s.parse().ok())
+        .ok_or_else(|| "missing x-width".to_string())?;
+    let height: u32 = hdr
+        .get("x-height")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|s| s.parse().ok())
+        .ok_or_else(|| "missing x-height".to_string())?;
+    let rgba = match request.body() {
+        tauri::ipc::InvokeBody::Raw(b) => b,
+        _ => return Err("expected raw RGBA bytes".to_string()),
+    };
+
+    #[cfg(windows)]
+    unsafe {
+        use windows::Win32::Foundation::{GlobalFree, HANDLE, HWND};
+        use windows::Win32::System::DataExchange::{
+            CloseClipboard, EmptyClipboard, OpenClipboard, SetClipboardData,
+        };
+        use windows::Win32::System::Memory::{GlobalAlloc, GlobalLock, GlobalUnlock, GMEM_MOVEABLE};
+        const CF_DIB: u32 = 8;
+
+        let Some(dib) = rgba_to_dib(rgba, width, height) else {
+            return Ok(false);
+        };
+        let owner = match window.hwnd() {
+            Ok(h) => HWND(h.0 as *mut core::ffi::c_void),
+            Err(_) => HWND::default(),
+        };
+        let hg = match GlobalAlloc(GMEM_MOVEABLE, dib.len()) {
+            Ok(h) => h,
+            Err(_) => return Ok(false),
+        };
+        let dst = GlobalLock(hg) as *mut u8;
+        if dst.is_null() {
+            let _ = GlobalFree(hg);
+            return Ok(false);
+        }
+        std::ptr::copy_nonoverlapping(dib.as_ptr(), dst, dib.len());
+        let _ = GlobalUnlock(hg);
+
+        for _ in 0..5 {
+            if OpenClipboard(owner).is_ok() {
+                let _ = EmptyClipboard();
+                let res = SetClipboardData(CF_DIB, HANDLE(hg.0));
+                let _ = CloseClipboard();
+                return Ok(res.is_ok());
+            }
+            std::thread::sleep(std::time::Duration::from_millis(25));
+        }
+        let _ = GlobalFree(hg);
+        Ok(false)
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = (window, width, height, rgba);
+        Ok(false)
+    }
+}
+
 use tauri::AppHandle;
 
 #[cfg(test)]
@@ -661,5 +766,25 @@ mod tests {
                 let _ = CloseClipboard();
             }
         }
+    }
+
+    #[test]
+    fn rgba_to_dib_builds_valid_bottom_up_header() {
+        // 2x2: top row red/green, bottom row blue/white
+        let rgba = [
+            255, 0, 0, 255,   0, 255, 0, 255,
+            0, 0, 255, 255,   255, 255, 255, 255,
+        ];
+        let dib = rgba_to_dib(&rgba, 2, 2).expect("valid dib");
+        assert_eq!(dib.len(), 40 + 16);
+        assert_eq!(u32::from_le_bytes(dib[0..4].try_into().unwrap()), 40);
+        assert_eq!(i32::from_le_bytes(dib[4..8].try_into().unwrap()), 2);
+        assert_eq!(i32::from_le_bytes(dib[8..12].try_into().unwrap()), 2);
+        // Bottom row comes first in bottom-up DIB: blue (BGRA = 255,0,0,255)
+        assert_eq!(&dib[40..44], &[255, 0, 0, 255]);
+        // Top row comes second: red (BGRA = 0,0,255,255)
+        assert_eq!(&dib[48..52], &[0, 0, 255, 255]);
+        assert!(rgba_to_dib(&[0; 4], 2, 2).is_none());
+        assert!(rgba_to_dib(&[], 0, 2).is_none());
     }
 }

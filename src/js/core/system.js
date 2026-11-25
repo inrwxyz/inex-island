@@ -205,10 +205,30 @@ export async function syncDeckStatsUI() {
   setDeckStatMeter('deck-stat-ram', 'deck-ram-val', 'deck-ram-bar', s.ram_pct, 85, 70, false, 'deck-ram-sub', s.ram_used_gb > 0 ? `${s.ram_used_gb.toFixed(1)} GB` : '');
 }
 
+export function syncSmartHidden(nextFs) {
+  if (typeof nextFs === 'boolean') appState.isFs = nextFs;
+  const SET = loadSettings();
+  const busyPopup = !!(
+    currentOffer ||
+    appState.transferring ||
+    appState.prompting ||
+    appState.lockerPrompting ||
+    island?.classList.contains('anim-radar-card-open') ||
+    island?.classList.contains('bt-hud-active') ||
+    island?.classList.contains('biometric-active')
+  );
+  const shouldHide = !!(
+    SET.notch?.mode === 'smart' &&
+    appState.isFs &&
+    appState.currentView === 'view-compact' &&
+    !busyPopup
+  );
+  island?.classList.toggle('smart-hidden', shouldHide);
+}
+
 export async function refreshStats() {
   const stats = await invokeTauri('get_sys_stats');
   if (stats) {
-    const SET = loadSettings();
     appState.stats = stats;
     updateClocks();
     renderWidgets();
@@ -226,12 +246,7 @@ export async function refreshStats() {
       if (sub && appState.wifiRadio) sub.textContent = stats.wifi_name;
     }
 
-    const currentMode = SET.notch?.mode;
-    if (currentMode === 'smart' && stats.is_fullscreen && appState.currentView === 'view-compact') {
-      island?.classList.add('smart-hidden');
-    } else {
-      island?.classList.remove('smart-hidden');
-    }
+    syncSmartHidden(!!stats.is_fullscreen);
   }
 }
 
@@ -385,15 +400,11 @@ export function initSystemPolling() {
   });
 
   onTauriEvent('fullscreen-changed', (e) => {
-    const isFs = !!(e?.payload?.is_fullscreen);
-    appState.isFs = isFs;
-    const SET = loadSettings();
-    if (SET.notch?.mode === 'smart' && appState.currentView === 'view-compact') {
-      island?.classList.toggle('smart-hidden', isFs);
-    } else {
-      island?.classList.remove('smart-hidden');
-    }
+    syncSmartHidden(!!(e?.payload?.is_fullscreen));
   });
+
+  bus.on('smart:sync', () => syncSmartHidden());
+  bus.on('view:change', () => syncSmartHidden());
 
   onTauriEvent('power-changed', (e) => {
     if (e?.payload) {

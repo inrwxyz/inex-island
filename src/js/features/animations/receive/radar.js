@@ -53,7 +53,7 @@ export const receiveRadar = {
   },
 
   onIncoming(meta = {}) {
-    if (!island || islandIsHidden()) return;
+    if (!island || appState.currentView !== 'view-compact' || islandIsHidden()) return;
     stopStream();
     const tok = nextToken('receive');
     _radarTok = tok;
@@ -98,12 +98,18 @@ export const receiveRadar = {
     }
 
     const showCard = () => {
-      if (!isToken('receive', tok) || !island) return;
+      if (!isToken('receive', tok) || !island || appState.currentView !== 'view-compact') return;
       bus.emit('hud:hide', true);
       const bar = island.querySelector('#view-compact .compact-bar');
       if (!bar) return;
 
       removeRadarCard(false);
+      clearTimeout(appState.toastTimer);
+      appState.toast = false;
+      document.getElementById('c-toast')?.classList.add('hidden');
+      island.classList.remove('smart-hidden', 'has-toast', 'welcome-hud', 'biometric-active', 'bio-hud', 'hud-pre', 'hud-out', 'hud-back');
+      if (!appState.transferring) island.classList.remove('transferring');
+      document.getElementById('c-biometric-box')?.classList.add('hidden');
       island.classList.add('anim-radar-card-open');
       reportIslandSize({ width: 320, height: 124 });
 

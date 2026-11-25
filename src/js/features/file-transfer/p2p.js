@@ -73,7 +73,9 @@ export function waitCandidatesGathered(pc, maxWaitMs = 4500) {
       if (!e.candidate) {
         finish();
       } else {
-        if (!softTimer) softTimer = setTimeout(finish, 600);
+        const c = e.candidate;
+        const isSrflx = c.type === 'srflx' || /\btyp\s+srflx\b/i.test(c.candidate || '');
+        if (isSrflx && !softTimer) softTimer = setTimeout(finish, 600);
       }
     };
     setTimeout(finish, maxWaitMs);
@@ -139,7 +141,7 @@ export function p2pHintText() {
     case 'generating': return 'Creating code\u2026';
     case 'offer-ready': return 'Click QR to copy, then paste reply.';
     case 'joining': return 'Joining\u2026';
-    case 'reply-ready': return 'Reply copied. Send it back.';
+    case 'reply-ready': return directUi.replyCopied ? 'Reply copied. Send it back.' : 'Click QR to copy reply, send back.';
     case 'connecting': return 'Connecting\u2026';
     default: return 'Generate or paste a QR.';
   }
@@ -181,18 +183,46 @@ export function drawP2PQr(canvas, text) {
   }
 }
 
-export async function copyP2PQr() {
+export async function copyP2PQr(fallbackCode = '') {
   const slot = document.getElementById('code-display-box');
   const cv = document.getElementById('p2p-qr-canvas');
   if (!slot || !cv || cv.classList.contains('hidden')) return false;
+  let copiedKind = '';
   try {
     const blob = await new Promise((res) => cv.toBlob(res, 'image/png'));
-    await navigator.clipboard.write([new window.ClipboardItem({ 'image/png': blob })]);
+    if (blob && window.ClipboardItem && navigator.clipboard?.write) {
+      await navigator.clipboard.write([new window.ClipboardItem({ 'image/png': blob })]);
+      copiedKind = 'image';
+    }
   } catch {
-    return false;
+    copiedKind = '';
   }
+  if (!copiedKind) {
+    try {
+      const g = cv.getContext('2d', { willReadFrequently: true });
+      const img = g && g.getImageData(0, 0, cv.width, cv.height);
+      if (img && img.data) {
+        const ok = await invokeRaw('set_clipboard_image', new Uint8Array(img.data.buffer), {
+          'x-width': String(cv.width),
+          'x-height': String(cv.height)
+        });
+        if (ok) copiedKind = 'image';
+      }
+    } catch {
+      copiedKind = '';
+    }
+  }
+  if (!copiedKind && fallbackCode) {
+    try {
+      const ok = await invokeTauri('set_clipboard_text', { text: String(fallbackCode) });
+      if (ok) copiedKind = 'text';
+    } catch {
+      copiedKind = '';
+    }
+  }
+  if (!copiedKind) return false;
   const toast = document.getElementById('p2p-qr-toast');
-  if (toast) toast.textContent = 'Copied \u2713';
+  if (toast) toast.textContent = copiedKind === 'text' ? 'Code copied \u2713' : 'Copied \u2713';
   slot.classList.add('copied');
   clearTimeout(slot._copyT);
   slot._copyT = setTimeout(() => slot.classList.remove('copied'), 1200);
@@ -466,9 +496,14 @@ export async function handleDirectJoinOffer(hostCode) {
     const expiresAt = Date.now() + CODE_TTL_MS;
     directJoinSession = { pc, replyCode, expiresAt };
     armDirectExpiry(expiresAt);
-    setDirectState({ phase: 'reply-ready', replyCode, expiresAt });
+    setDirectState({ phase: 'reply-ready', replyCode, expiresAt, replyCopied: false });
     await directSleep(60);
-    if (await copyP2PQr()) showP2PToast('done', 'Reply QR copied', 1600);
+    const copied = await copyP2PQr(replyCode);
+    if (directUi.phase === 'reply-ready' && directUi.replyCode === replyCode) {
+      setDirectState({ phase: 'reply-ready', replyCode, expiresAt, replyCopied: !!copied });
+    }
+    if (copied) showP2PToast('done', 'Reply QR copied', 1600);
+    else showP2PToast('info', 'Click QR to copy reply', 2200);
   } catch (err) {
     try { if (pc) pc.close(); } catch (e) { console.warn('P2P pc close err:', e); }
     if (tok === directGenSeq) {
@@ -1047,12 +1082,17 @@ export function refreshStatusPill() {
 export function refreshTransferUI() {
   if (anyTransferActive()) {
     if (!appState.transferring) {
-      if (typeof window.startCompactTransferUI === 'function') window.startCompactTransferUI();
-      bus.emit('transfer:start');
+      let s = false;
+      let r = false;
+      for (const e of rtcPeers.values()) {
+        if (e.send && e.send.active) s = true;
+        if (e.recv && e.recv.active) r = true;
+      }
+      appState.xferDir = s && r ? 'both' : r ? 'recv' : 'send';
+      bus.emit('transfer:start', { dir: appState.xferDir });
     }
   } else if (appState.transferring) {
-    if (typeof window.finishCompactTransferUI === 'function') window.finishCompactTransferUI();
-    bus.emit('transfer:finish');
+    bus.emit('transfer:finish', { ok: true });
   }
   updateOfferGlow();
   renderPeersUI();
@@ -1199,6 +1239,12 @@ export function renderCenter() {
 
 export function initP2P() {
   const $ = (id) => document.getElementById(id);
+  bus.on('drop:mode-switched', (mode) => {
+    if (mode !== 'qs') return;
+    if (rtcPeers.size === 0 && !directHostSession && !directJoinSession && directUi.phase === 'standby') return;
+    for (const id of [...rtcPeers.keys()]) disconnectPeer(id);
+    handleDirectDisconnect();
+  });
   $('btn-gen-code')?.addEventListener('click', (e) => {
     e.stopPropagation();
     handleDirectGenOffer();
@@ -1207,10 +1253,15 @@ export function initP2P() {
 
   const slot = $('code-display-box');
   slot?.addEventListener('animationend', () => slot.classList.remove('pop'));
+  slot?.addEventListener('mousedown', () => {
+    invokeTauri('focus_island').catch(() => {});
+  });
   slot?.addEventListener('click', async () => {
+    invokeTauri('focus_island').catch(() => {});
     slot.focus({ preventScroll: true });
     if (!slot.classList.contains('has-qr')) return;
-    if (!(await copyP2PQr())) showP2PToast('lock', 'Copy failed', 1500);
+    const code = directUi.phase === 'reply-ready' ? directUi.replyCode : directUi.code;
+    if (!(await copyP2PQr(code || ''))) showP2PToast('lock', 'Copy failed', 1500);
   });
 
   document.addEventListener('paste', async (e) => {

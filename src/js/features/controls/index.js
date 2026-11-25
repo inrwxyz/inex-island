@@ -527,6 +527,7 @@ export function openDeckSub(viewId, title, from) {
   if (viewId === 'view-clipboard') openClipboardView();
   if (viewId === 'view-alarm') openAlarmView();
   if (viewId === 'view-inexdrop') refreshDropUI();
+  if (viewId === 'view-p2p') invokeTauri('focus_island').catch(() => {});
   syncDropRail(viewId);
 }
 

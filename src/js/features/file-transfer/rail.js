@@ -35,6 +35,7 @@ export function setDropMode(mode) {
   }
   updateDropTile();
   updateTrayShareButton();
+  if (changed) bus.emit('drop:mode-switched', m);
 }
 
 export const QS_ICON_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v10M8 8l4-4 4 4M4 14v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg>';

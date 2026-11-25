@@ -587,6 +587,7 @@ export function sendTrayFiles(peerId, files) {
 }
 
 export function initTray() {
+  window.sendTrayFiles = sendTrayFiles;
   bus.on('tray:update', updateTrayUI);
 
   const registerDrop = () => {

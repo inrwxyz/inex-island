@@ -99,6 +99,7 @@ export function clearPrompt() {
   if (subMount) subMount.classList.remove('has-prompt');
   if (dropView) dropView.classList.remove('has-prompt');
   updateDropTile({ inTransfer, currentOffer, dropActive });
+  bus.emit('smart:sync');
 }
 
 function isDeckLayout() {
@@ -121,6 +122,7 @@ export function openP2PView() {
     return;
   }
   bus.emit('view:switch', { viewId: 'view-p2p', stateClass: 'state-sub', width: DROP_W, height: DROP_H });
+  invokeTauri('focus_island').catch(() => {});
 }
 
 export function openDropView() {
@@ -355,14 +357,19 @@ export function endTransfer(delay = 2800, ok = true) {
     inTransfer = false;
     document.getElementById('drop-state-active')?.classList.remove('is-xfer');
     refreshDropUI();
+    bus.emit('smart:sync');
   }, delay);
 
   bus.emit('transfer:finish', { ok });
+  bus.emit('smart:sync');
 }
 
 export function activateOfferPrompt(offer) {
   currentOffer = offer;
   clearTimeout(offerExpireTimer);
+
+  // Incoming share must unhide smart-mode island immediately before offer UI/animations decide visibility
+  document.getElementById('island')?.classList.remove('smart-hidden');
 
   offerExpireTimer = setTimeout(() => {
     if (currentOffer && currentOffer.pin === offer.pin) {
@@ -390,20 +397,22 @@ export function activateOfferPrompt(offer) {
 
   refreshDropUI();
 
-  bus.emit('anim:incoming', {
-    fileName: displayTitle,
-    size: offer.total || firstFile.size,
-    sizeText: fmtBytes(offer.total || firstFile.size),
-    sender: offer.device || 'Nearby device',
-    onAccept: () => acceptTransferPrompt(),
-    onDecline: () => declineTransferPrompt()
-  });
+  if (appState.currentView === 'view-compact') {
+    bus.emit('anim:incoming', {
+      fileName: displayTitle,
+      size: offer.total || firstFile.size,
+      sizeText: fmtBytes(offer.total || firstFile.size),
+      sender: offer.device || 'Nearby device',
+      onAccept: () => acceptTransferPrompt(),
+      onDecline: () => declineTransferPrompt()
+    });
+  }
 
   const isViewingDrop = (appState.currentView === 'view-inexdrop') ||
-    (appState.currentView === 'view-control-deck' && appState.currentDeckSubTarget && appState.currentDeckSubTarget.id === 'view-inexdrop');
+    (appState.currentView === 'view-control-deck' && appState.deckSubId === 'view-inexdrop');
 
   const animCfg = loadSettings()?.animations;
-  const radarCardTakesOver = !!(animCfg?.enabled && animCfg?.receive?.enabled && (animCfg?.receive?.id || 'radar') === 'radar');
+  const radarCardTakesOver = !!(appState.currentView === 'view-compact' && animCfg?.enabled && animCfg?.receive?.enabled && (animCfg?.receive?.id || 'radar') === 'radar');
 
   if (appState.currentView === 'view-control-deck') {
     if (!isViewingDrop) {
@@ -453,7 +462,7 @@ export async function declineTransferPrompt(silent = false) {
   currentOffer = null;
 
   await invokeTauri('respond_quick_share_offer', { accept: false });
-  refreshDropUI();
+  refreshDropUI(false);
   if (!silent) {
     bus.emit('toast:show', { icon: 'unphone', title: 'Transfer declined', ms: 1800 });
   }
@@ -462,18 +471,18 @@ export async function declineTransferPrompt(silent = false) {
 export async function startInexDrop() {
   dropActive = true;
   appState.dropActive = true;
-  refreshDropUI();
+  refreshDropUI(false);
   try {
     const res = await invokeTauri('start_quick_share');
     if (!res) {
       dropActive = false;
       appState.dropActive = false;
-      refreshDropUI();
+      refreshDropUI(false);
     }
   } catch (err) {
     dropActive = false;
     appState.dropActive = false;
-    refreshDropUI();
+    refreshDropUI(false);
     console.warn('start_quick_share error:', err);
   }
 }
@@ -483,11 +492,13 @@ export async function stopInexDrop() {
   appState.dropActive = false;
   inTransfer = false;
   clearDiscoveredDevices();
-  refreshDropUI();
+  refreshDropUI(false);
   try {
     await invokeTauri('stop_quick_share');
   } catch (err) {
     console.warn('stop_quick_share error:', err);
+  } finally {
+    refreshDropUI(false);
   }
 }
 
@@ -819,6 +830,12 @@ export function initQuickShare() {
   });
 
   bus.on('drop:refresh', () => refreshDropUI());
+  bus.on('drop:mode-switched', (mode) => {
+    if (mode === 'p2p' && (dropActive || currentOffer || inTransfer)) {
+      if (currentOffer) declineTransferPrompt(true);
+      stopInexDrop();
+    }
+  });
 
   const tileDrop = $('tile-drop');
   if (tileDrop) {
