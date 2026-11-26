@@ -2021,7 +2021,6 @@ dependencies = [
  "cbc",
  "hkdf",
  "hmac",
- "libaes",
  "mdns-sd",
  "p256",
  "prost",
@@ -2278,12 +2277,6 @@ dependencies = [
  "bitflags 2.13.2",
  "serde",
 ]
-
-[[package]]
-name = "libaes"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "82903360c009b816f5ab72a9b68158c27c301ee2c3f20655b55c5e589e7d3bb7"
 
 [[package]]
 name = "libappindicator"

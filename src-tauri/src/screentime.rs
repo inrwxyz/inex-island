@@ -383,10 +383,7 @@ fn is_real_window(hwnd: isize) -> bool {
         }
         let ex = sys::GetWindowLongW(hwnd, -20) as u32; // GWL_EXSTYLE
         // Must not be a toolwindow or noactivate popup
-        if (ex & 0x0000_0080) != 0 || (ex & 0x0800_0000) != 0 {
-            return false;
-        }
-        true
+        (ex & (0x0000_0080 | 0x0800_0000)) == 0
     }
 }
 

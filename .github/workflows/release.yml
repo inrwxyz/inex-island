@@ -34,10 +34,11 @@ jobs:
           npm test
           npm run build:frontend
 
-      - name: Rust Clippy & Tests
-        run: |
-          cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
-          cargo test --manifest-path src-tauri/Cargo.toml
+      - name: Rust Clippy (-D warnings)
+        run: cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
+
+      - name: Rust Unit Tests
+        run: cargo test --manifest-path src-tauri/Cargo.toml
 
       - name: Build Tauri Application
         uses: tauri-apps/tauri-action@v0

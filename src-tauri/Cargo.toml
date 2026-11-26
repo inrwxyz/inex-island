@@ -29,7 +29,6 @@ mdns-sd = "0.21.7"
 aes = "0.8"
 cbc = { version = "0.1", features = ["alloc"] }
 hmac = "0.12"
-libaes = "0.7.0"
 rfd = "0.15"
 
 [features]
