@@ -5,7 +5,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Mutex, MutexGuard, OnceLock};
 use std::time::{Duration, Instant};
 
@@ -13,7 +13,7 @@ const MIN_SECS: u64 = 2; // only 2 seconds to appear
 const TICK_SECS: u64 = 5; // check every 5 seconds for snappy updates
 const IDLE_LIMIT_MS: u32 = 120_000; // 2 min without mouse/keyboard = idle
 
-static SESSION_START: OnceLock<Instant> = OnceLock::new();
+static TOTAL_SECS: AtomicU64 = AtomicU64::new(0);
 static CUR_APP: Mutex<Option<String>> = Mutex::new(None);
 static LAST_INSTANT: Mutex<Option<Instant>> = Mutex::new(None);
 static ENABLED: AtomicBool = AtomicBool::new(true);
@@ -551,6 +551,7 @@ fn accrue() {
 
     let open_apps = get_open_taskbar_apps();
     if idle_ms() < IDLE_LIMIT_MS {
+        TOTAL_SECS.fetch_add(el, Ordering::Relaxed);
         let mut apps = apps_lock();
         for exe in open_apps {
             *apps.entry(exe).or_insert(0) += el;
@@ -567,7 +568,6 @@ pub fn on_foreground(_hwnd: isize) {
 }
 
 pub fn start() {
-    SESSION_START.get_or_init(Instant::now);
     let enabled_path = crate::startup::data_dir().join("screentime_enabled.txt");
     if let Ok(content) = std::fs::read_to_string(&enabled_path) {
         if content.trim() == "0" {
@@ -579,6 +579,7 @@ pub fn start() {
     let t_str = today();
     let disk_days = read_disk_history();
     if let Some(today_record) = disk_days.iter().find(|d| d.date == t_str) {
+        TOTAL_SECS.store(today_record.total, Ordering::Relaxed);
         let mut apps = apps_lock();
         for app in &today_record.apps {
             apps.entry(app.exe.clone()).or_insert(app.secs);
@@ -681,8 +682,7 @@ pub fn get_screen_time_today() -> DayTime {
         };
     }
     accrue();
-    let start = SESSION_START.get().copied().unwrap_or_else(Instant::now);
-    let session_total = start.elapsed().as_secs();
+    let total = TOTAL_SECS.load(Ordering::Relaxed);
     let apps_g = apps_lock();
     let mut apps: Vec<AppTime> = apps_g
         .iter()
@@ -694,10 +694,9 @@ pub fn get_screen_time_today() -> DayTime {
         })
         .collect();
     apps.sort_by(|a, b| b.secs.cmp(&a.secs));
-    let apps_total: u64 = apps.iter().map(|a| a.secs).sum();
     DayTime {
         date: today(),
-        total: session_total.max(apps_total),
+        total,
         apps,
     }
 }
@@ -731,6 +730,7 @@ pub fn set_screen_time_enabled(on: bool) {
 
 #[tauri::command]
 pub fn clear_screen_time() {
+    TOTAL_SECS.store(0, Ordering::Relaxed);
     let mut apps = apps_lock();
     apps.clear();
     let mut cur = CUR_APP.lock().unwrap_or_else(|e| e.into_inner());

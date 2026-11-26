@@ -265,6 +265,12 @@ function screentimePage() {
       <span id="st-tracking-state" style="font-size:11px;font-weight:600;color:${isStEnabled ? 'var(--mint, #20c997)' : 'var(--faint, #8e8e93)'};">${isStEnabled ? 'Tracking' : 'Off'}</span>
     </div>
     <div class="gp st-chart-card">
+      <div class="st-chart-top">
+        <div class="st-mode-seg" role="tablist" aria-label="View mode">
+          <button type="button" class="st-mode-btn on" data-st-mode="apps">Apps</button>
+          <button type="button" class="st-mode-btn" data-st-mode="sessions">Screen Time</button>
+        </div>
+      </div>
       <div class="st-bars-wrap" id="st-bars-container">
         <div style="margin:auto;font-size:12px;color:var(--faint)">Loading history...</div>
       </div>
@@ -276,7 +282,7 @@ function screentimePage() {
     <div class="lb" id="st-day-header">${isStEnabled ? 'Today' : 'Today (Tracking Off)'}</div>
     <div class="gp" id="st-day-card">
       <div class="rw st-total-row">
-        <div class="t">Total</div>
+        <div class="t" id="st-total-label">Total</div>
         <b class="st-total-time" id="st-total-val">--</b>
       </div>
       <div id="st-app-list">

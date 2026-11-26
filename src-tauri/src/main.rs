@@ -14,6 +14,7 @@ mod nexus_bridge;
 mod privacy;
 mod radios;
 mod screentime;
+mod session_history;
 mod settings_win;
 mod shelf;
 mod sounds;
@@ -344,6 +345,7 @@ fn main() {
             screentime::set_screen_time_enabled,
             screentime::clear_screen_time,
             screentime::get_app_icons,
+            session_history::get_pc_session_history,
             webget::http_get
         ])
         .run(tauri::generate_context!())

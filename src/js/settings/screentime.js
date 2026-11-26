@@ -1,7 +1,9 @@
 import { invoke, esc } from './state.js';
 
 let stHistoryCache = [];
+let stSessionCache = null; // On-demand only; cleared when switching back to Apps
 let stSelectedDayIdx = 29;
+let stViewMode = 'apps'; // 'apps' (default) | 'sessions'
 const stIconCache = {};
 
 function fmtDuration(secs) {
@@ -39,9 +41,98 @@ function getBadgeColor(name) {
   return APP_BADGE_COLORS[name] || '#64748b';
 }
 
+function buildLast30DateGrid() {
+  const now = new Date();
+  const out = [];
+  for (let i = 29; i >= 0; i--) {
+    const d = new Date(now);
+    d.setDate(d.getDate() - i);
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    out.push({ date: `${yyyy}-${mm}-${dd}`, dateObj: d });
+  }
+  return out;
+}
+
+function renderBarsForActiveMode() {
+  const container = document.getElementById('st-bars-container');
+  if (!container) return;
+
+  const list = stViewMode === 'sessions' && stSessionCache ? stSessionCache : stHistoryCache;
+  if (!list.length) return;
+
+  const startLbl = document.getElementById('st-chart-start-date');
+  if (startLbl && list[0]) {
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    startLbl.textContent = `${list[0].dateObj.getDate()} ${months[list[0].dateObj.getMonth()]}`;
+  }
+
+  const maxTotal = Math.max(60, ...list.map(d => d.total || 0));
+  container.innerHTML = list.map((d, idx) => {
+    const t = d.total || 0;
+    const heightPct = Math.min(100, Math.max(6, Math.round((t / maxTotal) * 100)));
+    const isOn = idx === stSelectedDayIdx;
+    return `<div class="st-bar-col${isOn ? ' on' : ''}" data-idx="${idx}" title="${fmtDateTitle(d.dateObj)}: ${fmtDuration(t)}">
+      <div class="st-bar-fill" style="height:${heightPct}%"></div>
+    </div>`;
+  }).join('');
+
+  container.querySelectorAll('.st-bar-col').forEach(col => {
+    col.addEventListener('click', () => {
+      stSelectedDayIdx = parseInt(col.dataset.idx, 10);
+      container.querySelectorAll('.st-bar-col').forEach((c, i) => c.classList.toggle('on', i === stSelectedDayIdx));
+      renderSelectedDayView();
+    });
+  });
+}
+
+function bindModeToggle() {
+  const btns = document.querySelectorAll('.st-mode-btn[data-st-mode]');
+  if (!btns.length) return;
+  btns.forEach(btn => {
+    btn.classList.toggle('on', btn.dataset.stMode === stViewMode);
+    btn.addEventListener('click', async () => {
+      const nextMode = btn.dataset.stMode || 'apps';
+      if (nextMode === stViewMode) return;
+      stViewMode = nextMode;
+      btns.forEach(b => b.classList.toggle('on', b.dataset.stMode === stViewMode));
+
+      if (stViewMode === 'sessions') {
+        const listEl = document.getElementById('st-app-list');
+        if (listEl) listEl.innerHTML = `<div class="st-app-row"><div class="st-app-name" style="color:var(--faint)">Reading event log...</div></div>`;
+        try {
+          const rawSessions = await invoke('get_pc_session_history') || [];
+          const sessMap = {};
+          for (const d of rawSessions) {
+            if (d && d.date) sessMap[d.date] = d;
+          }
+          stSessionCache = buildLast30DateGrid().map(({ date, dateObj }) => {
+            const rec = sessMap[date];
+            return { date, dateObj, total: rec?.total_secs || 0, sessions: rec?.sessions || [] };
+          });
+        } catch (err) {
+          console.error('Failed loading PC session history:', err);
+          stSessionCache = buildLast30DateGrid().map(({ date, dateObj }) => ({ date, dateObj, total: 0, sessions: [] }));
+        }
+      } else {
+        // Release session logs from RAM immediately when returning to default Apps view
+        stSessionCache = null;
+      }
+
+      renderBarsForActiveMode();
+      renderSelectedDayView();
+    });
+  });
+}
+
 export async function renderScreenTimeData() {
   const container = document.getElementById('st-bars-container');
   if (!container) return;
+
+  // Always start in default Apps mode with no held session RAM cache
+  stViewMode = 'apps';
+  stSessionCache = null;
 
   try {
     const rawHistory = await invoke('get_screen_time_history') || [];
@@ -50,46 +141,14 @@ export async function renderScreenTimeData() {
       if (d && d.date) histMap[d.date] = d;
     }
 
-    const days30 = [];
-    const now = new Date();
-    for (let i = 29; i >= 0; i--) {
-      const d = new Date(now);
-      d.setDate(d.getDate() - i);
-      const yyyy = d.getFullYear();
-      const mm = String(d.getMonth() + 1).padStart(2, '0');
-      const dd = String(d.getDate()).padStart(2, '0');
-      const dateKey = `${yyyy}-${mm}-${dd}`;
-      const rec = histMap[dateKey] || { date: dateKey, total: 0, apps: [] };
-      days30.push({ date: dateKey, dateObj: d, total: rec.total || 0, apps: rec.apps || [] });
-    }
-    stHistoryCache = days30;
+    stHistoryCache = buildLast30DateGrid().map(({ date, dateObj }) => {
+      const rec = histMap[date] || { date, total: 0, apps: [] };
+      return { date, dateObj, total: rec.total || 0, apps: rec.apps || [] };
+    });
     stSelectedDayIdx = 29;
 
-    const startLbl = document.getElementById('st-chart-start-date');
-    if (startLbl && days30[0]) {
-      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-      startLbl.textContent = `${days30[0].dateObj.getDate()} ${months[days30[0].dateObj.getMonth()]}`;
-    }
-
-    const maxTotal = Math.max(60, ...days30.map(d => d.total));
-
-    container.innerHTML = days30.map((d, idx) => {
-      const heightPct = Math.min(100, Math.max(6, Math.round((d.total / maxTotal) * 100)));
-      const isOn = idx === stSelectedDayIdx;
-      return `<div class="st-bar-col${isOn ? ' on' : ''}" data-idx="${idx}" title="${fmtDateTitle(d.dateObj)}: ${fmtDuration(d.total)}">
-        <div class="st-bar-fill" style="height:${heightPct}%"></div>
-      </div>`;
-    }).join('');
-
-    container.querySelectorAll('.st-bar-col').forEach(col => {
-      col.addEventListener('click', () => {
-        const idx = parseInt(col.dataset.idx, 10);
-        stSelectedDayIdx = idx;
-        container.querySelectorAll('.st-bar-col').forEach((c, i) => c.classList.toggle('on', i === idx));
-        renderSelectedDayView();
-      });
-    });
-
+    bindModeToggle();
+    renderBarsForActiveMode();
     renderSelectedDayView();
     setupHistoryClear();
   } catch (err) {
@@ -98,13 +157,20 @@ export async function renderScreenTimeData() {
 }
 
 async function renderSelectedDayView() {
+  if (stViewMode === 'sessions') {
+    renderSelectedDaySessions();
+    return;
+  }
+
   const day = stHistoryCache[stSelectedDayIdx];
   if (!day) return;
 
   const dayHdr = document.getElementById('st-day-header');
+  const totLbl = document.getElementById('st-total-label');
   const totVal = document.getElementById('st-total-val');
   const listEl = document.getElementById('st-app-list');
   if (dayHdr) dayHdr.textContent = fmtDateTitle(day.dateObj);
+  if (totLbl) totLbl.textContent = 'Total';
   if (totVal) totVal.textContent = fmtDuration(day.total);
   if (!listEl) return;
 
@@ -150,6 +216,37 @@ async function renderSelectedDayView() {
   }
 }
 
+function renderSelectedDaySessions() {
+  const day = stSessionCache?.[stSelectedDayIdx];
+  if (!day) return;
+
+  const dayHdr = document.getElementById('st-day-header');
+  const totLbl = document.getElementById('st-total-label');
+  const totVal = document.getElementById('st-total-val');
+  const listEl = document.getElementById('st-app-list');
+  if (dayHdr) dayHdr.textContent = fmtDateTitle(day.dateObj);
+  if (totLbl) totLbl.textContent = 'PC Screen Time';
+  if (totVal) totVal.textContent = fmtDuration(day.total);
+  if (!listEl) return;
+
+  if (!day.sessions || day.sessions.length === 0) {
+    listEl.innerHTML = `<div class="st-app-row"><div class="st-app-name" style="color:var(--faint)">No PC sessions logged</div></div>`;
+    return;
+  }
+
+  listEl.innerHTML = day.sessions.map(s => {
+    const stLower = String(s.status || '').toLowerCase();
+    const dotCls = stLower === 'active' ? ' active' : stLower === 'unexpected' ? ' unexpected' : stLower === 'sleep' ? ' sleep' : '';
+    const tagText = s.status === 'Active' ? 'Active now' : s.status === 'Clean' ? 'Off' : esc(s.status);
+    return `<div class="st-app-row">
+      <span class="st-sess-dot${dotCls}"></span>
+      <div class="st-sess-range">${esc(s.start_label)} – ${esc(s.end_label)}</div>
+      <span class="st-sess-tag${dotCls}">${tagText}</span>
+      <div class="st-app-dur">${fmtDuration(s.duration_secs)}</div>
+    </div>`;
+  }).join('');
+}
+
 function setupHistoryClear() {
   const actions = document.getElementById('st-hist-actions');
   if (!actions) return;
@@ -165,6 +262,7 @@ function setupHistoryClear() {
     document.getElementById('btn-st-confirm')?.addEventListener('click', async () => {
       await invoke('clear_screen_time');
       stHistoryCache = [];
+      stSessionCache = null;
       await renderScreenTimeData();
     });
   });
