@@ -31,6 +31,19 @@ pub fn show_settings_window(app: &AppHandle) {
     .focused(true)
     .build()
     {
+        let app_h = app.clone();
+        w.on_window_event(move |ev| {
+            if matches!(ev, tauri::WindowEvent::Destroyed) {
+                let h = app_h.clone();
+                std::thread::spawn(move || {
+                    std::thread::sleep(std::time::Duration::from_millis(500));
+                    crate::island_window::trim_working_set();
+                    if let Some(main_w) = h.get_webview_window("main") {
+                        crate::island_window::set_webview_low_memory(&main_w, true);
+                    }
+                });
+            }
+        });
         let _ = w.set_focus();
     }
 }
@@ -129,12 +142,12 @@ pub fn set_autostart(on: bool) -> bool {
             if ok {
                 let _ = std::fs::write(&marker, b"1");
             }
-            return ok;
+            ok
         } else {
             let _ = std::fs::remove_file(&marker);
             let _ = crate::winreg::delete_value(RUN_SUBKEY, AUTOSTART_NAME);
             let _ = crate::winreg::delete_value(APPROVED_SUBKEY, AUTOSTART_NAME);
-            return true;
+            true
         }
     }
     #[cfg(not(target_os = "windows"))]

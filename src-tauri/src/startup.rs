@@ -33,8 +33,8 @@ pub fn system_shutting_down() -> bool {
     unsafe {
         use windows::Win32::UI::WindowsAndMessaging::{GetSystemMetrics, SYSTEM_METRICS_INDEX};
         // SM_SHUTTINGDOWN, or WM_QUERYENDSESSION already seen by native_events.rs
-        return GetSystemMetrics(SYSTEM_METRICS_INDEX(0x2000)) != 0
-            || crate::native_events::SHUTTING_DOWN.load(std::sync::atomic::Ordering::SeqCst);
+        GetSystemMetrics(SYSTEM_METRICS_INDEX(0x2000)) != 0
+            || crate::native_events::SHUTTING_DOWN.load(std::sync::atomic::Ordering::SeqCst)
     }
     #[cfg(not(target_os = "windows"))]
     false

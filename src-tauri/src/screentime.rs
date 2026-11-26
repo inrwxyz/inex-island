@@ -69,7 +69,7 @@ fn sync_and_prune(today_data: DayTime) -> Vec<DayTime> {
 
 pub fn save() {
     accrue();
-    let today_data = get_screen_time_today();
+    let today_data = compute_screen_time_today();
     let _ = sync_and_prune(today_data);
 }
 
@@ -326,7 +326,7 @@ fn uwp_app_path(_hwnd: isize) -> Option<String> {
 }
 
 fn file_name_lc(path: &str) -> String {
-    path.rsplit(|c: char| c == '\\' || c == '/').next().unwrap_or("").to_lowercase()
+    path.rsplit(['\\', '/']).next().unwrap_or("").to_lowercase()
 }
 
 fn win_dir() -> &'static str {
@@ -337,7 +337,7 @@ fn win_dir() -> &'static str {
             .unwrap_or_else(|_| "C:\\Windows".to_string())
             .to_lowercase()
             .replace('/', "\\");
-        d.trim_end_matches(|c: char| c == '\\').to_string()
+        d.trim_end_matches('\\').to_string()
     })
 }
 
@@ -598,6 +598,8 @@ pub fn start() {
     }
 
     let _ = std::thread::Builder::new().name("screentime".into()).spawn(|| {
+        // Warm PC session uptime cache off the UI thread so Widgets / Settings read it instantly.
+        let _ = crate::session_history::today_pc_screen_time_secs();
         let mut ticks = 0u64;
         loop {
             std::thread::sleep(Duration::from_secs(TICK_SECS));
@@ -605,7 +607,7 @@ pub fn start() {
                 accrue();
                 ticks += 1;
                 // Periodic flush every 30s so disk log stays up to date with zero RAM footprint
-                if ticks % 6 == 0 {
+                if ticks.is_multiple_of(6) {
                     save();
                 }
             }
@@ -666,9 +668,7 @@ pub struct DayTime {
     pub apps: Vec<AppTime>,
 }
 
-/// Today's current session time & apps sorted descending by time.
-#[tauri::command]
-pub fn get_screen_time_today() -> DayTime {
+pub(crate) fn compute_screen_time_today() -> DayTime {
     if !ENABLED.load(Ordering::Relaxed) {
         let history = read_disk_history();
         let today_str = today();
@@ -694,7 +694,7 @@ pub fn get_screen_time_today() -> DayTime {
             secs: *secs,
         })
         .collect();
-    apps.sort_by(|a, b| b.secs.cmp(&a.secs));
+    apps.sort_by_key(|a| std::cmp::Reverse(a.secs));
     DayTime {
         date: today(),
         total,
@@ -702,14 +702,30 @@ pub fn get_screen_time_today() -> DayTime {
     }
 }
 
+/// Today's current session time & apps sorted descending by time.
 #[tauri::command]
-pub fn get_screen_time_history() -> Vec<DayTime> {
-    if !ENABLED.load(Ordering::Relaxed) {
-        return read_disk_history();
-    }
-    accrue();
-    let today_data = get_screen_time_today();
-    sync_and_prune(today_data)
+pub async fn get_screen_time_today() -> DayTime {
+    tauri::async_runtime::spawn_blocking(compute_screen_time_today)
+        .await
+        .unwrap_or_else(|_| DayTime {
+            date: today(),
+            total: 0,
+            apps: Vec::new(),
+        })
+}
+
+#[tauri::command]
+pub async fn get_screen_time_history() -> Vec<DayTime> {
+    tauri::async_runtime::spawn_blocking(|| {
+        if !ENABLED.load(Ordering::Relaxed) {
+            return read_disk_history();
+        }
+        accrue();
+        let today_data = compute_screen_time_today();
+        sync_and_prune(today_data)
+    })
+    .await
+    .unwrap_or_default()
 }
 
 #[tauri::command]
@@ -994,4 +1010,35 @@ fn icons_for(exes: Vec<String>) -> HashMap<String, String> {
 #[tauri::command]
 pub async fn get_app_icons(exes: Vec<String>) -> HashMap<String, String> {
     tauri::async_runtime::spawn_blocking(move || icons_for(exes)).await.unwrap_or_default()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{file_name_lc, junk_name, pretty, track_name, under_windows};
+
+    #[test]
+    fn normalizes_paths_and_detects_windows_dir() {
+        assert_eq!(file_name_lc(r"C:\Program Files\Microsoft\Edge\Application\msedge.exe"), "msedge.exe");
+        assert_eq!(file_name_lc("/usr/local/bin/Code.exe"), "code.exe");
+        assert!(under_windows(r"C:\Windows\System32\notepad.exe"));
+        assert!(!under_windows(r"C:\Users\Inex\AppData\Local\Programs\Microsoft VS Code\Code.exe"));
+    }
+
+    #[test]
+    fn filters_background_hosts_and_prettifies_known_apps() {
+        assert!(junk_name("conhost.exe"));
+        assert!(!junk_name("spotify.exe"));
+        assert_eq!(pretty("code.exe"), "Visual Studio Code");
+        assert_eq!(pretty("my-custom_app.exe"), "My custom app");
+    }
+
+    #[test]
+    fn track_name_drops_windows_system_binaries_and_accepts_user_apps() {
+        assert_eq!(track_name(r"C:\Windows\explorer.exe"), None);
+        assert_eq!(track_name(r"C:\Windows\System32\svchost.exe"), None);
+        assert_eq!(
+            track_name(r"C:\Users\Demo\AppData\Roaming\Spotify\Spotify.exe"),
+            Some("spotify.exe".to_string())
+        );
+    }
 }

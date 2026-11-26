@@ -13,11 +13,11 @@ type Aes256CbcDec = cbc::Decryptor<Aes256>;
 use prost::Message;
 use rand::RngCore;
 
-use crate::protos::securegcm::{
+use super::protos::securegcm::{
     ukey2_client_init, ukey2_message, DeviceToDeviceMessage, GcmMetadata, Ukey2ClientFinished,
     Ukey2ClientInit, Ukey2HandshakeCipher, Ukey2Message, Ukey2ServerInit, Ukey2Alert,
 };
-use crate::protos::securemessage::{
+use super::protos::securemessage::{
     EncScheme, GenericPublicKey, Header, HeaderAndBody, PublicKeyType,
     SecureMessage, SigScheme, EcP256PublicKey,
 };
@@ -29,10 +29,19 @@ const D2D_SALT: [u8; 32] = [
     0x5F, 0x13, 0xFA, 0x7D, 0xEB, 0x1D, 0x4A, 0xB3, 0x83, 0x76, 0xB8, 0x25, 0x6D, 0xA8, 0x55, 0x10,
 ];
 
+const EXPECTED_NEXT_PROTOCOL: &str = "AES_256_CBC-HMAC_SHA256";
+
 pub struct Ukey2HandshakeSession {
     secret_key: SecretKey,
     public_key: PublicKey,
     pub server_init_raw: Vec<u8>,
+    client_commitment: Option<Vec<u8>>,
+}
+
+impl Default for Ukey2HandshakeSession {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Ukey2HandshakeSession {
@@ -43,6 +52,7 @@ impl Ukey2HandshakeSession {
             secret_key,
             public_key,
             server_init_raw: Vec::new(),
+            client_commitment: None,
         }
     }
 
@@ -58,6 +68,23 @@ impl Ukey2HandshakeSession {
         if client_init.version.unwrap_or(0) != 1 {
             return Err("Unsupported UKEY2 version".into());
         }
+        if matches!(
+            client_init.next_protocol.as_deref(),
+            Some(p) if !p.is_empty() && p != EXPECTED_NEXT_PROTOCOL
+        ) {
+            return Err("Unsupported UKEY2 next_protocol".into());
+        }
+
+        let commitment = client_init
+            .cipher_commitments
+            .iter()
+            .find(|c| c.handshake_cipher == Some(Ukey2HandshakeCipher::P256Sha512 as i32))
+            .and_then(|c| c.commitment.as_ref())
+            .ok_or("Missing P256_SHA512 commitment in Ukey2ClientInit")?;
+        if commitment.len() != 64 {
+            return Err("Invalid SHA-512 commitment length in Ukey2ClientInit".into());
+        }
+        self.client_commitment = Some(commitment.clone());
 
         // Build generic public key for server with two's complement coordinates
         let encoded_point = self.public_key.to_encoded_point(false);
@@ -122,6 +149,14 @@ impl Ukey2HandshakeSession {
         }
 
         let client_finish_data = msg.message_data.ok_or("Missing client_finish data")?;
+        let expected_commitment = self
+            .client_commitment
+            .as_deref()
+            .ok_or("Missing P256_SHA512 commitment from ClientInit")?;
+        let computed_commitment = Sha512::digest(client_finish_msg_bytes);
+        if !ct_eq(computed_commitment.as_slice(), expected_commitment) {
+            return Err("UKEY2 ClientInit commitment mismatch".into());
+        }
         let client_finish = match Ukey2ClientFinished::decode(&client_finish_data[..]) {
             Ok(cf) => cf,
             Err(e) => {
@@ -267,11 +302,19 @@ impl SecureSessionChannel {
             .map_err(|_| "AES-CBC bad padding")?;
         let d2d_msg = DeviceToDeviceMessage::decode(&plaintext[..])?;
 
-        let expected = self.in_seq + 1;
-        if d2d_msg.sequence_number != Some(expected) {
-            eprintln!("[Quick Share] Warning: unexpected seq {:?}, expected {}", d2d_msg.sequence_number, expected);
+        let expected = self.in_seq.checked_add(1).ok_or("Inbound sequence overflow")?;
+        match d2d_msg.sequence_number {
+            Some(seq) if seq == expected => {
+                self.in_seq = expected;
+            }
+            other => {
+                return Err(format!(
+                    "SecureMessage sequence mismatch: got {:?}, expected {}",
+                    other, expected
+                )
+                .into());
+            }
         }
-        self.in_seq = d2d_msg.sequence_number.unwrap_or(expected);
 
         d2d_msg.message.ok_or_else(|| "Missing message in DeviceToDeviceMessage".into())
     }
@@ -281,7 +324,7 @@ impl SecureSessionChannel {
         &mut self,
         offline_frame_bytes: &[u8],
     ) -> Result<Vec<u8>, Box<dyn std::error::Error + Send + Sync>> {
-        self.out_seq += 1;
+        self.out_seq = self.out_seq.checked_add(1).ok_or("Outbound sequence overflow")?;
         let d2d_msg = DeviceToDeviceMessage {
             sequence_number: Some(self.out_seq),
             message: Some(offline_frame_bytes.to_vec()),
@@ -334,6 +377,12 @@ pub struct Ukey2ClientSession {
     public_key: PublicKey,
     client_init_raw: Vec<u8>,
     client_finish_raw: Vec<u8>,
+}
+
+impl Default for Ukey2ClientSession {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Ukey2ClientSession {
@@ -533,6 +582,85 @@ fn encode_twos_complement(bytes: &[u8]) -> Vec<u8> {
     }
     v.extend_from_slice(bytes);
     v
+}
+
+/// Constant-time slice equality check for commitment verification.
+fn ct_eq(a: &[u8], b: &[u8]) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+    let mut diff = 0u8;
+    for (&x, &y) in a.iter().zip(b.iter()) {
+        diff |= x ^ y;
+    }
+    diff == 0
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn pair_handshake() -> (SecureSessionChannel, SecureSessionChannel, Vec<u8>, Vec<u8>) {
+        let mut client = Ukey2ClientSession::new();
+        let client_init = client.build_client_init().expect("client_init");
+        let mut server = Ukey2HandshakeSession::new();
+        let server_init = server.process_client_init(&client_init).expect("server_init");
+        let (client_finish, client_chan) = client.process_server_init(&server_init).expect("server_init decode");
+        let server_chan = server.process_client_finish(&client_finish, &client_init).expect("client_finish verify");
+        (client_chan, server_chan, client_init, client_finish)
+    }
+
+    #[test]
+    fn ukey2_handshake_and_bidirectional_encryption_match() {
+        let (mut cli, mut srv, _, _) = pair_handshake();
+        assert_eq!(cli.pin, srv.pin);
+
+        let ct1 = cli.encrypt_secure_message(b"hello server").unwrap();
+        assert_eq!(srv.decrypt_secure_message(&ct1).unwrap(), b"hello server");
+
+        let ct2 = srv.encrypt_secure_message(b"hello client").unwrap();
+        assert_eq!(cli.decrypt_secure_message(&ct2).unwrap(), b"hello client");
+    }
+
+    #[test]
+    fn ukey2_rejects_mismatched_client_init_commitment() {
+        let mut client = Ukey2ClientSession::new();
+        let client_init = client.build_client_init().unwrap();
+        let mut server = Ukey2HandshakeSession::new();
+        let server_init = server.process_client_init(&client_init).unwrap();
+        let (mut client_finish, _) = client.process_server_init(&server_init).unwrap();
+        // Flip one byte in the ClientFinish frame so it no longer matches ClientInit commitment
+        let last = client_finish.len() - 1;
+        client_finish[last] ^= 0xFF;
+        let err = server.process_client_finish(&client_finish, &client_init).err().expect("tampered finish must fail");
+        assert!(err.to_string().contains("commitment mismatch"));
+    }
+
+    #[test]
+    fn secure_channel_rejects_replay_and_out_of_order_sequences() {
+        let (mut cli, mut srv, _, _) = pair_handshake();
+        let msg1 = cli.encrypt_secure_message(b"frame 1").unwrap();
+        let msg2 = cli.encrypt_secure_message(b"frame 2").unwrap();
+        let msg3 = cli.encrypt_secure_message(b"frame 3").unwrap();
+
+        assert_eq!(srv.decrypt_secure_message(&msg1).unwrap(), b"frame 1");
+        // Replay msg1 must fail
+        assert!(srv.decrypt_secure_message(&msg1).is_err());
+        // Out-of-order skip msg3 before msg2 must fail
+        assert!(srv.decrypt_secure_message(&msg3).is_err());
+        // Valid msg2 still succeeds cleanly afterwards
+        assert_eq!(srv.decrypt_secure_message(&msg2).unwrap(), b"frame 2");
+        assert_eq!(srv.decrypt_secure_message(&msg3).unwrap(), b"frame 3");
+    }
+
+    #[test]
+    fn secure_channel_rejects_tampered_hmac() {
+        let (mut cli, mut srv, _, _) = pair_handshake();
+        let mut ct = cli.encrypt_secure_message(b"secret").unwrap();
+        let last = ct.len() - 1;
+        ct[last] ^= 0x01;
+        assert!(srv.decrypt_secure_message(&ct).is_err());
+    }
 }
 
 

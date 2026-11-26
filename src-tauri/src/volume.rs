@@ -182,7 +182,7 @@ pub async fn get_mic_muted() -> Option<bool> {
     #[cfg(target_os = "windows")]
     unsafe {
         let vol = capture_endpoint()?;
-        return vol.GetMute().ok().map(|b| b.as_bool());
+        vol.GetMute().ok().map(|b| b.as_bool())
     }
     #[cfg(not(target_os = "windows"))]
     None

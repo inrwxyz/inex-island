@@ -1,0 +1,178 @@
+// Inex Drop Side Rail Feature: Mode switching between Quick Share ('qs') and Direct P2P ('p2p')
+import { island } from '../../core/dom.js';
+import { appState } from '../../core/state.js';
+import { bus } from '../../core/bus.js';
+
+export type DropMode = 'qs' | 'p2p';
+
+export interface DropTileOptions {
+  direct?: boolean;
+  inTransfer?: boolean;
+  currentOffer?: unknown;
+  dropActive?: boolean;
+}
+
+let dropModeCache: DropMode | null = null;
+
+export function dropRailViews(): string[] {
+  return ['view-inexdrop', 'view-p2p'];
+}
+
+export function getDropMode(): DropMode {
+  if (dropModeCache == null) {
+    let v: DropMode = 'qs';
+    try {
+      if (localStorage.getItem('inex.dropMode') === 'p2p') v = 'p2p';
+    } catch (err) {
+      console.warn('Storage read failed in rail.js:', err);
+    }
+    dropModeCache = v;
+  }
+  return dropModeCache;
+}
+
+export function setDropMode(mode: string): void {
+  const m: DropMode = mode === 'p2p' ? 'p2p' : 'qs';
+  const changed = m !== getDropMode();
+  dropModeCache = m;
+  if (changed) {
+    try {
+      localStorage.setItem('inex.dropMode', m);
+    } catch (err) {
+      console.warn('Storage write failed in rail.js:', err);
+    }
+  }
+  updateDropTile();
+  updateTrayShareButton();
+  if (changed) bus.emit('drop:mode-switched', m);
+}
+
+export const QS_ICON_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v10M8 8l4-4 4 4M4 14v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg>';
+export const P2P_ICON_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="1.5" y="3" width="9" height="7" rx="1.5"/><path d="M4 13h4"/><rect x="13.5" y="12" width="9" height="7" rx="1.5"/><path d="M16 22h4"/><path d="M12 6.5h4.5V10"/><path d="M12 17.5H7.5V14"/></svg>';
+
+export function updateDropTile(options: DropTileOptions = {}): void {
+  const tile = document.getElementById('tile-drop');
+  const deckTile = document.getElementById('deck-tile-drop');
+  if (!tile && !deckTile) return;
+  const p2p = getDropMode() === 'p2p';
+  if (tile) tile.classList.toggle('mode-p2p', p2p);
+  if (deckTile) deckTile.classList.toggle('mode-p2p', p2p);
+  const sub = document.getElementById('tile-drop-sub');
+  const cap = document.getElementById('drop-cap');
+  const title = document.getElementById('tile-drop-title');
+  const count = (appState.peers || []).length;
+  const direct = options.direct ?? false;
+  const inTransfer = options.inTransfer ?? appState.transferring ?? false;
+  const currentOffer = options.currentOffer ?? appState.currentOffer ?? null;
+  const dropActive = options.dropActive ?? appState.dropActive ?? false;
+
+  const deckSub = document.getElementById('deck-drop-sub');
+  const deckTitle = deckTile ? deckTile.querySelector('.mx-txt b') : null;
+
+  if (p2p) {
+    const p2pText = count > 0 ? (direct ? 'Direct 1:1' : `${count}/5 Peers`) : 'Standby';
+    if (tile) {
+      tile.classList.toggle('active', count > 0);
+      if (sub) sub.textContent = p2pText;
+      if (cap) cap.textContent = count > 0 ? (direct ? '1 direct peer' : `${count} peer${count > 1 ? 's' : ''}`) : '';
+      if (title) title.textContent = 'P2P Link';
+      tile.title = 'Inex Drop · P2P (click to open)';
+    }
+    if (deckTile) deckTile.classList.toggle('active', count > 0);
+    if (deckSub) deckSub.textContent = p2pText;
+    if (deckTitle) deckTitle.textContent = 'P2P Link';
+  } else {
+    const qsText = inTransfer ? 'Transferring' : (currentOffer ? 'Incoming...' : (dropActive ? 'Ready' : 'Off'));
+    if (tile) {
+      tile.classList.toggle('active', dropActive || !!currentOffer);
+      tile.classList.toggle('offer', !!currentOffer);
+      if (sub) sub.textContent = qsText;
+      if (cap) cap.textContent = currentOffer ? 'Tap to accept' : '';
+      if (title) title.textContent = 'Inex Drop';
+      tile.title = currentOffer ? 'File incoming · Click to accept' : 'Inex Drop · Quick Share (click to turn on / off)';
+    }
+    if (deckTile) {
+      deckTile.classList.toggle('active', dropActive || !!currentOffer);
+      deckTile.classList.toggle('offer', !!currentOffer);
+    }
+    if (deckSub) deckSub.textContent = qsText;
+    if (deckTitle) deckTitle.textContent = 'Inex Drop';
+  }
+}
+
+export function updateTrayShareButton(): void {
+  const btn = document.getElementById('btn-tray-inexdrop');
+  if (!btn) return;
+  const svg = btn.querySelector('svg');
+  const p2p = getDropMode() === 'p2p';
+  if (svg) {
+    const tmp = document.createElement('div');
+    tmp.innerHTML = p2p ? P2P_ICON_SVG : QS_ICON_SVG;
+    const n = tmp.firstElementChild;
+    if (n) {
+      n.setAttribute('width', '15');
+      n.setAttribute('height', '15');
+      svg.replaceWith(n);
+    }
+  }
+  btn.title = p2p ? 'Inex Drop · P2P' : 'Inex Drop · Quick Share';
+}
+
+export function syncDropRail(viewId: string): void {
+  const idx = dropRailViews().indexOf(viewId);
+  island?.classList.toggle('has-rail', idx !== -1);
+  if (idx === -1) return;
+  setDropMode(idx === 0 ? 'qs' : 'p2p');
+  const rail = document.getElementById('drop-rail');
+  if (rail) rail.style.setProperty('--i', String(idx));
+  document.getElementById('rail-qs')?.classList.toggle('on', idx === 0);
+  document.getElementById('rail-p2p')?.classList.toggle('on', idx === 1);
+}
+
+export function openDeckDrop(mode?: DropMode): void {
+  const m = mode || getDropMode();
+  bus.emit('deck:open-drop', m);
+}
+
+export function currentDropRailIdx(): number {
+  const id = appState.currentView === 'view-control-deck' ? appState.deckSubId : appState.currentView;
+  return dropRailViews().indexOf(id || '');
+}
+
+export function goDropRail(idx: number): void {
+  if (idx < 0 || idx >= dropRailViews().length) return;
+  if (currentDropRailIdx() === idx) return;
+  bus.emit('rail:navigate', idx);
+}
+
+export function updateDropRailBadge(count: number): void {
+  const b = document.getElementById('rail-p2p-badge');
+  if (!b) return;
+  b.textContent = String(count);
+  b.classList.toggle('hidden', !count);
+}
+
+export function initDropRail(): void {
+  document.getElementById('rail-qs')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    goDropRail(0);
+  });
+  document.getElementById('rail-p2p')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    goDropRail(1);
+  });
+
+  let dropRailWheelAt = 0;
+  document.getElementById('drop-rail')?.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const now = Date.now();
+    if (now - dropRailWheelAt < 250) return;
+    dropRailWheelAt = now;
+    const cur = currentDropRailIdx();
+    if (cur === -1) return;
+    goDropRail(cur + (e.deltaY > 0 ? 1 : -1));
+  }, { passive: false });
+
+  updateDropTile();
+  updateTrayShareButton();
+}

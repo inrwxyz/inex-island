@@ -58,11 +58,11 @@ pub async fn get_net_speed() -> (u64, u64) {
     {
         let (rx, tx) = net_octets();
         let now = std::time::Instant::now();
-        let mut prev = NET_PREV.lock().unwrap();
+        let mut prev = NET_PREV.lock().unwrap_or_else(|e| e.into_inner());
         let out = match *prev {
             Some((t, prx, ptx)) => {
                 let dt = now.duration_since(t).as_secs_f64();
-                if dt >= 0.5 && dt <= 10.0 {
+                if (0.5..=10.0).contains(&dt) {
                     (
                         (rx.saturating_sub(prx) as f64 / dt) as u64,
                         (tx.saturating_sub(ptx) as f64 / dt) as u64,
@@ -74,7 +74,7 @@ pub async fn get_net_speed() -> (u64, u64) {
             None => (0, 0),
         };
         *prev = Some((now, rx, tx));
-        return out;
+        out
     }
     #[cfg(not(target_os = "windows"))]
     (0, 0)
@@ -94,7 +94,7 @@ fn cpu_percent() -> u32 {
     }
     let ft = |f: FILETIME| ((f.dwHighDateTime as u64) << 32) | f.dwLowDateTime as u64;
     let (i, total) = (ft(idle), ft(kernel) + ft(user));
-    let mut prev = CPU_PREV.lock().unwrap();
+    let mut prev = CPU_PREV.lock().unwrap_or_else(|e| e.into_inner());
     let (prev_i, prev_total) = *prev;
     *prev = (i, total);
     if prev_total == 0 || total <= prev_total {
@@ -201,8 +201,9 @@ mod gpu {
 
         unsafe {
             if PdhCollectQueryData(q_ref.query) != 0 {
-                let old = state.take().unwrap();
-                PdhCloseQuery(old.query);
+                if let Some(old) = state.take() {
+                    PdhCloseQuery(old.query);
+                }
                 return 0;
             }
 
@@ -273,11 +274,9 @@ fn disk_percent() -> u32 {
             Some(&mut free),
         );
     }
-    if total == 0 {
-        0
-    } else {
-        (100 - free * 100 / total) as u32
-    }
+    (free * 100)
+        .checked_div(total)
+        .map_or(0, |pct| 100u64.saturating_sub(pct) as u32)
 }
 
 #[cfg(target_os = "windows")]

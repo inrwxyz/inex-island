@@ -488,7 +488,7 @@ pub fn get_bt_nearby() -> Vec<BtNearby> {
             }
         }
         v.sort_by(|a, b| a.name.cmp(&b.name));
-        return v;
+        v
     }
     #[cfg(not(target_os = "windows"))]
     Vec::new()
@@ -579,7 +579,7 @@ fn pairing_text(st: windows::Devices::Enumeration::DevicePairingResultStatus) ->
 pub async fn bt_pair(app: AppHandle, id: String, name: String) -> String {
     #[cfg(target_os = "windows")]
     {
-        return tauri::async_runtime::spawn_blocking(move || {
+        tauri::async_runtime::spawn_blocking(move || {
             use windows::core::HSTRING;
             use windows::Devices::Enumeration::{DeviceInformation, DeviceInformationCustomPairing, DevicePairingKinds, DevicePairingRequestedEventArgs};
             use windows::Foundation::TypedEventHandler;
@@ -624,7 +624,7 @@ pub async fn bt_pair(app: AppHandle, id: String, name: String) -> String {
             out
         })
         .await
-        .unwrap_or_else(|_| "failed".into());
+        .unwrap_or_else(|_| "failed".into())
     }
     #[cfg(not(target_os = "windows"))]
     {
@@ -638,7 +638,7 @@ pub async fn bt_pair(app: AppHandle, id: String, name: String) -> String {
 pub async fn bt_unpair(app: AppHandle, name: String) -> bool {
     #[cfg(target_os = "windows")]
     {
-        return tauri::async_runtime::spawn_blocking(move || {
+        tauri::async_runtime::spawn_blocking(move || {
             use windows::Devices::Bluetooth::{BluetoothDevice, BluetoothLEDevice};
             use windows::Devices::Enumeration::{DeviceInformation, DeviceUnpairingResultStatus as U};
             com_init();
@@ -671,7 +671,7 @@ pub async fn bt_unpair(app: AppHandle, name: String) -> bool {
             any
         })
         .await
-        .unwrap_or(false);
+        .unwrap_or(false)
     }
     #[cfg(not(target_os = "windows"))]
     {
@@ -697,7 +697,7 @@ pub async fn bt_set_connection(name: String, on: bool) -> String {
             return "notfound".into();
         }
         // the driver can hang for a long time: never leave the UI on "Disconnecting..." for ever
-        return tauri::async_runtime::spawn_blocking(move || {
+        tauri::async_runtime::spawn_blocking(move || {
             let (tx, rx) = mpsc::channel::<String>();
             std::thread::spawn(move || {
                 com_init();
@@ -706,7 +706,7 @@ pub async fn bt_set_connection(name: String, on: bool) -> String {
             rx.recv_timeout(std::time::Duration::from_secs(22)).unwrap_or_else(|_| "timeout".to_string())
         })
         .await
-        .unwrap_or_else(|_| "error".into());
+        .unwrap_or_else(|_| "error".into())
     }
     #[cfg(not(target_os = "windows"))]
     {
@@ -738,7 +738,7 @@ fn send_audio_oneshot_by_name(name: &str, connect: bool) -> bool {
         // first matching endpoint that accepts the request wins
         (0..total)
             .filter_map(|i| endpoints.Item(i).ok())
-            .filter(|ep| endpoint_label(ep).map_or(false, |label| labels_overlap(&label, &wanted)))
+            .filter(|ep| endpoint_label(ep).is_some_and(|label| labels_overlap(&label, &wanted)))
             .any(|ep| ks_audio_oneshot(&enumerator, &ep, connect).is_some())
     }
 }
@@ -990,7 +990,7 @@ fn read_batteries() -> Vec<BtBatt> {
                 if SetupDiGetDevicePropertyW(set, &data, &DEVPKEY_Device_FriendlyName, &mut ntype, Some(&mut nbuf[..]), None, 0).is_err() {
                     continue;
                 }
-                let units: Vec<u16> = nbuf.chunks_exact(2).map(|c| u16::from_le_bytes([c[0], c[1]])).take_while(|&u| u != 0).collect();
+                let units: Vec<u16> = nbuf.as_chunks::<2>().0.iter().map(|c| u16::from_le_bytes(*c)).take_while(|&u| u != 0).collect();
                 let name = String::from_utf16_lossy(&units);
                 if !name.is_empty() && !out.iter().any(|b| b.name == name) {
                     out.push(BtBatt { name, pct });
@@ -1024,7 +1024,7 @@ pub async fn get_bt_batteries() -> Vec<BtBatt> {
         if let Ok(mut g) = BATT_CACHE.lock() {
             *g = Some((std::time::Instant::now(), fresh.clone()));
         }
-        return fresh;
+        fresh
     }
     #[cfg(not(target_os = "windows"))]
     Vec::new()
@@ -1061,4 +1061,28 @@ pub async fn get_bt_devices() -> Vec<BtDev> {
         }
     }
     vec![]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{bt_kind_classic, bt_kind_from_name, bt_kind_le};
+
+    #[test]
+    fn classifies_common_bluetooth_device_names() {
+        assert_eq!(bt_kind_from_name("Keychron K2 Keyboard"), "keyboard");
+        assert_eq!(bt_kind_from_name("Logitech MX Master 3S Mouse"), "mouse");
+        assert_eq!(bt_kind_from_name("Sony WH-1000XM4"), "headphones");
+        assert_eq!(bt_kind_from_name("JBL Flip Speaker"), "speaker");
+        assert_eq!(bt_kind_from_name("Xbox Wireless Controller"), "gamepad");
+        assert_eq!(bt_kind_from_name("Unknown BT Gadget"), "");
+    }
+
+    #[test]
+    fn maps_classic_and_le_device_classes() {
+        assert_eq!(bt_kind_classic(4, 1), "headphones");
+        assert_eq!(bt_kind_classic(4, 5), "speaker");
+        assert_eq!(bt_kind_classic(2, 0), "phone");
+        assert_eq!(bt_kind_le(15, 1), "keyboard");
+        assert_eq!(bt_kind_le(3, 0), "watch");
+    }
 }

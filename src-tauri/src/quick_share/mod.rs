@@ -280,7 +280,7 @@ static STAGED_FILES: Mutex<Vec<String>> = Mutex::new(Vec::new());
 
 #[tauri::command]
 pub fn stage_quick_share_files(paths: Vec<String>) -> usize {
-    let mut g = STAGED_FILES.lock().unwrap();
+    let mut g = STAGED_FILES.lock().unwrap_or_else(|e| e.into_inner());
     for p in paths {
         if !g.contains(&p) {
             g.push(p);
@@ -291,12 +291,12 @@ pub fn stage_quick_share_files(paths: Vec<String>) -> usize {
 
 #[tauri::command]
 pub fn get_staged_quick_share_files() -> Vec<String> {
-    STAGED_FILES.lock().unwrap().clone()
+    STAGED_FILES.lock().unwrap_or_else(|e| e.into_inner()).clone()
 }
 
 #[tauri::command]
 pub fn clear_staged_quick_share_files() {
-    STAGED_FILES.lock().unwrap().clear();
+    STAGED_FILES.lock().unwrap_or_else(|e| e.into_inner()).clear();
 }
 
 // Legacy Inex Drop Aliases

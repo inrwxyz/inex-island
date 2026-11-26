@@ -551,7 +551,7 @@ pub fn set_clipboard_text(window: tauri::WebviewWindow, text: String) -> bool {
 
         // Use our own window as the clipboard owner (a NULL owner can make some apps' right-click Paste ignore the text).
         let owner = match window.hwnd() {
-            Ok(h) => HWND(h.0 as *mut core::ffi::c_void),
+            Ok(h) => HWND(h.0),
             Err(_) => HWND::default(),
         };
         let wide: Vec<u16> = text.encode_utf16().chain(std::iter::once(0)).collect();
@@ -614,7 +614,7 @@ pub(crate) fn rgba_to_dib(rgba: &[u8], width: u32, height: u32) -> Option<Vec<u8
 
     for y in (0..height as usize).rev() {
         let row = &rgba[y * row_bytes..(y + 1) * row_bytes];
-        for px in row.chunks_exact(4) {
+        for px in row.as_chunks::<4>().0 {
             dib.push(px[2]); // B
             dib.push(px[1]); // G
             dib.push(px[0]); // R
@@ -658,7 +658,7 @@ pub fn set_clipboard_image(
             return Ok(false);
         };
         let owner = match window.hwnd() {
-            Ok(h) => HWND(h.0 as *mut core::ffi::c_void),
+            Ok(h) => HWND(h.0),
             Err(_) => HWND::default(),
         };
         let hg = match GlobalAlloc(GMEM_MOVEABLE, dib.len()) {

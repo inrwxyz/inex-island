@@ -9,15 +9,15 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 
 
-use crate::console::{self, Command};
-use crate::crypto::{SecureSessionChannel, Ukey2ClientSession};
-use crate::mdns::DiscoveredDevice;
-use crate::protos::connections::{
+use super::console::{self, Command};
+use super::crypto::{SecureSessionChannel, Ukey2ClientSession};
+use super::mdns::DiscoveredDevice;
+use super::protos::connections::{
     self, offline_frame, payload_transfer_frame, v1_frame,
     ConnectionRequestFrame, ConnectionResponseFrame as ConnResp, OfflineFrame,
     PayloadTransferFrame, V1Frame,
 };
-use crate::protos::nearby::{
+use super::protos::nearby::{
     self, connection_response_frame as nearby_resp, v1_frame as nearby_v1,
     IntroductionFrame, PairedKeyEncryptionFrame, PairedKeyResultFrame,
 };
@@ -200,6 +200,9 @@ impl QuickShareClient {
         // -------------------------------------------------------------
         socket.read_exact(&mut len_buf).await?;
         let len = u32::from_be_bytes(len_buf) as usize;
+        if len == 0 || len > 10 * 1024 * 1024 {
+            return Err("Pre-auth frame length invalid in ServerInit".into());
+        }
         let mut server_init_bytes = vec![0u8; len];
         socket.read_exact(&mut server_init_bytes).await?;
         println!("[Quick Share] Handshake step 2/3: Received ServerInit");
@@ -216,7 +219,7 @@ impl QuickShareClient {
         println!(" [Quick Share] SECURE CHANNEL VERIFIED!");
         println!(" [Quick Share] Remote Device: {}", target.name);
         println!(" [Quick Share] Pairing PIN:   {}", channel.pin);
-        crate::events::emit(serde_json::json!({ "type": "send_pin", "pin": channel.pin }));
+        super::events::emit(serde_json::json!({ "type": "send_pin", "pin": channel.pin }));
         println!("============================================================");
 
         // -------------------------------------------------------------
@@ -246,6 +249,9 @@ impl QuickShareClient {
         loop {
             socket.read_exact(&mut len_buf).await?;
             let len = u32::from_be_bytes(len_buf) as usize;
+            if len == 0 || len > 10 * 1024 * 1024 {
+                return Err("Pre-auth frame length invalid during mutual accept".into());
+            }
             let mut resp_bytes = vec![0u8; len];
             socket.read_exact(&mut resp_bytes).await?;
 
@@ -258,10 +264,10 @@ impl QuickShareClient {
                         continue;
                     }
                 }
-            } else if let Ok(msg) = crate::protos::securegcm::Ukey2Message::decode(&resp_bytes[..]) {
-                if msg.message_type == Some(crate::protos::securegcm::ukey2_message::Type::Alert as i32) {
+            } else if let Ok(msg) = super::protos::securegcm::Ukey2Message::decode(&resp_bytes[..]) {
+                if msg.message_type == Some(super::protos::securegcm::ukey2_message::Type::Alert as i32) {
                     if let Some(data) = msg.message_data {
-                        if let Ok(alert) = crate::protos::securegcm::Ukey2Alert::decode(&data[..]) {
+                        if let Ok(alert) = super::protos::securegcm::Ukey2Alert::decode(&data[..]) {
                             eprintln!("[Quick Share] Phone sent UKEY2 Alert: {:?}", alert);
                         }
                     }
@@ -379,7 +385,7 @@ impl QuickShareClient {
 
         println!("\n[Quick Share] >>> File offer sent to \"{}\" <<<", target.name);
         println!("[Quick Share] Check your phone screen and tap 'ACCEPT' (or 'Receive')...");
-        crate::events::emit(serde_json::json!({ "type": "send_waiting" }));
+        super::events::emit(serde_json::json!({ "type": "send_waiting" }));
 
         // -------------------------------------------------------------
         // Step 8: Wait for the phone user's decision (keep-alives are sent automatically)
@@ -390,7 +396,7 @@ impl QuickShareClient {
             if let Some(line) = console::try_line() {
                 if console::parse_command(&line) == Command::Cancel {
                     println!("[Quick Share] Cancelled by you while waiting for phone to accept.");
-                    crate::events::emit(serde_json::json!({ "type": "send_finished", "cancelled": true }));
+                    super::events::emit(serde_json::json!({ "type": "send_finished", "cancelled": true }));
                     return Ok(());
                 }
             }
@@ -399,8 +405,8 @@ impl QuickShareClient {
                 Err(_) => {
                     if tokio::time::Instant::now() >= consent_deadline {
                         println!("[Quick Share] No answer from the phone within 120s. Giving up.");
-                        crate::events::emit(serde_json::json!({ "type": "send_finished", "cancelled": true }));
-                        crate::events::status("warn", "No answer from the phone within 2 minutes.");
+                        super::events::emit(serde_json::json!({ "type": "send_finished", "cancelled": true }));
+                        super::events::status("warn", "No answer from the phone within 2 minutes.");
                         return Ok(());
                     }
                     continue;
@@ -409,16 +415,16 @@ impl QuickShareClient {
             match ev {
                 Event::Disconnect => {
                     println!("[Quick Share] Phone ended the session before accepting (it sent DISCONNECTION).");
-                    crate::events::emit(serde_json::json!({ "type": "send_finished", "cancelled": true }));
-                    crate::events::status("warn", "The phone ended the session before accepting.");
+                    super::events::emit(serde_json::json!({ "type": "send_finished", "cancelled": true }));
+                    super::events::status("warn", "The phone ended the session before accepting.");
                     return Ok(());
                 }
                 Event::Nearby(nf) => {
                     if let Some(nv1) = nf.v1 {
                         if nv1.r#type == Some(nearby_v1::FrameType::Cancel as i32) {
                             println!("[Quick Share] Phone CANCELLED the offer.");
-                            crate::events::emit(serde_json::json!({ "type": "send_finished", "cancelled": true }));
-                            crate::events::status("warn", "The phone cancelled the offer.");
+                            super::events::emit(serde_json::json!({ "type": "send_finished", "cancelled": true }));
+                            super::events::status("warn", "The phone cancelled the offer.");
                             return Ok(());
                         }
                         if let Some(resp) = nv1.connection_response {
@@ -426,7 +432,7 @@ impl QuickShareClient {
                             if status == nearby_resp::Status::Accept as i32 {
                                 println!("[Quick Share] Phone user tapped ACCEPT! Starting transfer...\n");
                                 console::drain(); // old key presses must not pause/cancel this transfer
-                                crate::events::emit(serde_json::json!({ "type": "send_accepted" }));
+                                super::events::emit(serde_json::json!({ "type": "send_accepted" }));
 
                                 for (aid, details) in &resp.attachment_details {
                                     if let Some(fad) = &details.file_attachment_details {
@@ -440,8 +446,8 @@ impl QuickShareClient {
                                 break;
                             } else {
                                 println!("[Quick Share] Phone declined the transfer (status: {}).", status);
-                                crate::events::emit(serde_json::json!({ "type": "send_finished", "cancelled": true }));
-                                crate::events::status("warn", "The phone declined the transfer.");
+                                super::events::emit(serde_json::json!({ "type": "send_finished", "cancelled": true }));
+                                super::events::status("warn", "The phone declined the transfer.");
                                 return Ok(());
                             }
                         }
@@ -485,7 +491,7 @@ impl QuickShareClient {
             } else {
                 0.0
             };
-            crate::events::emit(serde_json::json!({
+            super::events::emit(serde_json::json!({
                 "type": "progress", "dir": "tx", "name": f.name,
                 "pct": total_pct,
                 "mbps": 0.0, "file_index": idx + 1, "files": total_files,
@@ -500,12 +506,12 @@ impl QuickShareClient {
                             println!("\n[Quick Share] Cancelling...");
                             let _ = send_cancel(&mut socket, &mut channel, f.payload_id, f.size as i64, file_sent as i64).await;
                             println!("[Quick Share] Transfer CANCELLED by you.");
-                            crate::events::emit(serde_json::json!({ "type": "send_finished", "cancelled": true }));
+                            super::events::emit(serde_json::json!({ "type": "send_finished", "cancelled": true }));
                             return Ok(());
                         }
                         Command::Pause => {
                             println!("\n[Quick Share] PAUSED. Type 'r' + Enter to resume, 'c' + Enter to cancel.");
-                            crate::events::emit(serde_json::json!({ "type": "xfer_paused" }));
+                            super::events::emit(serde_json::json!({ "type": "xfer_paused" }));
                             let pause_started = Instant::now();
                             'paused: loop {
                                 tokio::time::sleep(Duration::from_millis(50)).await;
@@ -526,13 +532,13 @@ impl QuickShareClient {
                                     match console::parse_command(&l2) {
                                         Command::Resume => {
                                             println!("[Quick Share] RESUMED.");
-                                            crate::events::emit(serde_json::json!({ "type": "xfer_resumed" }));
+                                            super::events::emit(serde_json::json!({ "type": "xfer_resumed" }));
                                             break 'paused;
                                         }
                                         Command::Cancel => {
                                             let _ = send_cancel(&mut socket, &mut channel, f.payload_id, f.size as i64, file_sent as i64).await;
                                             println!("[Quick Share] Transfer CANCELLED by you.");
-                                            crate::events::emit(serde_json::json!({ "type": "send_finished", "cancelled": true }));
+                                            super::events::emit(serde_json::json!({ "type": "send_finished", "cancelled": true }));
                                             return Ok(());
                                         }
                                         _ => {}
@@ -575,13 +581,15 @@ impl QuickShareClient {
                 send_file_chunk(
                     &mut socket,
                     &mut channel,
-                    f.payload_id,
-                    f.size as i64,
-                    file_sent as i64,
+                    FileChunkMeta {
+                        payload_id: f.payload_id,
+                        total_size: f.size as i64,
+                        offset: file_sent as i64,
+                        last: false,
+                        name: &f.name,
+                        parent_folder: &f.parent_folder,
+                    },
                     &chunk_buf[..n],
-                    false,
-                    &f.name,
-                    &f.parent_folder,
                 ).await?;
                 file_sent += n as u64;
                 cumulative_sent += n as u64;
@@ -591,7 +599,7 @@ impl QuickShareClient {
                     let total_pct = if total_all_bytes > 0 { cumulative_sent as f64 / total_all_bytes as f64 * 100.0 } else { 100.0 };
                     let secs = file_started.elapsed().as_secs_f64().max(0.001);
                     let speed = file_sent as f64 / 1_048_576.0 / secs;
-                    crate::events::emit(serde_json::json!({
+                    super::events::emit(serde_json::json!({
                         "type": "progress", "dir": "tx", "name": f.name,
                         "pct": total_pct.min(100.0), "mbps": speed, "file_index": idx + 1, "files": total_files,
                     }));
@@ -621,13 +629,15 @@ impl QuickShareClient {
             send_file_chunk(
                 &mut socket,
                 &mut channel,
-                f.payload_id,
-                f.size as i64,
-                file_sent as i64,
+                FileChunkMeta {
+                    payload_id: f.payload_id,
+                    total_size: f.size as i64,
+                    offset: file_sent as i64,
+                    last: true,
+                    name: &f.name,
+                    parent_folder: &f.parent_folder,
+                },
                 &[],
-                true,
-                &f.name,
-                &f.parent_folder,
             ).await?;
             socket.flush().await?;
 
@@ -646,7 +656,7 @@ impl QuickShareClient {
         }
         println!(" [*] Total Sent:  {:.2} MB in {:.2}s", total_mb, total_secs);
         println!(" [*] Avg Speed:   {:.1} MB/s ({:.0} Mbps)", total_mb / total_secs, (total_mb / total_secs) * 8.0);
-        crate::events::emit(serde_json::json!({
+        super::events::emit(serde_json::json!({
             "type": "send_done", "mb": total_mb, "secs": total_secs, "mbps": total_mb / total_secs,
         }));
         println!("============================================================");
@@ -668,7 +678,7 @@ impl QuickShareClient {
 // ---------------------------------------------------------------------
 
 enum Event {
-    Nearby(nearby::Frame),
+    Nearby(Box<nearby::Frame>),
     Disconnect,
 }
 
@@ -774,8 +784,12 @@ impl ControlReader {
             let is_last = (chunk.flags.unwrap_or(0) & 1) != 0;
 
             if header.r#type == Some(payload_transfer_frame::payload_header::PayloadType::Bytes as i32) {
-                let buf = self.buffers.entry(id).or_insert_with(Vec::new);
+                let buf = self.buffers.entry(id).or_default();
                 if let Some(body) = chunk.body {
+                    if buf.len().saturating_add(body.len()) > 2 * 1024 * 1024 {
+                        self.buffers.remove(&id);
+                        return Err("Control payload exceeds 2 MB limit".into());
+                    }
                     buf.extend_from_slice(&body);
                 }
                 if is_last {
@@ -787,7 +801,7 @@ impl ControlReader {
                                 nf.v1.as_ref().and_then(|v| v.r#type),
                                 data.len()
                             );
-                            return Ok(Some(Event::Nearby(nf)));
+                            return Ok(Some(Event::Nearby(Box::new(nf))));
                         }
                         Err(e) => {
                             println!("[debug] phone -> undecodable control payload ({} bytes): {:?}", data.len(), e);
@@ -876,16 +890,20 @@ fn file_type_and_mime(ext: &str) -> (i32, &'static str) {
     }
 }
 
-async fn send_file_chunk(
-    socket: &mut TcpStream,
-    channel: &mut SecureSessionChannel,
+struct FileChunkMeta<'a> {
     payload_id: i64,
     total_size: i64,
     offset: i64,
-    body: &[u8],
     last: bool,
-    name: &str,
-    parent_folder: &str,
+    name: &'a str,
+    parent_folder: &'a str,
+}
+
+async fn send_file_chunk(
+    socket: &mut TcpStream,
+    channel: &mut SecureSessionChannel,
+    meta: FileChunkMeta<'_>,
+    body: &[u8],
 ) -> Result<(), BoxErr> {
     let frame = OfflineFrame {
         version: Some(offline_frame::Version::V1 as i32),
@@ -894,17 +912,17 @@ async fn send_file_chunk(
             payload_transfer: Some(PayloadTransferFrame {
                 packet_type: Some(payload_transfer_frame::PacketType::Data as i32),
                 payload_header: Some(payload_transfer_frame::PayloadHeader {
-                    id: Some(payload_id),
+                    id: Some(meta.payload_id),
                     r#type: Some(payload_transfer_frame::payload_header::PayloadType::File as i32),
-                    total_size: Some(total_size),
+                    total_size: Some(meta.total_size),
                     is_sensitive: Some(false),
-                    file_name: Some(name.to_string()),
-                    parent_folder: if parent_folder.is_empty() { None } else { Some(parent_folder.to_string()) },
+                    file_name: Some(meta.name.to_string()),
+                    parent_folder: if meta.parent_folder.is_empty() { None } else { Some(meta.parent_folder.to_string()) },
                     ..Default::default()
                 }),
                 payload_chunk: Some(payload_transfer_frame::PayloadChunk {
-                    flags: Some(if last { 1 } else { 0 }),
-                    offset: Some(offset),
+                    flags: Some(if meta.last { 1 } else { 0 }),
+                    offset: Some(meta.offset),
                     body: Some(body.to_vec()),
                     ..Default::default()
                 }),

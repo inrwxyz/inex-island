@@ -50,7 +50,7 @@ fn read_block_sync(path: &str, offset: u64, len: u32) -> Result<Vec<u8>, String>
         let f = File::open(path).map_err(|e| e.to_string())?;
         *guard = Some((path.to_string(), f));
     }
-    let f = &mut guard.as_mut().unwrap().1;
+    let (_, f) = guard.as_mut().ok_or_else(|| "missing file handle".to_string())?;
     f.seek(SeekFrom::Start(offset)).map_err(|e| e.to_string())?;
     let mut buf = vec![0u8; want];
     let mut filled = 0usize;
@@ -235,9 +235,9 @@ pub async fn drag_out_file(app: tauri::AppHandle, path: String) -> bool {
         {
             return false;
         }
-        return tauri::async_runtime::spawn_blocking(move || rx.recv().unwrap_or(false))
+        tauri::async_runtime::spawn_blocking(move || rx.recv().unwrap_or(false))
             .await
-            .unwrap_or(false);
+            .unwrap_or(false)
     }
     #[cfg(not(target_os = "windows"))]
     {

@@ -4,18 +4,18 @@ use std::io::{BufWriter, Write};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use prost::Message;
 
-use crate::console::{self, Command};
-use crate::crypto::{Ukey2HandshakeSession, SecureSessionChannel};
-use crate::protos::connections::{
+use super::console::{self, Command};
+use super::crypto::{Ukey2HandshakeSession, SecureSessionChannel};
+use super::protos::connections::{
     self, offline_frame, v1_frame, payload_transfer_frame,
     ConnectionResponseFrame as ConnResp, OfflineFrame, PayloadTransferFrame, V1Frame,
 };
-use crate::protos::nearby::{
+use super::protos::nearby::{
     self, v1_frame as nearby_v1,
     connection_response_frame, paired_key_result_frame,
     ConnectionResponseFrame as NearbyConnResp, PairedKeyEncryptionFrame, PairedKeyResultFrame,
@@ -84,7 +84,7 @@ impl QuickShareServer {
                     tokio::spawn(async move {
                         if let Err(e) = Self::handle_connection(socket, dir).await {
                             eprintln!("[Server] Connection closed with error: {:?}", e);
-                            crate::events::emit(serde_json::json!({
+                            super::events::emit(serde_json::json!({
                                 "type": "rx_interrupted", "error": format!("{}", e),
                             }));
                         }
@@ -137,7 +137,7 @@ impl QuickShareServer {
         let remote_name = extract_device_name(&ep_info);
         println!("[Quick Share] >> Inbound Request from device: \"{}\"", remote_name);
         console::drain(); // forget old key presses / UI clicks
-        crate::events::emit(serde_json::json!({ "type": "rx_connected", "device": remote_name }));
+        super::events::emit(serde_json::json!({ "type": "rx_connected", "device": remote_name }));
 
         // -------------------------------------------------------------
         // Step 2: Read Ukey2Message (ClientInit) & Send ServerInit
@@ -318,7 +318,7 @@ impl QuickShareServer {
                     if let Ok(mut g) = CONSENT_TX.lock() {
                         *g = None;
                     }
-                    crate::events::emit(serde_json::json!({ "type": "offer_closed" }));
+                    super::events::emit(serde_json::json!({ "type": "offer_closed" }));
                     next_payload_id += 1;
                     if ok {
                         send_response(
@@ -329,7 +329,7 @@ impl QuickShareServer {
                             resumed_attachments.clone(),
                         ).await?;
                         println!("[Quick Share] You ACCEPTED. Receiving...");
-                        crate::events::emit(serde_json::json!({ "type": "rx_accepted", "device": remote_name }));
+                        super::events::emit(serde_json::json!({ "type": "rx_accepted", "device": remote_name }));
                     } else {
                         send_response(
                             &mut socket,
@@ -356,7 +356,7 @@ impl QuickShareServer {
                     if let Ok(mut g) = LAST_RX_SESSION.lock() {
                         *g = None;
                     }
-                    crate::events::emit(serde_json::json!({ "type": "offer_closed" }));
+                    super::events::emit(serde_json::json!({ "type": "offer_closed" }));
                     next_payload_id += 1;
                     let _ = send_response(&mut socket, &mut channel, next_payload_id, connection_response_frame::Status::TimedOut, Default::default()).await;
                     println!("[Quick Share] No answer in time. Transfer timed out.");
@@ -400,7 +400,7 @@ impl QuickShareServer {
                                     paused = true;
                                     pause_started = Some(Instant::now());
                                     println!("\n[Quick Share] PAUSED. Keeping connection alive...");
-                                    crate::events::emit(serde_json::json!({ "type": "xfer_paused" }));
+                                    super::events::emit(serde_json::json!({ "type": "xfer_paused" }));
                                 }
                             }
                             Command::Resume => {
@@ -413,7 +413,7 @@ impl QuickShareServer {
                                         }
                                     }
                                     println!("[Quick Share] RESUMED.");
-                                    crate::events::emit(serde_json::json!({ "type": "xfer_resumed" }));
+                                    super::events::emit(serde_json::json!({ "type": "xfer_resumed" }));
                                 }
                             }
                             Command::Other => {}
@@ -473,8 +473,12 @@ impl QuickShareServer {
 
                 if p_type == payload_transfer_frame::payload_header::PayloadType::Bytes as i32 {
                     // Control payload (PairedKey*, Introduction, Cancel, ...)
-                    let buf = byte_buffers.entry(p_id).or_insert_with(Vec::new);
+                    let buf = byte_buffers.entry(p_id).or_default();
                     if let Some(body) = chunk.body {
+                        if buf.len().saturating_add(body.len()) > 2 * 1024 * 1024 {
+                            byte_buffers.remove(&p_id);
+                            break 'main;
+                        }
                         buf.extend_from_slice(&body);
                     }
 
@@ -586,7 +590,7 @@ impl QuickShareServer {
                                                     resumed_attachments.clone(),
                                                 ).await?;
                                                 println!("[Quick Share] Auto-accepted reconnected session. Receiving...");
-                                                crate::events::emit(serde_json::json!({ "type": "rx_resumed", "device": remote_name }));
+                                                super::events::emit(serde_json::json!({ "type": "rx_resumed", "device": remote_name }));
                                             } else {
                                                 if let Ok(mut g) = LAST_RX_SESSION.lock() {
                                                     *g = Some(LastRxSession {
@@ -612,7 +616,7 @@ impl QuickShareServer {
                 } else if p_type == payload_transfer_frame::payload_header::PayloadType::File as i32 {
                     let chunk_offset = chunk.offset.unwrap_or(0);
 
-                    if active_files.get(&p_id).is_none() {
+                    if let std::collections::hash_map::Entry::Vacant(entry) = active_files.entry(p_id) {
                         let file_entry = meta_files.iter().find(|m| m.2 == p_id).or_else(|| if meta_files.len() == 1 { meta_files.first() } else { None });
                         let raw_name = file_entry
                             .map(|m| m.0.clone())
@@ -655,7 +659,7 @@ impl QuickShareServer {
                         match open_result {
                             Ok(f) => {
                                 println!("[Quick Share] Receiving: {:?}", final_dir.join(&safe_name));
-                                active_files.insert(p_id, ReceivingFile {
+                                entry.insert(ReceivingFile {
                                     name: safe_name.clone(),
                                     final_dir,
                                     safe_name: safe_name.clone(),
@@ -673,7 +677,7 @@ impl QuickShareServer {
                                 } else {
                                     0.0
                                 };
-                                crate::events::emit(serde_json::json!({
+                                super::events::emit(serde_json::json!({
                                     "type": "progress", "dir": "rx", "name": safe_name,
                                     "pct": init_pct, "mbps": 0.0, "file_index": completed_files + 1, "files": meta_files.len(),
                                 }));
@@ -706,7 +710,7 @@ impl QuickShareServer {
                                 let mbps = (rf.received - rf.base) as f64 / 1_048_576.0 / rf.started.elapsed().as_secs_f64().max(0.001);
                                 print!("\r[Quick Share] {}: {:.1}% (total: {:.1}%)  {:.1} MB/s   ", rf.name, (rf.received as f64 / rf.size.max(1) as f64 * 100.0).min(100.0), batch_pct, mbps);
                                 let _ = std::io::stdout().flush();
-                                crate::events::emit(serde_json::json!({
+                                super::events::emit(serde_json::json!({
                                     "type": "progress", "dir": "rx", "name": rf.name,
                                     "pct": batch_pct, "mbps": mbps, "file_index": completed_files + 1, "files": meta_files.len(),
                                 }));
@@ -731,7 +735,7 @@ impl QuickShareServer {
                                 match std::fs::rename(&rf.part_path, &final_path) {
                                     Ok(()) => {
                                         println!("\n[Quick Share] SUCCESS! Saved: {:?}", final_path);
-                                        crate::events::emit(serde_json::json!({
+                                        super::events::emit(serde_json::json!({
                                             "type": "file_done", "name": rf.safe_name, "path": final_path.to_string_lossy(),
                                         }));
                                         println!("[Quick Share] {:.1} MB in {:.1}s = {:.1} MB/s ({:.0} Mbps)", mb, secs, mb / secs, mb / secs * 8.0);
@@ -802,7 +806,7 @@ impl QuickShareServer {
                 *g = None;
             }
         }
-        crate::events::emit(serde_json::json!({
+        super::events::emit(serde_json::json!({
             "type": "rx_session_end",
             "ok": is_ok,
             "cancelled": cancelled,
@@ -915,7 +919,7 @@ fn spawn_consent_prompt(
             .take(12)
             .map(|(n, sz)| serde_json::json!({ "name": n, "size": sz }))
             .collect();
-        crate::events::emit(serde_json::json!({
+        super::events::emit(serde_json::json!({
             "type": "offer", "device": device, "pin": pin, "files": shown,
             "more": files.len().saturating_sub(12), "count": files.len(), "total": total,
         }));
@@ -1025,7 +1029,7 @@ fn extract_device_name(ep_info: &[u8]) -> String {
     String::from_utf8_lossy(ep_info).to_string()
 }
 
-fn resolve_unique_path(dir: &PathBuf, filename: &str) -> PathBuf {
+fn resolve_unique_path(dir: &Path, filename: &str) -> PathBuf {
     let mut candidate = dir.join(filename);
     if !candidate.exists() {
         return candidate;
@@ -1046,5 +1050,37 @@ fn resolve_unique_path(dir: &PathBuf, filename: &str) -> PathBuf {
             return candidate;
         }
         counter += 1;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{resolve_unique_path, safe_relative_dir, sanitize_component};
+    use std::path::PathBuf;
+
+    #[test]
+    fn sanitizes_traversal_illegal_and_reserved_names() {
+        assert_eq!(sanitize_component(".."), None);
+        assert_eq!(sanitize_component("."), None);
+        assert_eq!(sanitize_component("   "), None);
+        assert_eq!(sanitize_component("CON.txt"), Some("_CON.txt".to_string()));
+        assert_eq!(sanitize_component("a<b>c:d?.png"), Some("a_b_c_d_.png".to_string()));
+    }
+
+    #[test]
+    fn safe_relative_dir_drops_parent_traversal_segments() {
+        let rel = safe_relative_dir(r"../../Windows\System32/Photos");
+        assert_eq!(rel, PathBuf::from("Windows").join("System32").join("Photos"));
+    }
+
+    #[test]
+    fn resolve_unique_path_handles_collisions() {
+        let dir = std::env::temp_dir().join(format!("wqs_test_{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+        let p0 = dir.join("note.txt");
+        let _ = std::fs::write(&p0, b"hi");
+        assert_eq!(resolve_unique_path(&dir, "note.txt"), dir.join("note (1).txt"));
+        assert_eq!(resolve_unique_path(&dir, "fresh.txt"), dir.join("fresh.txt"));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

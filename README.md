@@ -8,7 +8,7 @@ Built with Tauri 2 and Rust.
 ![Platform](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D6?style=flat-square&logo=windows)
 ![Tauri](https://img.shields.io/badge/Tauri-2-FFC131?style=flat-square&logo=tauri)
 ![Rust](https://img.shields.io/badge/Rust-2021-DEA584?style=flat-square&logo=rust)
-![Version](https://img.shields.io/badge/version-1.1.0-brightgreen?style=flat-square)
+![Version](https://img.shields.io/badge/version-1.2.0-brightgreen?style=flat-square)
 ![License](https://img.shields.io/badge/license-GPLv3-blue?style=flat-square)
 
 <br/>
@@ -67,15 +67,15 @@ Two distinct layouts, switchable from Settings:
 ### Media & Audio
 
 - Windows Media Integration: Reads title, artist, playback status, timeline progress, duration, and album art from active media sessions (Spotify, YouTube / Chrome browsers, media players).
-- 5-band audio spectrum visualizer (60 Hz to 16 kHz) powered by native FFT sampling of system audio output.
+- 5-band audio spectrum visualizer (60 Hz to 16 kHz) powered by native WASAPI loopback 512-point FFT sampling, automatically paused when media stops, when Smart Mode hides the island in fullscreen, or on views without 5-band bars.
 - Real-time volume and mute synchronization across Windows audio sessions.
 - Audio output switcher: Matched-size, flicker-free switching between default playback devices, synchronized with Classic/Glass media theme.
 - Hardware brightness control via WMI, matching Windows Fn keys and action center sliders.
 
 ### Connectivity & File Transfer
 
-- **Inex Drop (Quick Share)**: Native Rust implementation of Google Nearby / Quick Share protocols using mDNS discovery, Bluetooth LE beacons, and encrypted peer-to-peer Wi-Fi channels. Compatible with Android and Windows Quick Share without third-party phone utilities.
-- **P2P Link**: Direct PC-to-PC WebRTC encrypted data channel connection. Establishes serverless connections using QR image exchange or one-time text codes.
+- **Inex Drop (Quick Share)**: Native Rust implementation of Google Nearby / Quick Share protocols using mDNS discovery, Bluetooth LE beacons, UKEY2 SHA-512 commitment verification, strict sequence-number replay protection, and encrypted peer-to-peer Wi-Fi channels. Compatible with Android and Windows Quick Share without third-party phone utilities.
+- **P2P Link**: Direct PC-to-PC WebRTC encrypted data channel connection. Establishes serverless connections via QR code image exchange (click to copy, `Ctrl+V` paste, or drag-and-drop).
 - **File Tray**: Drag-and-drop file parking shelf on the island. Retains absolute file paths without duplication, enabling drag-out to desktop, file explorer, or apps. Includes color-coded file type icons (`.fico`) with extension badges for documents, media, archives, and code.
 
 ### Screen Time & Analytics
@@ -91,14 +91,27 @@ Two distinct layouts, switchable from Settings:
 
 | Component | Technologies |
 | --- | --- |
-| **Backend** | Rust (2021 edition), Tauri 2, Windows API (`windows` crate: Core Audio, WLAN, Bluetooth, WinRT Media, Shell, Registry), `wmi`, `rustfft`, `tokio` |
+| **Backend** | Rust (2021 edition), Tauri 2, Windows API (`windows` crate: Core Audio, WLAN, Bluetooth, WinRT Media, Shell, Registry, Windows Event Log), `wmi`, `rustfft`, `tokio` |
 | **Quick Share** | `prost` (Protobuf), `p256`, `hkdf`, `aes`, `hmac`, `mdns-sd`, `socket2`, BLE advertisement |
-| **Frontend** | Vanilla JavaScript (ES Modules), modular CSS, WebView2 runtime (zero third-party web frameworks) |
+| **Frontend** | Strict TypeScript (ES2022 modules), Vite 8 bundler, modular CSS transitions, WebView2 runtime (zero React / JS UI frameworks) |
 | **File Transfer** | Quick Share (Rust), WebRTC data channels for P2P Link |
-| **Signaling** | Fully serverless. Handshake via QR code scanning or 6-digit text exchange |
+| **Signaling** | Fully serverless WebRTC signaling via QR code image exchange (copy, paste, or drag-and-drop) |
+| **Testing & CI** | Vitest (TypeScript unit tests), Cargo `#[test]` suite, Clippy (`-D warnings`), Playwright + Pixelmatch golden visual regression harness, GitHub Actions |
 | **Packaging** | WiX Toolset (`.msi`) and NSIS (`.exe`) installers |
 
 Minimum system requirement: Windows 10 (version 1903+) or Windows 11 with WebView2 Runtime.
+
+---
+
+## Engineering Architecture & Performance
+
+Inex Island is engineered for minimal idle overhead (0% idle CPU, low WebView2 working-set footprint via `MEMORY_USAGE_TARGET_LEVEL_LOW` and working-set trimming) while preserving smooth native-feeling animations:
+
+- **Fixed-Size Click-Through Win32 Window**: Rather than resizing the HWND on every expand/collapse frame (which causes DWM flicker and lateral jitter), [`src-tauri/src/island_window.rs`](src-tauri/src/island_window.rs) positions the transparent overlay once via `SetWindowPos` and dynamically toggles `set_ignore_cursor_events` from a lightweight cursor hit-poller (`16ms` near the notch bounds, `70ms` elsewhere).
+- **Event-Driven over Polling**: Power state (`live.rs`), WMI display brightness (`brightness.rs`), Core Audio session mute/device switches (`audio_events.rs`), Windows SMTC media changes (`media.rs`), Wi-Fi & Bluetooth radios (`radios.rs`), and session lock/unlock events (`native_events.rs`) are pushed to the UI via OS callbacks. Hardware telemetry (`sys_stats.rs`) runs only when stats widgets are active, and WASAPI loopback FFT (`visualizer.rs`) starts paused and auto-suspends whenever audio pauses, Smart Mode fullscreen hides the island, or a non-visualizer view (like Control Deck or Glass Media Card) is active.
+- **Privacy & Local-First Storage**: Zero cloud telemetry. Settings stay in WebView2 `localStorage` (`inex.settings.v1`), Screen Time & app icon caches live in `%LOCALAPPDATA%`, external HTTP widget lookups are restricted in Rust (`webget.rs`) to an explicit HTTPS allowlist, and browser launches validate `http(s)://` URLs without shell interpolation.
+
+For deeper component diagrams and module responsibilities, see [ARCHITECTURE.md](ARCHITECTURE.md) and [SECURITY.md](SECURITY.md).
 
 ---
 
@@ -106,19 +119,20 @@ Minimum system requirement: Windows 10 (version 1903+) or Windows 11 with WebVie
 
 ```
 inex-island/
-├── main-parts/         Modular entry scripts, concatenated into src/main.js
-├── styles-parts/       Modular CSS sheets, concatenated into src/styles.css (plus src/js/features/*/*.css)
-├── scripts/            Automated assembly scripts (build-styles.mjs, build-main.mjs)
+├── styles-parts/       Modular CSS sheets, assembled into src/styles.css
+├── scripts/            Style assembly (build-styles.mjs) and Playwright Golden UI harness
+├── tests/              Vitest unit test suite (settings, solar/prayer, currency, spotlight, clipboard)
 ├── src/
 │   ├── js/
-│   │   ├── core/       DOM utilities, state bus, Tauri bridge, view switcher, settings sync
-│   │   ├── features/   Feature modules (animations, spotlight, media, media-glass, tray, controls, widgets, prayer, etc.)
-│   │   └── settings/   Modular Settings window pages, previews, and state bindings
+│   │   ├── core/       Strict TypeScript core (DOM utilities, typed EventBus, state store, Tauri bridge, views)
+│   │   ├── features/   Modular feature engines (animations, spotlight, media, media-glass, tray, controls, widgets, prayer, etc.)
+│   │   └── settings/   Modular Settings window pages, live previews, and state bindings
+│   ├── types/          Shared domain models and global window augmentation (.d.ts)
 │   ├── index.html      Island, Control Deck, and Notch markup
 │   ├── settings.html   Standalone Settings application window
-│   ├── settings.js     Settings window bootstrap and event wiring
-│   ├── shared.js       Theme computation, defaults, and cross-window state
-│   └── styles.css      Generated stylesheet
+│   ├── main.ts         Island entrypoint
+│   ├── settings.ts     Settings window bootstrap and event wiring
+│   └── shared.ts       Theme token computation, defaults, migrations, and cross-window sync
 └── src-tauri/
     ├── src/
     │   ├── main.rs     Tauri setup, command dispatch, window management, system tray
@@ -126,18 +140,20 @@ inex-island/
     │   ├── audio.rs    Core Audio session endpoints and device switcher
     │   ├── bluetooth.rs Native Windows Bluetooth LE discovery and battery polling
     │   ├── brightness.rs WMI brightness controller
-    │   ├── clipboard.rs Clipboard history watcher and file reader
+    │   ├── clipboard.rs Clipboard history watcher and DIB/file reader
     │   ├── island_window.rs Fixed window sizing, click-through hit-testing, and cursor probe
     │   ├── live.rs     System event listeners (power, radios, media)
     │   ├── media.rs    Windows SMTC media status, artwork, timeline & browser source detection
     │   ├── radios.rs   Wi-Fi & Bluetooth adapter state control
     │   ├── screentime.rs Local foreground process monitor and rolling history
+    │   ├── session_history.rs Native Windows Event Log (`wevtapi`) PC session reader
     │   ├── settings_win.rs Settings window lifecycle & sync
-    │   ├── sounds.rs   Synthesized status SFX and full-length repeating alarm player
+    │   ├── sounds.rs   Synthesized status SFX and repeating alarm player
     │   ├── spotlight.rs Installed browser detection and browser-specific URL launcher
-    │   ├── sys_stats.rs CPU, RAM, battery, network, and weather system telemetry
+    │   ├── sys_stats.rs CPU, RAM, GPU, disk, battery, and network telemetry
     │   ├── visualizer.rs System output capture and 5-band FFT pipeline
     │   ├── volume.rs   System & per-app audio session volume control
+    │   ├── webget.rs   Allowlisted HTTPS widget fetcher
     │   ├── wifi.rs     WLAN scanning and profile management
     │   └── quick_share/ Google Nearby protocol implementation
     ├── Cargo.toml
@@ -146,36 +162,45 @@ inex-island/
 
 ---
 
-## Building from Source
+## Building & Testing from Source
 
 ### Prerequisites
-- [Node.js](https://nodejs.org/) (v18 or v20 LTS)
-- [Rust](https://rustup.rs/) (stable channel, 1.75+)
+- [Node.js](https://nodejs.org/) (v20 LTS)
+- [Rust](https://rustup.rs/) (stable toolchain with `clippy`)
 - Visual Studio C++ Build Tools with the Windows 10/11 SDK
 
-### Build Commands
+### Build & Verification Commands
 
 ```bash
 # Clone the repository
 git clone https://github.com/inrwxyz/inex-island.git
 cd inex-island
 
-# Install build dependencies
-npm install
+# Install dependencies
+npm ci
 
-# Run in live development mode
+# Run in live development mode (Vite dev server + Tauri)
 npm run dev
 
-# Regenerate joined CSS and JS scripts
-npm run build:parts
+# Static typechecking, frontend production bundle, and unit tests
+npm run typecheck
+npm test
+npm run build:frontend
+
+# Rust unit tests & strict lints
+npm run test:rust
+cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
+
+# Playwright visual regression + UI interaction harness (requires Microsoft Edge on Windows)
+npm run test:golden
 
 # Compile release binaries and installers (.exe and .msi)
 npm run build
 ```
 
 The compiled release installers are generated in:
-- `src-tauri/target/release/bundle/nsis/Inex Island_1.1.0_x64-setup.exe`
-- `src-tauri/target/release/bundle/msi/Inex Island_1.1.0_x64_en-US.msi`
+- `src-tauri/target/release/bundle/nsis/Inex Island_1.2.0_x64-setup.exe`
+- `src-tauri/target/release/bundle/msi/Inex Island_1.2.0_x64_en-US.msi`
 
 ---
 

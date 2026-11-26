@@ -5,7 +5,7 @@ fn synthesize_wav_notes(duration_secs: f32, decay_rate: f32, notes: &[(f32, f32,
 
     for &(freq, delay, vol) in notes {
         let start_sample = (delay * sample_rate as f32) as usize;
-        for i in start_sample..total_samples {
+        for (i, slot) in pcm.iter_mut().enumerate().take(total_samples).skip(start_sample) {
             let t = (i - start_sample) as f32 / sample_rate as f32;
             // Warm Material/Android-like soft transient + gentle 2nd harmonic body
             let attack = (t / 0.014).min(1.0);
@@ -14,7 +14,7 @@ fn synthesize_wav_notes(duration_secs: f32, decay_rate: f32, notes: &[(f32, f32,
             let overtone = (4.0 * std::f32::consts::PI * freq * t).sin() * 0.16 * (-t * decay_rate * 2.2).exp();
             let sample = (fundamental + overtone) * vol * attack * decay;
             let val = (sample * 32767.0) as i32;
-            pcm[i] = pcm[i].saturating_add(val as i16);
+            *slot = slot.saturating_add(val as i16);
         }
     }
 

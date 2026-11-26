@@ -91,8 +91,10 @@ pub fn get_string(subkey: &str, name: &str) -> Option<String> {
             let mut len2 = len;
             if RegQueryValueExW(h, nm.as_ptr(), std::ptr::null_mut(), &mut kind, buf.as_mut_ptr(), &mut len2) == ERROR_SUCCESS {
                 let u: Vec<u16> = buf[..len2 as usize]
-                    .chunks_exact(2)
-                    .map(|c| u16::from_le_bytes([c[0], c[1]]))
+                    .as_chunks::<2>()
+                    .0
+                    .iter()
+                    .map(|c| u16::from_le_bytes(*c))
                     .take_while(|&c| c != 0)
                     .collect();
                 out = Some(String::from_utf16_lossy(&u));

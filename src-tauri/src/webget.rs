@@ -9,7 +9,7 @@ fn host_ok(url: &str) -> bool {
         Some(r) => r,
         None => return false,
     };
-    let host = rest.split(|c| c == '/' || c == '?' || c == '#').next().unwrap_or("");
+    let host = rest.split(['/', '?', '#']).next().unwrap_or("");
     ALLOWED_HOSTS.contains(&host)
 }
 
@@ -45,4 +45,24 @@ pub async fn http_get(url: String) -> Result<String, String> {
     })
     .await
     .map_err(|e| e.to_string())?
+}
+
+#[cfg(test)]
+mod tests {
+    use super::host_ok;
+
+    #[test]
+    fn allows_only_whitelisted_https_hosts() {
+        assert!(host_ok("https://open.er-api.com/v6/latest/USD"));
+        assert!(host_ok("https://api.coingecko.com/api/v3/simple/price"));
+        assert!(host_ok("https://query1.finance.yahoo.com/v8/finance/chart/BTC-USD?range=1d"));
+    }
+
+    #[test]
+    fn rejects_non_https_and_unknown_or_spoofed_hosts() {
+        assert!(!host_ok("http://open.er-api.com/v6/latest/USD"));
+        assert!(!host_ok("https://evil.example.com/open.er-api.com"));
+        assert!(!host_ok("https://open.er-api.com.evil.com/x"));
+        assert!(!host_ok("file:///C:/Windows/win.ini"));
+    }
 }

@@ -13,7 +13,7 @@ html,body{width:100vw;height:100vh;overflow:hidden;background:transparent;
   --track:rgba(0,0,0,.16);
   --ac:#2db8a6;
   --segon:rgba(255,255,255,.9);
-  --menu:rgba(255,255,255,.52);
+  --menu:rgba(248,248,252,.92);
   --sel:rgba(255,255,255,.80);
   --hov:rgba(255,255,255,.40);
   --pv:rgba(255,255,255,.34);
@@ -30,7 +30,7 @@ html,body{width:100vw;height:100vh;overflow:hidden;background:transparent;
   --line:rgba(255,255,255,.09);
   --tx:#f5f5f7;--dim:#b0b0b6;--faint:#8e8e93;
   --field:rgba(255,255,255,.10);--track:rgba(255,255,255,.22);
-  --segon:rgba(255,255,255,.22);--menu:rgba(58,58,66,.52);
+  --segon:rgba(255,255,255,.22);--menu:rgba(36,36,44,.92);
   --sel:rgba(255,255,255,.16);--hov:rgba(255,255,255,.07);--pv:rgba(0,0,0,.22);
   border-color:rgba(255,255,255,.14);
   background-image:linear-gradient(135deg,rgba(110,130,255,.14) 0%,rgba(255,255,255,0) 42%,rgba(255,110,170,.10) 100%);
@@ -150,10 +150,11 @@ html,body{width:100vw;height:100vh;overflow:hidden;background:transparent;
 .pop{font:inherit;font-size:12px;font-weight:500;padding:4px 6px 4px 10px;border-radius:5px;background:var(--field);display:inline-flex;gap:6px;align-items:center;cursor:pointer;white-space:nowrap;color:var(--tx);border:0}
 .pop:hover{background:color-mix(in srgb,var(--field) 80%,var(--tx))}
 .pop i{font-size:13px;color:var(--dim)}
-.mn{display:none;position:absolute;right:0;top:32px;min-width:180px;background:var(--menu);backdrop-filter:blur(40px) saturate(170%);-webkit-backdrop-filter:blur(40px) saturate(170%);
+.mn{display:none;position:absolute;right:0;top:32px;min-width:180px;max-height:min(260px,52vh);overflow-y:auto;background:var(--menu);backdrop-filter:blur(40px) saturate(170%);-webkit-backdrop-filter:blur(40px) saturate(170%);
   border:.5px solid rgba(255,255,255,.45);border-radius:6px;padding:4px;z-index:99;box-shadow:0 10px 30px rgba(0,0,0,.25),inset 0 0 0 .5px rgba(255,255,255,.25)}
+.mn::-webkit-scrollbar{width:5px}.mn::-webkit-scrollbar-thumb{background:var(--line);border-radius:3px}
 .mn.open{display:block}
-.mn.up{top:auto;bottom:32px}
+.mn.up{top:auto;bottom:32px;max-height:min(260px,52vh)}
 .pw.mk .mn.up{max-height:min(240px,50vh)}
 .pw.mk .mn{max-height:240px;overflow-y:auto}
 .mi{display:flex;align-items:center;gap:6px;padding:5px 8px 5px 6px;border-radius:4px;font-size:12px;cursor:pointer;color:var(--tx)}

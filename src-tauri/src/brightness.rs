@@ -245,20 +245,17 @@ fn event_thread(app: AppHandle) {
 
     let Some(c) = con else { return };
     loop {
-        match c.raw_notification::<BrightnessEvent>("SELECT * FROM WmiMonitorBrightnessEvent") {
-            Ok(events) => {
-                for ev in events.flatten() {
-                    let level = ev.brightness as u32;
-                    // ignore the echo of our own change
-                    if now_ms() - LAST_SET_MS.load(Ordering::Relaxed) < 2000 {
-                        continue;
-                    }
-                    if CURRENT.swap(level, Ordering::Relaxed) != level {
-                        let _ = app.emit("brightness-changed", level);
-                    }
+        if let Ok(events) = c.raw_notification::<BrightnessEvent>("SELECT * FROM WmiMonitorBrightnessEvent") {
+            for ev in events.flatten() {
+                let level = ev.brightness as u32;
+                // ignore the echo of our own change
+                if now_ms() - LAST_SET_MS.load(Ordering::Relaxed) < 2000 {
+                    continue;
+                }
+                if CURRENT.swap(level, Ordering::Relaxed) != level {
+                    let _ = app.emit("brightness-changed", level);
                 }
             }
-            Err(_) => {}
         }
         // the subscription ended or could not start: try again later (a sleeping thread costs nothing)
         std::thread::sleep(std::time::Duration::from_secs(60));

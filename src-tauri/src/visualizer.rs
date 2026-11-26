@@ -25,7 +25,7 @@ use windows::Win32::System::Com::{
     CoCreateInstance, CoInitializeEx, CoTaskMemFree, CLSCTX_ALL, COINIT_MULTITHREADED,
 };
 
-pub static VISUALIZER_ACTIVE: AtomicBool = AtomicBool::new(true);
+pub static VISUALIZER_ACTIVE: AtomicBool = AtomicBool::new(false);
 
 /// Set (by audio_events.rs) when Windows switched the default output device.
 static OUTPUT_CHANGED: AtomicBool = AtomicBool::new(false);

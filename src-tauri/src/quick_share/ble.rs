@@ -4,7 +4,7 @@
 //!   * service UUID  = 0xFE2C
 //!   * model id      = fc 12 8e
 //!   * metadata byte = [ version (3 bits) | type (3 bits) | uwb_supported (1) | sender_cert_supported (1) ]
-//!                     type: kNotify = 0, kSilent = 1
+//!     type: kNotify = 0, kSilent = 1
 //!   * then one byte "adjusted_tx_power"
 //!
 //! What it does NOT contain: the platform code that actually serialises the beacon on Windows.
@@ -39,7 +39,7 @@ impl Drop for FastInitBeacon {
 
 fn parse_hex(s: &str) -> Option<Vec<u8>> {
     let s: String = s.chars().filter(|c| !c.is_whitespace()).collect();
-    if s.is_empty() || s.len() % 2 != 0 {
+    if s.is_empty() || !s.len().is_multiple_of(2) {
         return None;
     }
     let mut out = Vec::new();

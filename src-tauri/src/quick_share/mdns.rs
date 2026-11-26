@@ -1,9 +1,8 @@
 use std::collections::HashMap;
-use std::io::Write;
 use std::net::Ipv4Addr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
 use mdns_sd::{ServiceDaemon, ServiceEvent, ServiceInfo};
@@ -30,128 +29,6 @@ pub fn parse_endpoint_info(ep_info_b64: &str) -> Option<(String, u8)> {
         return Some((name, dev_type));
     }
     None
-}
-
-/// Old fixed-time scan (kept for compatibility).
-#[allow(dead_code)]
-pub async fn scan_nearby_devices(
-    timeout_secs: u64,
-) -> Result<Vec<DiscoveredDevice>, Box<dyn std::error::Error + Send + Sync>> {
-    scan_nearby_devices_ext(timeout_secs, false).await
-}
-
-/// Scans local Wi-Fi / mDNS for Quick Share devices (radar animation).
-///
-/// Smart mode: returns as soon as a device was found and nothing new showed up for a short
-/// grace period, instead of always waiting the full timeout. `ble_active` only changes the hint text.
-pub async fn scan_nearby_devices_ext(
-    timeout_secs: u64,
-    ble_active: bool,
-) -> Result<Vec<DiscoveredDevice>, Box<dyn std::error::Error + Send + Sync>> {
-    const GRACE_AFTER_LAST_FOUND: Duration = Duration::from_millis(1800);
-    let mut last_found: Option<Instant> = None;
-    let daemon = ServiceDaemon::new()?;
-    let service_type = "_FC9F5ED42C8A._tcp.local.";
-    let receiver = daemon.browse(service_type)?;
-
-    let mut devices: HashMap<String, DiscoveredDevice> = HashMap::new();
-    let start_time = Instant::now();
-    let duration = Duration::from_secs(timeout_secs);
-
-    println!("\n============================================================");
-    println!("     📡 QUICK SHARE RADAR - SCANNING NEARBY TARGETS        ");
-    println!("============================================================");
-    println!(" [*] Service Protocol:  _FC9F5ED42C8A._tcp.local. (mDNS over your Wi-Fi / LAN)");
-    if ble_active {
-        println!(" [*] Wake-up:           BLE beacon ON (phone may show a 'nearby device is sharing' notification)");
-    } else {
-        println!(" [*] Wake-up:           none (no Bluetooth beacon) - keep Quick Share open on the phone");
-    }
-    println!(" [*] Searching for:     Phones, Tablets, Chromebooks, PCs");
-    println!("------------------------------------------------------------");
-
-    let radar_frames = [
-        "[       ◎       ]",
-        "[    ·  ◎  ·    ]",
-        "[  · ·  ◎  · ·  ]",
-        "[· · ·  ◎  · · ·]",
-        "[  · ·  ◎  · ·  ]",
-        "[    ·  ◎  ·    ]",
-    ];
-    let mut frame_idx = 0;
-
-    while start_time.elapsed() < duration {
-        if let Some(t) = last_found {
-            if t.elapsed() >= GRACE_AFTER_LAST_FOUND {
-                break; // found something and nothing new is arriving: don't waste time
-            }
-        }
-        match tokio::time::timeout(Duration::from_millis(150), receiver.recv_async()).await {
-            Ok(Ok(event)) => {
-                if let ServiceEvent::ServiceResolved(info) = event {
-                    let instance = info.get_fullname().to_string();
-                    let port = info.get_port();
-                    let addrs = info.get_addresses_v4();
-
-                    if let Some(ipv4) = pick_best_ip(&addrs) {
-                        let (name, dev_type) = if let Some(n_val) = info.get_property_val_str("n") {
-                            parse_endpoint_info(n_val).unwrap_or_else(|| ("Nearby Device".to_string(), 1))
-                        } else {
-                            ("Nearby Device".to_string(), 1)
-                        };
-
-                        let key = format!("{}:{}", ipv4, port);
-                        if !devices.contains_key(&key) {
-                            let icon = match dev_type {
-                                1 => "📱 Phone ",
-                                2 => "📱 Tablet",
-                                3 => "💻 Laptop",
-                                _ => "📡 Device",
-                            };
-                            print!("\r                                                              \r");
-                            println!(" [+] Discovered: [{}] \"{}\" ({}:{})", icon, name, ipv4, port);
-                            last_found = Some(Instant::now());
-                            crate::events::emit(serde_json::json!({
-                                "type": "device",
-                                "name": name,
-                                "ip": ipv4.to_string(),
-                                "port": port,
-                                "dev_type": dev_type,
-                                "instance": instance,
-                            }));
-                            devices.insert(
-                                key,
-                                DiscoveredDevice {
-                                    name,
-                                    ip: ipv4,
-                                    port,
-                                    device_type: dev_type,
-                                    instance,
-                                },
-                            );
-                        }
-                    }
-                }
-            }
-            _ => {
-                let elapsed = start_time.elapsed().as_secs();
-                let remaining = timeout_secs.saturating_sub(elapsed);
-                let frame = radar_frames[frame_idx % radar_frames.len()];
-                print!("\r [Radar Pulse] {} Scanning... ({}s remaining, {} found)   ", frame, remaining, devices.len());
-                let _ = std::io::stdout().flush();
-                frame_idx += 1;
-            }
-        }
-    }
-
-    print!("\r                                                                      \r");
-    let _ = daemon.shutdown(); // do not leave the mDNS thread running
-    let result: Vec<DiscoveredDevice> = devices.into_values().collect();
-    println!("------------------------------------------------------------");
-    println!(" [*] Radar scan complete. Found {} nearby device(s).", result.len());
-    println!("============================================================\n");
-
-    Ok(result)
 }
 
 /// Continuous discovery (like the real Quick Share send screen): keeps listening until `stop` is set.
@@ -192,11 +69,11 @@ pub async fn watch_devices(
                     let key = format!("{}:{}", ipv4, port);
                     if let Some(old_key) = shown.get(&instance) {
                         if *old_key != key {
-                            crate::events::emit(serde_json::json!({ "type": "device_gone", "key": old_key }));
+                            super::events::emit(serde_json::json!({ "type": "device_gone", "key": old_key }));
                         }
                     }
                     shown.insert(instance.clone(), key.clone());
-                    crate::events::emit(serde_json::json!({
+                    super::events::emit(serde_json::json!({
                         "type": "device",
                         "key": key,
                         "name": name,
@@ -209,7 +86,7 @@ pub async fn watch_devices(
             }
             Ok(Ok(ServiceEvent::ServiceRemoved(_, fullname))) => {
                 if let Some(key) = shown.remove(&fullname) {
-                    crate::events::emit(serde_json::json!({ "type": "device_gone", "key": key }));
+                    super::events::emit(serde_json::json!({ "type": "device_gone", "key": key }));
                 }
             }
             Ok(Ok(_)) => {}
@@ -350,6 +227,7 @@ pub fn pick_best_ip<'a>(addrs: impl IntoIterator<Item = &'a Ipv4Addr>) -> Option
 /// Active local IPv4 addresses:
 ///  1) Wi-Fi router / Phone Hotspot / Ethernet connected IP
 ///  2) Windows Mobile Hotspot IP 192.168.137.1 (if PC acts as hotspot)
+///
 /// Multi-probe technique detects the primary interface IP by routing probes towards common gateways.
 pub fn advertise_ips() -> Vec<Ipv4Addr> {
     let mut v: Vec<Ipv4Addr> = Vec::new();
@@ -367,10 +245,8 @@ pub fn advertise_ips() -> Vec<Ipv4Addr> {
             if sock.connect(target).is_ok() {
                 if let Ok(std::net::SocketAddr::V4(a)) = sock.local_addr() {
                     let ip = *a.ip();
-                    if !ip.is_loopback() && !ip.is_unspecified() && !ip.is_link_local() {
-                        if !v.contains(&ip) {
-                            v.push(ip);
-                        }
+                    if !ip.is_loopback() && !ip.is_unspecified() && !ip.is_link_local() && !v.contains(&ip) {
+                        v.push(ip);
                     }
                 }
             }

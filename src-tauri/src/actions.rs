@@ -55,13 +55,16 @@ pub fn open_wifi_settings() {
     shell_open("ms-settings:network-wifi");
 }
 
+pub(crate) fn is_safe_web_url(url: &str) -> bool {
+    (url.starts_with("http://") || url.starts_with("https://"))
+        && !url.chars().any(|c| c.is_control())
+}
+
 #[tauri::command]
 pub fn open_url(url: String) {
     // Only web links, and no control characters. ShellExecuteW never goes through cmd.exe,
     // so the text is handed to the default browser as it is and can not run anything.
-    if (url.starts_with("http://") || url.starts_with("https://"))
-        && !url.chars().any(|c| c.is_control())
-    {
+    if is_safe_web_url(&url) {
         shell_open(&url);
     }
 }
@@ -88,5 +91,19 @@ pub fn take_snip() {
 pub fn launch_quick_action(id: String) {
     if id == "calc" {
         shell_open("calc.exe");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_safe_web_url;
+
+    #[test]
+    fn allows_only_clean_http_and_https_urls() {
+        assert!(is_safe_web_url("https://github.com/inrwxyz/inex-island"));
+        assert!(is_safe_web_url("http://127.0.0.1:49871/health"));
+        assert!(!is_safe_web_url("javascript:alert(1)"));
+        assert!(!is_safe_web_url("file:///C:/Windows/System32/calc.exe"));
+        assert!(!is_safe_web_url("https://example.com/\ncalc"));
     }
 }

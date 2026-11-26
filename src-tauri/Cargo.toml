@@ -1,6 +1,6 @@
 [package]
 name = "inex-island"
-version = "1.1.0"
+version = "1.2.0"
 description = "Inex Island - Dynamic Notch & Island for Windows"
 authors = ["Inex"]
 license = "GPL-3.0-or-later"
@@ -88,6 +88,13 @@ windows = { version = "0.58", features = [
 
 [target.'cfg(windows)'.dependencies.wmi]
 version = "0.14"
+
+[target.'cfg(windows)'.dependencies.webview2-com]
+version = "0.39"
+
+[target.'cfg(windows)'.dependencies.windows_core_062]
+package = "windows-core"
+version = "0.62"
 
 [profile.dev]
 opt-level = 2

@@ -30,7 +30,7 @@ pub async fn get_radio_present(kind: String) -> Option<bool> {
             }
         }
         crate::live::present_store(&kind, found);
-        return Some(found);
+        Some(found)
     }
     #[cfg(not(target_os = "windows"))]
     {
@@ -92,7 +92,7 @@ pub async fn set_radio_state(kind: String, on: bool) -> Result<bool, String> {
                 return Ok(status == RadioAccessStatus::Allowed);
             }
         }
-        return Err("No such radio on this PC".into());
+        Err("No such radio on this PC".into())
     }
     #[cfg(not(target_os = "windows"))]
     {

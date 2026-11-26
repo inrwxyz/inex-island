@@ -22,12 +22,22 @@ jobs:
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
-      - name: Rust Check
-        run: cargo check --manifest-path src-tauri/Cargo.toml
+      - name: TypeScript Check & Unit Tests
+        run: |
+          npm run typecheck
+          npm test
+          npm run build:frontend
+
+      - name: Rust Clippy & Tests
+        run: |
+          cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
+          cargo test --manifest-path src-tauri/Cargo.toml
 
       - name: Build Tauri Application
         uses: tauri-apps/tauri-action@v0
@@ -42,9 +52,10 @@ jobs:
             ## Inex Island v__VERSION__
 
             ### ✨ What's New in v__VERSION__
-            - 🎨 **Settings & Screen Time**: Fixed real active Screen Time total, added on-demand native Windows PC session history (`Apps | Screen Time`), and streamlined UI.
-            - ⚡ **Native Windows Notch Engine**: Performance and layout enhancements.
-            - 📁 **Quick Share & Device HUD**: Integrated quick share folder picker and Bluetooth HUD indicator.
+            - 🧠 **Strict TypeScript & Vite 8 Architecture**: Migrated the entire Island & Settings frontend to strict TypeScript with modular `styles-parts/` and automated Vitest + Cargo + Clippy + Playwright Golden UI verification.
+            - 📉 **Idle RAM & 5-Band Visualizer Optimization**: Enabled WebView2 `MEMORY_USAGE_TARGET_LEVEL_LOW` + working-set trim on idle/hide, and auto-paused Rust WASAPI loopback 512-point FFT capture when media stops or Smart Mode hides the island.
+            - 🔒 **Quick Share / Inex Drop Engine Hardening**: Synced the hardened `wquickshare` engine (`UKEY2` SHA-512 verification, strict replay protection, 2 MB buffer caps, and path-traversal sanitization) plus parallel `4x4 MB` Speed Test upload calibration.
+            - 🎨 **Settings & Screen Time Polish**: Added 5s cached Screen Time sync across `Apps | Screen Time` tabs and scrollable, high-contrast Settings dropdown menus.
 
             ### 📦 Installation
             Download `Inex Island___VERSION___x64-setup.exe` below and run the installer.

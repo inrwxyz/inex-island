@@ -27,7 +27,7 @@ const BROWSERS: &[(&str, &[&str])] = &[
 fn roots() -> Vec<PathBuf> {
     ["PROGRAMFILES", "PROGRAMFILES(X86)", "LOCALAPPDATA"]
         .iter()
-        .filter_map(|k| std::env::var_os(k))
+        .filter_map(std::env::var_os)
         .map(PathBuf::from)
         .collect()
 }
@@ -35,7 +35,7 @@ fn roots() -> Vec<PathBuf> {
 fn find_exe(id: &str) -> Option<PathBuf> {
     let (_, rels) = BROWSERS.iter().find(|(bid, _)| *bid == id)?;
     for root in roots() {
-        for rel in rels.iter() {
+        for &rel in *rels {
             let p = root.join(rel);
             if p.is_file() {
                 return Some(p);
@@ -60,10 +60,29 @@ pub fn spotlight_detect_browsers() -> Vec<InstalledBrowser> {
 
 #[tauri::command]
 pub fn spotlight_open(browser: String, url: String) -> Result<(), String> {
-    if !(url.starts_with("http://") || url.starts_with("https://")) {
+    if !crate::actions::is_safe_web_url(&url) {
         return Err("only http(s) URLs can be opened".into());
     }
     let exe = find_exe(&browser).ok_or_else(|| format!("browser not installed: {browser}"))?;
     Command::new(exe).arg(url).spawn().map_err(|e| e.to_string())?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{find_exe, spotlight_open, BROWSERS};
+
+    #[test]
+    fn browser_catalog_has_known_entries() {
+        let ids: Vec<&str> = BROWSERS.iter().map(|(id, _)| *id).collect();
+        assert!(ids.contains(&"chrome"));
+        assert!(ids.contains(&"edge"));
+        assert!(find_exe("nonexistent-browser-xyz").is_none());
+    }
+
+    #[test]
+    fn rejects_non_http_schemes_before_launching() {
+        let err = spotlight_open("edge".into(), "file:///C:/Windows/win.ini".into()).unwrap_err();
+        assert!(err.contains("http(s)"));
+    }
 }

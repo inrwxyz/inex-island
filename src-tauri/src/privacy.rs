@@ -39,7 +39,7 @@ pub async fn privacy_watch_start(app: AppHandle, enabled: bool) -> Option<String
     if !enabled {
         return None;
     }
-    let st = MIC_STATE.lock().unwrap();
+    let st = MIC_STATE.lock().unwrap_or_else(|e| e.into_inner());
     st.clone()
 }
 
@@ -125,7 +125,7 @@ fn mic_loop(app: AppHandle) {
 
 #[cfg(target_os = "windows")]
 fn publish(app: &AppHandle, now: Option<String>) {
-    let mut st = MIC_STATE.lock().unwrap();
+    let mut st = MIC_STATE.lock().unwrap_or_else(|e| e.into_inner());
     if *st == now {
         return;
     }

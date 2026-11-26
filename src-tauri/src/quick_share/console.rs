@@ -16,7 +16,10 @@ fn ensure_channel() -> (&'static mpsc::UnboundedSender<String>, &'static tokio::
         let _ = RX.set(tokio::sync::Mutex::new(rx));
         tx
     });
-    let rx = RX.get().unwrap();
+    let rx = RX.get_or_init(|| {
+        let (_tx, rx) = mpsc::unbounded_channel::<String>();
+        tokio::sync::Mutex::new(rx)
+    });
     (tx, rx)
 }
 
@@ -31,7 +34,7 @@ pub fn init() {
             match stdin.read_line(&mut line) {
                 Ok(0) | Err(_) => break,
                 Ok(_) => {
-                    let cleaned = line.trim_end_matches(|c| c == '\r' || c == '\n').to_string();
+                    let cleaned = line.trim_end_matches(['\r', '\n']).to_string();
                     if tx.send(cleaned).is_err() {
                         break;
                     }

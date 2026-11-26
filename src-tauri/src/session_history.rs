@@ -463,7 +463,10 @@ fn build_days_from_events(mut events: Vec<RawEvent>, now_secs: i64) -> Vec<Sessi
         .collect()
 }
 
+type HistoryCacheEntry = (Instant, String, Vec<SessionHistoryDay>);
+
 static TODAY_CACHE: OnceLock<Mutex<Option<(Instant, String, u64)>>> = OnceLock::new();
+static HISTORY_CACHE: OnceLock<Mutex<Option<HistoryCacheEntry>>> = OnceLock::new();
 
 fn store_today_cache(date: String, secs: u64) {
     let lock = TODAY_CACHE.get_or_init(|| Mutex::new(None));
@@ -480,7 +483,7 @@ pub fn today_pc_screen_time_secs() -> Option<u64> {
     let lock = TODAY_CACHE.get_or_init(|| Mutex::new(None));
     if let Ok(guard) = lock.lock() {
         if let Some((at, ref cached_date, secs)) = *guard {
-            if cached_date == &today_str && at.elapsed() < Duration::from_secs(5) {
+            if cached_date == &today_str && at.elapsed() < Duration::from_secs(30) {
                 return Some(secs);
             }
         }
@@ -503,16 +506,34 @@ pub fn today_pc_screen_time_secs() -> Option<u64> {
     secs
 }
 
-#[tauri::command]
-pub fn get_pc_session_history() -> Vec<SessionHistoryDay> {
+pub(crate) fn compute_pc_session_history() -> Vec<SessionHistoryDay> {
     let now = now_local_secs();
     let today_str = fmt_date(now);
+    let cache = HISTORY_CACHE.get_or_init(|| Mutex::new(None));
+    if let Ok(guard) = cache.lock() {
+        if let Some((at, ref cached_date, ref days)) = *guard {
+            if cached_date == &today_str && at.elapsed() < Duration::from_secs(60) {
+                return days.clone();
+            }
+        }
+    }
+
     let events = query_system_events_30d();
     let days = build_days_from_events(events, now);
     if let Some(today_rec) = days.iter().find(|d| d.date == today_str) {
-        store_today_cache(today_str, today_rec.total_secs);
+        store_today_cache(today_str.clone(), today_rec.total_secs);
+    }
+    if let Ok(mut guard) = cache.lock() {
+        *guard = Some((Instant::now(), today_str, days.clone()));
     }
     days
+}
+
+#[tauri::command]
+pub async fn get_pc_session_history() -> Vec<SessionHistoryDay> {
+    tauri::async_runtime::spawn_blocking(compute_pc_session_history)
+        .await
+        .unwrap_or_default()
 }
 
 #[cfg(test)]
@@ -552,12 +573,12 @@ mod tests {
     #[cfg(target_os = "windows")]
     #[test]
     fn native_wevtapi_queries_real_system_sessions_without_powershell() {
-        let hist = get_pc_session_history();
+        let hist = compute_pc_session_history();
         // Verify we returned structured history quickly with today's running session
         assert!(!hist.is_empty());
         assert!(hist.iter().any(|d| d.sessions.iter().any(|s| s.status == "Active")));
         let today_pc = today_pc_screen_time_secs().expect("today pc screen time should be present");
-        let today_widget = crate::screentime::get_screen_time_today().total;
+        let today_widget = crate::screentime::compute_screen_time_today().total;
         assert!(today_pc > 0);
         assert!(today_widget.abs_diff(today_pc) <= 2);
     }

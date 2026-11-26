@@ -3,8 +3,8 @@
 //!   * IAudioEndpointVolumeCallback on the default speaker  -> "volume-changed"    {level, muted}
 //!   * IAudioEndpointVolumeCallback on the default mic      -> "mic-muted-changed" {muted}
 //!   * IMMNotificationClient (device added / removed / state / default changed)
-//!         -> re-attaches the two callbacks above to the new default devices,
-//!            wakes the audio visualizer and sends "audio-device-changed".
+//!     -> re-attaches the two callbacks above to the new default devices,
+//!     wakes the audio visualizer and sends "audio-device-changed".
 //!
 //! Volume keys, the Windows tray slider, a headset button or another app changing the volume all
 //! arrive here the moment they happen. The thread sleeps on a channel the rest of the time.

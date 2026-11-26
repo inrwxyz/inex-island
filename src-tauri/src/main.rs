@@ -61,7 +61,10 @@ fn main() {
     // SINGLE INSTANCE GUARD: only exit if a REAL Inex Island answers. Anything else on this
     // port (or a dead leftover) must not make the app quit silently.
     if let Ok(mut stream) = TcpStream::connect_timeout(
-        &"127.0.0.1:49871".parse().unwrap(),
+        &std::net::SocketAddr::V4(std::net::SocketAddrV4::new(
+            std::net::Ipv4Addr::LOCALHOST,
+            49871,
+        )),
         Duration::from_millis(800),
     ) {
         let _ = stream.set_read_timeout(Some(Duration::from_millis(1500)));
@@ -131,6 +134,9 @@ fn main() {
                     }
                     island_window::start_hit_poller(w.clone(), island_window::FIXED_WIN_W);
                     let _ = w.show();
+                    std::thread::sleep(Duration::from_secs(3));
+                    island_window::set_webview_low_memory(&w, true);
+                    island_window::trim_working_set();
                 });
             }
 
@@ -231,6 +237,7 @@ fn main() {
             spotlight::spotlight_detect_browsers,
             spotlight::spotlight_open,
             island_window::set_island_hit,
+            island_window::set_idle_memory_mode,
             island_window::pet_probe,
             settings_win::trigger_companion_demo,
             settings_win::trigger_animation_demo,

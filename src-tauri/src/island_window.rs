@@ -74,12 +74,12 @@ pub fn start_hit_poller(window: WebviewWindow, win_logical_w: f64) {
                 let m = 120.0 * scale;
                 near = px >= left - m && px <= right + m && py >= top - m && py <= bottom + m;
                 let want_ignore = !inside;
-                if ignoring != Some(want_ignore) {
-                    if window.set_ignore_cursor_events(want_ignore).is_ok() {
-                        ignoring = Some(want_ignore);
-                        // a click-through window gets no more mouse events, so tell the page where the pointer is
-                        let _ = window.emit("island_pointer", !want_ignore);
-                    }
+                if ignoring != Some(want_ignore)
+                    && window.set_ignore_cursor_events(want_ignore).is_ok()
+                {
+                    ignoring = Some(want_ignore);
+                    // a click-through window gets no more mouse events, so tell the page where the pointer is
+                    let _ = window.emit("island_pointer", !want_ignore);
                 }
             }
             // fast while the cursor is around the island, relaxed (almost no CPU) everywhere else
@@ -114,7 +114,7 @@ pub fn place_island(window: &WebviewWindow, width: f64, height: f64) -> bool {
                 SetWindowPos, SWP_NOACTIVATE, SWP_NOOWNERZORDER, SWP_NOZORDER,
             };
             if let Ok(h) = window.hwnd() {
-                let hwnd = HWND(h.0 as *mut core::ffi::c_void);
+                let hwnd = HWND(h.0);
                 let ok = unsafe {
                     SetWindowPos(
                         hwnd,
@@ -147,4 +147,47 @@ pub fn focus_island(window: WebviewWindow) {
 #[tauri::command]
 pub fn setup_shelf_drop(app: AppHandle) {
     crate::shelf::setup_shelf_drop(app);
+}
+
+#[cfg(target_os = "windows")]
+pub fn trim_working_set() {
+    use windows::Win32::System::Threading::{GetCurrentProcess, SetProcessWorkingSetSize};
+    unsafe {
+        let _ = SetProcessWorkingSetSize(GetCurrentProcess(), usize::MAX, usize::MAX);
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+pub fn trim_working_set() {}
+
+#[cfg(target_os = "windows")]
+pub fn set_webview_low_memory(window: &WebviewWindow, low: bool) {
+    use webview2_com::Microsoft::Web::WebView2::Win32::{
+        ICoreWebView2_19, COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL_LOW,
+        COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL_NORMAL,
+    };
+    let _ = window.with_webview(move |wv| unsafe {
+        if let Ok(core) = wv.controller().CoreWebView2() {
+            if let Ok(wv19) = windows_core_062::Interface::cast::<ICoreWebView2_19>(&core)
+            {
+                let level = if low {
+                    COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL_LOW
+                } else {
+                    COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL_NORMAL
+                };
+                let _ = wv19.SetMemoryUsageTargetLevel(level);
+            }
+        }
+    });
+}
+
+#[cfg(not(target_os = "windows"))]
+pub fn set_webview_low_memory(_window: &WebviewWindow, _low: bool) {}
+
+#[tauri::command]
+pub fn set_idle_memory_mode(window: WebviewWindow, low: bool) {
+    set_webview_low_memory(&window, low);
+    if low {
+        trim_working_set();
+    }
 }
