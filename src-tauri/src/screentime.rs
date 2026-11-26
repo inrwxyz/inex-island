@@ -682,7 +682,8 @@ pub fn get_screen_time_today() -> DayTime {
         };
     }
     accrue();
-    let total = TOTAL_SECS.load(Ordering::Relaxed);
+    let tracked_total = TOTAL_SECS.load(Ordering::Relaxed);
+    let total = crate::session_history::today_pc_screen_time_secs().unwrap_or(tracked_total);
     let apps_g = apps_lock();
     let mut apps: Vec<AppTime> = apps_g
         .iter()

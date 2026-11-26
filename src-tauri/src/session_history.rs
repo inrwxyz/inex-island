@@ -3,6 +3,8 @@
 
 use serde::Serialize;
 use std::collections::BTreeMap;
+use std::sync::{Mutex, OnceLock};
+use std::time::{Duration, Instant};
 
 #[derive(Debug, Clone, Serialize)]
 pub struct PcSession {
@@ -287,14 +289,17 @@ fn parse_event_xml(xml: &str) -> Option<RawEvent> {
 // ---------------------------------------------------------------- Win32 query
 
 #[cfg(target_os = "windows")]
-fn query_system_events_30d() -> Vec<RawEvent> {
+fn query_system_events_ms(window_ms: u64) -> Vec<RawEvent> {
     const EVT_QUERY_CHANNEL_PATH: u32 = 0x1;
     const EVT_QUERY_FORWARD: u32 = 0x100;
     const EVT_RENDER_EVENT_XML: u32 = 1;
     const BATCH: usize = 64;
 
     let channel: Vec<u16> = "System\0".encode_utf16().collect();
-    let xpath = "*[System[((Provider[@Name='Microsoft-Windows-Kernel-General'] and (EventID=12 or EventID=13)) or (Provider[@Name='EventLog'] and EventID=6008) or (Provider[@Name='Microsoft-Windows-Kernel-Power'] and (EventID=42 or EventID=107))) and TimeCreated[timediff(@SystemTime) <= 2592000000]]]\0";
+    let xpath = format!(
+        "*[System[((Provider[@Name='Microsoft-Windows-Kernel-General'] and (EventID=12 or EventID=13)) or (Provider[@Name='EventLog'] and EventID=6008) or (Provider[@Name='Microsoft-Windows-Kernel-Power'] and (EventID=42 or EventID=107))) and TimeCreated[timediff(@SystemTime) <= {}]]]\0",
+        window_ms
+    );
     let query: Vec<u16> = xpath.encode_utf16().collect();
 
     let h_query = unsafe { EvtQuery(0, channel.as_ptr(), query.as_ptr(), EVT_QUERY_CHANNEL_PATH | EVT_QUERY_FORWARD) };
@@ -344,8 +349,12 @@ fn query_system_events_30d() -> Vec<RawEvent> {
 }
 
 #[cfg(not(target_os = "windows"))]
-fn query_system_events_30d() -> Vec<RawEvent> {
+fn query_system_events_ms(_window_ms: u64) -> Vec<RawEvent> {
     Vec::new()
+}
+
+fn query_system_events_30d() -> Vec<RawEvent> {
+    query_system_events_ms(2_592_000_000)
 }
 
 // ---------------------------------------------------------------- pairing & splitting
@@ -454,10 +463,56 @@ fn build_days_from_events(mut events: Vec<RawEvent>, now_secs: i64) -> Vec<Sessi
         .collect()
 }
 
+static TODAY_CACHE: OnceLock<Mutex<Option<(Instant, String, u64)>>> = OnceLock::new();
+
+fn store_today_cache(date: String, secs: u64) {
+    let lock = TODAY_CACHE.get_or_init(|| Mutex::new(None));
+    if let Ok(mut guard) = lock.lock() {
+        *guard = Some((Instant::now(), date, secs));
+    }
+}
+
+/// Returns today's wall-clock PC uptime seconds from Windows System Event Log,
+/// matching `PC Screen Time` so the Control Deck widget and Apps total stay synced.
+pub fn today_pc_screen_time_secs() -> Option<u64> {
+    let now = now_local_secs();
+    let today_str = fmt_date(now);
+    let lock = TODAY_CACHE.get_or_init(|| Mutex::new(None));
+    if let Ok(guard) = lock.lock() {
+        if let Some((at, ref cached_date, secs)) = *guard {
+            if cached_date == &today_str && at.elapsed() < Duration::from_secs(5) {
+                return Some(secs);
+            }
+        }
+    }
+
+    // Fast path: 48h window catches today's sessions plus overnight runs from yesterday.
+    let find_today = |ev: Vec<RawEvent>| {
+        build_days_from_events(ev, now)
+            .into_iter()
+            .find(|d| d.date == today_str)
+            .map(|d| d.total_secs)
+    };
+    let secs = find_today(query_system_events_ms(172_800_000))
+        .filter(|&s| s > 0)
+        .or_else(|| find_today(query_system_events_30d()));
+
+    if let Some(s) = secs {
+        store_today_cache(today_str, s);
+    }
+    secs
+}
+
 #[tauri::command]
 pub fn get_pc_session_history() -> Vec<SessionHistoryDay> {
+    let now = now_local_secs();
+    let today_str = fmt_date(now);
     let events = query_system_events_30d();
-    build_days_from_events(events, now_local_secs())
+    let days = build_days_from_events(events, now);
+    if let Some(today_rec) = days.iter().find(|d| d.date == today_str) {
+        store_today_cache(today_str, today_rec.total_secs);
+    }
+    days
 }
 
 #[cfg(test)]
@@ -501,5 +556,9 @@ mod tests {
         // Verify we returned structured history quickly with today's running session
         assert!(!hist.is_empty());
         assert!(hist.iter().any(|d| d.sessions.iter().any(|s| s.status == "Active")));
+        let today_pc = today_pc_screen_time_secs().expect("today pc screen time should be present");
+        let today_widget = crate::screentime::get_screen_time_today().total;
+        assert!(today_pc > 0);
+        assert!(today_widget.abs_diff(today_pc) <= 2);
     }
 }
