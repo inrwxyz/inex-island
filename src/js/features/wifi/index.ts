@@ -36,6 +36,22 @@ let wifiBusySsid: string | null = null;
 let wifiBusyWant = '';
 let wifiScanning = false;
 let wifiScanT: ReturnType<typeof setTimeout> | undefined;
+let wifiLoadSeq = 0;
+
+function syncWifiStatsAndLabel(connectedSsid: string, signal?: number): void {
+  if (!appState.stats) appState.stats = {};
+  appState.stats.wifi_name = connectedSsid || 'Not connected';
+  if (typeof signal === 'number') appState.stats.wifi_signal = signal;
+  const deckWifiSub = document.getElementById('deck-wifi-sub');
+  if (deckWifiSub && appState.wifiPresent !== false) {
+    const next = appState.wifiRadio ? (connectedSsid || 'On') : 'Off';
+    if (deckWifiSub.textContent !== next) deckWifiSub.textContent = next;
+  }
+  const cap = document.getElementById('wifi-cap');
+  if (cap) cap.textContent = appState.wifiRadio && connectedSsid ? connectedSsid : '';
+  const sub = document.getElementById('wifi-sub');
+  if (sub) sub.textContent = appState.wifiRadio ? (connectedSsid || 'On') : 'Off';
+}
 
 function isWifiOpen(): boolean {
   const deckMount = $('deck-sub-mount');
@@ -74,15 +90,19 @@ export async function loadWifiList(soft?: boolean): Promise<void> {
     return;
   }
   if (appState.keepOpen) return;
+  const seq = ++wifiLoadSeq;
   if (btn) btn.classList.add('spin');
-  if (!soft) netList.innerHTML = '<div class="empty-hint">Scanning…</div>';
+  if (!soft && netList.children.length === 0) netList.innerHTML = '<div class="empty-hint">Scanning…</div>';
   const res = await invokeTauri<WifiScanResponse | null>('get_wifi_networks');
   if (!wifiScanning && btn) btn.classList.remove('spin');
-  if (!isWifiOpen() || appState.keepOpen) return;
+  if (seq !== wifiLoadSeq || !isWifiOpen() || appState.keepOpen) return;
   const networks = res && Array.isArray(res.networks) ? res.networks : [];
   const scanError = res && res.error ? res.error : '';
+  const scannedNet = networks.find((n) => n.connected);
   const wn = appState.stats && (appState.stats.wifi_name as string | undefined);
-  const current = wn && wn !== 'Not connected' ? wn : '';
+  const statCurrent = wn && wn !== 'Not connected' ? wn : '';
+  const current = scannedNet ? scannedNet.ssid : (networks.length === 0 ? statCurrent : '');
+  syncWifiStatsAndLabel(current, scannedNet?.signal);
   if (wifiBusySsid && ((wifiBusyWant === 'on' && current === wifiBusySsid) || (wifiBusyWant === 'off' && current !== wifiBusySsid))) {
     wifiBusySsid = null;
     selectedWifiSsid = null;
@@ -106,15 +126,24 @@ export async function loadWifiList(soft?: boolean): Promise<void> {
     const row = document.createElement('div');
     row.className = 'list-row-item' + (isConnected ? ' on' : '') + (isExpanded ? ' expanded' : '') + (isBusy ? ' busy' : '');
 
+    const textWrap = document.createElement('div');
+    textWrap.className = 'row-text';
     const name = document.createElement('span');
     name.className = 'row-name';
     name.textContent = n.ssid;
+    textWrap.appendChild(name);
+    if (isConnected) {
+      const sub = document.createElement('span');
+      sub.className = 'row-sub';
+      sub.textContent = 'Connected';
+      textWrap.appendChild(sub);
+    }
 
     const pct = document.createElement('small');
     pct.className = 'sig-pct';
     const displaySignal = isConnected ? (sigPct > 0 ? sigPct : (n.signal || 85)) : (n.signal || Math.min(100, Math.round((n.bars || 2) * 25)));
     pct.textContent = `${displaySignal}%`;
-    row.append(rowAction(isConnected), name, pct);
+    row.append(rowAction(isConnected), textWrap, pct);
 
     if (n.security && n.security !== 'open') {
       const lock = document.createElement('span');
@@ -163,7 +192,9 @@ export async function loadWifiList(soft?: boolean): Promise<void> {
             return;
           }
           selectedWifiSsid = null;
+          syncWifiStatsAndLabel('', 0);
           bus.emit('wifi:refresh-request');
+          void loadWifiList(true);
         });
         btnRow.appendChild(disBtn);
 
@@ -211,7 +242,9 @@ export async function loadWifiList(soft?: boolean): Promise<void> {
             return;
           }
           selectedWifiSsid = null;
+          syncWifiStatsAndLabel(n.ssid);
           bus.emit('wifi:refresh-request');
+          void loadWifiList(true);
         });
         const fBtn = document.createElement('button');
         fBtn.className = 'drawer-btn ghost';
@@ -237,15 +270,18 @@ export async function loadWifiList(soft?: boolean): Promise<void> {
           wifiBusySsid = n.ssid;
           wifiBusyWant = 'on';
           connBtn.textContent = 'Connecting…';
+          let joinRes = '';
           try {
-            await invokeTauri('wifi_join', { ssid: n.ssid, password: '', security: 'open', hidden: false });
+            joinRes = (await invokeTauri<string>('wifi_join', { ssid: n.ssid, password: '', security: 'open', hidden: false })) || '';
           } catch (err) {
             console.warn('Wi-Fi open join error:', err);
           }
           if (wifiBusySsid !== n.ssid) return;
           wifiBusySsid = null;
           selectedWifiSsid = null;
+          if (joinRes === 'ok') syncWifiStatsAndLabel(n.ssid);
           bus.emit('wifi:refresh-request');
+          void loadWifiList(true);
         });
         btnRow.appendChild(connBtn);
         drawer.appendChild(btnRow);
@@ -273,6 +309,8 @@ export async function loadWifiList(soft?: boolean): Promise<void> {
           const joinRes = await invokeTauri<string>('wifi_join', { ssid: n.ssid, password: key, security: n.security || 'wpa2', hidden: false });
           if (joinRes === 'ok') {
             selectedWifiSsid = null;
+            syncWifiStatsAndLabel(n.ssid);
+            bus.emit('wifi:refresh-request');
             void loadWifiList(true);
           } else {
             connBtn.disabled = passIn.disabled = false;
@@ -310,13 +348,25 @@ export async function loadWifiList(soft?: boolean): Promise<void> {
           selectedWifiSsid = selectedWifiSsid === n.ssid ? null : n.ssid;
           void loadWifiList(true);
         } else {
+          wifiBusySsid = n.ssid;
+          wifiBusyWant = 'on';
           row.classList.add('busy');
           invokeTauri<boolean>('connect_wifi_network', { ssid: n.ssid }).then((ok) => {
+            if (wifiBusySsid === n.ssid) wifiBusySsid = null;
             row.classList.remove('busy');
             if (ok === false) {
               selectedWifiSsid = n.ssid;
-              void loadWifiList(true);
+            } else {
+              selectedWifiSsid = null;
+              syncWifiStatsAndLabel(n.ssid);
+              bus.emit('wifi:refresh-request');
             }
+            void loadWifiList(true);
+          }).catch(() => {
+            if (wifiBusySsid === n.ssid) wifiBusySsid = null;
+            row.classList.remove('busy');
+            selectedWifiSsid = n.ssid;
+            void loadWifiList(true);
           });
         }
       } else {
@@ -437,10 +487,11 @@ export function showWifiJoin({ ssid, hidden, security }: { ssid: string; hidden?
     const r = await invokeTauri<string>('wifi_join', { ssid: name, password: pass.value, security: sec.value, hidden: !!hidden });
     if (r === 'ok') {
       msg.textContent = 'Connected';
-      if (appState.stats) appState.stats.wifi_name = name;
+      syncWifiStatsAndLabel(name);
       appState.keepOpen = false;
+      bus.emit('wifi:refresh-request');
       setTimeout(() => {
-        if (isWifiOpen()) void loadWifiList();
+        if (isWifiOpen()) void loadWifiList(true);
       }, 700);
       return;
     }

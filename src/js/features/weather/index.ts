@@ -466,7 +466,7 @@ try {
 }
 
 export function wxAlertFor(code: number, windKmh: number, aqi: number | null): { key: string; icon: string; title: string } | null {
-  if (code === 95 || code === 96 || code === 99) return { key: 'storm', icon: 'cloud', title: 'Severe Thunderstorm Warning' };
+  if (code === 95 || code === 96 || code === 99) return { key: 'storm', icon: 'storm', title: 'Severe Thunderstorm' };
   if (code === 75 || code === 86) return { key: 'snow', icon: 'cloud', title: 'Blizzard Warning' };
   if (code === 65 || code === 82) return { key: 'rain', icon: 'cloud', title: 'Heavy Rain Alert' };
   if (windKmh > 50) return { key: 'wind', icon: 'alert', title: 'High Wind Warning' };

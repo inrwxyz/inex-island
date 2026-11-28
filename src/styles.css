@@ -1979,6 +1979,20 @@ body {
 .c-toast.t-warn .c-toast-ico,
 .c-toast.t-alert .c-toast-ico,
 .c-toast.t-cloud .c-toast-ico { color: #ff9f0a; }
+.c-toast.t-storm .c-toast-ico {
+  color: #ff453a;
+  background: rgba(255, 69, 58, 0.18);
+  border-radius: 6px;
+  padding: 3px;
+  justify-content: center;
+}
+.c-toast.t-storm .c-toast-ico svg {
+  animation: toastPop 0.38s var(--spring) both, stormAlertPulse 1.3s 0.4s ease-in-out infinite;
+}
+@keyframes stormAlertPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+}
 .c-toast.t-info .c-toast-ico { color: #64d2ff; }
 
 
@@ -3903,6 +3917,7 @@ body {
 :root[data-notch-tone="light"] .island:not([data-mode="ghost"]) .c-toast.t-warn .c-toast-ico,
 :root[data-notch-tone="light"] .island:not([data-mode="ghost"]) .c-toast.t-alert .c-toast-ico,
 :root[data-notch-tone="light"] .island:not([data-mode="ghost"]) .c-toast.t-cloud .c-toast-ico { color: #d97706; }
+:root[data-notch-tone="light"] .island:not([data-mode="ghost"]) .c-toast.t-storm .c-toast-ico { color: #dc2626; background: rgba(220, 38, 38, 0.14); }
 :root[data-notch-tone="light"] .island:not([data-mode="ghost"]) .c-toast.t-info .c-toast-ico { color: #0284c7; }
 :root[data-notch-tone="light"] .island:not([data-mode="ghost"]) .c-toast.t-unphone .c-toast-ico { color: #64748b; }
 :root[data-notch-tone="light"] .island:not([data-mode="ghost"]) .c-toast.t-mic .c-toast-ico { color: #0891b2; }

@@ -2,6 +2,13 @@
 
 All notable changes to Inex Island are documented in this file.
 
+## [1.2.1] - 2026-11-28
+
+### Fixed
+- **Bluetooth Connect, Disconnect & Remove**: Fixed frontend command mismatch in `src/js/features/bluetooth/index.ts` (`bt_set_connection` and `bt_unpair`), enabled Control Deck subview refresh on master toggle, emitted immediate `bluetooth-changed` events from Rust on connection changes, and ensured audio oneshot reconnect/disconnect signals all matching endpoints (A2DP + Hands-Free).
+- **Wi-Fi Live Refresh & Connected SSID Display**: Fixed `refreshWifiNow()` and radio toggle checks to recognize Control Deck subview (`isWifiViewOpen()`), prevented stale scan races with `wifiLoadSeq`, synced `#deck-wifi-sub` with `mqFit` and live `Connected` row labels, and triggered immediate refreshes after connect/disconnect/join actions.
+- **Severe Thunderstorm Island Status Style**: Matched live Island severe thunderstorm alerts (`#c-toast.t-storm`) to the Settings `Severe weather alerts` preview danger triangle icon and red tinted badge while keeping the compact pill size unchanged.
+
 ## [1.2.0] - 2026-11-26
 
 ### Added

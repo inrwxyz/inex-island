@@ -131,6 +131,7 @@
 :root[data-notch-tone="light"] .island:not([data-mode="ghost"]) .c-toast.t-warn .c-toast-ico,
 :root[data-notch-tone="light"] .island:not([data-mode="ghost"]) .c-toast.t-alert .c-toast-ico,
 :root[data-notch-tone="light"] .island:not([data-mode="ghost"]) .c-toast.t-cloud .c-toast-ico { color: #d97706; }
+:root[data-notch-tone="light"] .island:not([data-mode="ghost"]) .c-toast.t-storm .c-toast-ico { color: #dc2626; background: rgba(220, 38, 38, 0.14); }
 :root[data-notch-tone="light"] .island:not([data-mode="ghost"]) .c-toast.t-info .c-toast-ico { color: #0284c7; }
 :root[data-notch-tone="light"] .island:not([data-mode="ghost"]) .c-toast.t-unphone .c-toast-ico { color: #64748b; }
 :root[data-notch-tone="light"] .island:not([data-mode="ghost"]) .c-toast.t-mic .c-toast-ico { color: #0891b2; }

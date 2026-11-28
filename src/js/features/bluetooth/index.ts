@@ -270,21 +270,33 @@ export async function loadBtList(soft?: boolean): Promise<void> {
           const want = !d.connected;
           connBtn.textContent = want ? 'Connecting…' : 'Disconnecting…';
           btAction = { name: d.name, on: want };
-          let ok = false;
+          let res: string | null = 'error';
           try {
-            ok = (await invokeTauri('connect_bt_device', { name: d.name, connect: want })) === true;
+            res = await invokeTauri<string>('bt_set_connection', { name: d.name, on: want });
           } catch {
-            ok = false;
+            res = 'error';
           }
+          const ok = res === 'ok';
           if (!btAction || btAction.name !== d.name) return;
           btAction = null;
           if (!ok) {
             connBtn.disabled = false;
             connBtn.textContent = want ? 'Connect' : 'Disconnect';
-            showBtNote(want ? `Could not connect to ${d.name}` : `Could not disconnect from ${d.name}`);
+            const msg = res === 'noradio'
+              ? 'Bluetooth is turned off'
+              : res === 'notfound'
+                ? `${d.name} was not found`
+                : res === 'timeout'
+                  ? `Timed out trying to ${want ? 'connect to' : 'disconnect from'} ${d.name}`
+                  : want
+                    ? `Could not connect to ${d.name}`
+                    : `Could not disconnect from ${d.name}`;
+            showBtNote(msg);
             return;
           }
           selectedBtName = null;
+          bus.emit('bt:refresh');
+          void checkNewBtConnections();
           void loadBtList(true);
         });
 
@@ -294,8 +306,9 @@ export async function loadBtList(soft?: boolean): Promise<void> {
         fBtn.addEventListener('click', async (e) => {
           e.stopPropagation();
           fBtn.disabled = true;
-          await invokeTauri('unpair_bt_device', { name: d.name });
+          await invokeTauri('bt_unpair', { name: d.name });
           selectedBtName = null;
+          bus.emit('bt:refresh');
           void loadBtList(true);
         });
 

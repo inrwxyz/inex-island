@@ -6,6 +6,7 @@ import { loadSettings } from './settings.js';
 import { island } from './dom.js';
 import {
   isDeckLayout,
+  isWifiViewOpen,
   applyPresence,
   applyRadio,
   loadAudioDeviceList,
@@ -19,7 +20,7 @@ import {
   goCompact,
   renderMic
 } from '../features/menu/index.js';
-import { btBatteryFor, BUDS_SVG, DEV_ICONS } from '../features/bluetooth/index.js';
+import { btBatteryFor, BUDS_SVG, DEV_ICONS, mqFit } from '../features/bluetooth/index.js';
 import { updateClocks } from '../features/clock/index.js';
 import { renderWidgets } from '../features/weather/index.js';
 import { batteryOverlays } from '../features/battery/index.js';
@@ -261,6 +262,28 @@ export function syncSmartHidden(nextFs?: boolean): void {
   }
 }
 
+export function syncWifiCaption(name?: string): void {
+  const clean = appState.wifiRadio && name && name !== 'Not connected' ? name : '';
+  const deckWifiSub = document.getElementById('deck-wifi-sub');
+  if (deckWifiSub) {
+    const next = appState.wifiPresent === false
+      ? 'No adapter'
+      : appState.wifiRadio
+        ? (clean || 'On')
+        : 'Off';
+    if (deckWifiSub.textContent !== next) {
+      deckWifiSub.textContent = next;
+      mqFit(deckWifiSub);
+    }
+  }
+  if (slotRunning.has('wifi') || document.getElementById('tile-wifi')) {
+    const cap = document.getElementById('wifi-cap');
+    if (cap) cap.textContent = clean;
+    const sub = document.getElementById('wifi-sub');
+    if (sub) sub.textContent = appState.wifiRadio ? (clean || 'On') : 'Off';
+  }
+}
+
 export async function refreshStats(): Promise<void> {
   const stats = await invokeTauri<SystemStats & { wifi_name?: string; is_fullscreen?: boolean }>('get_sys_stats');
   if (stats) {
@@ -268,18 +291,7 @@ export async function refreshStats(): Promise<void> {
     updateClocks();
     renderWidgets();
     batteryOverlays(stats);
-    const deckWifiSub = document.getElementById('deck-wifi-sub');
-    if (deckWifiSub && appState.wifiRadio) {
-      deckWifiSub.textContent = (stats.wifi_name && stats.wifi_name !== 'Not connected') ? stats.wifi_name : 'On';
-    }
-    if (slotRunning.has('wifi')) {
-      const cap = document.getElementById('wifi-cap');
-      if (cap) {
-        cap.textContent = appState.wifiRadio && stats.wifi_name && stats.wifi_name !== 'Not connected' ? stats.wifi_name : '';
-      }
-      const sub = document.getElementById('wifi-sub');
-      if (sub && appState.wifiRadio && stats.wifi_name) sub.textContent = stats.wifi_name;
-    }
+    syncWifiCaption(stats.wifi_name);
 
     syncSmartHidden(!!stats.is_fullscreen);
   }
@@ -349,17 +361,11 @@ export function syncLoadTimer(): void {
 export async function refreshWifiNow(): Promise<void> {
   const st = await invokeTauri<{ name?: string; signal?: number }>('get_wifi_status');
   if (!st) return;
-  if (appState.stats) {
-    appState.stats.wifi_name = st.name;
-    appState.stats.wifi_signal = st.signal;
-  }
-  const cap = document.getElementById('wifi-cap');
-  if (cap) {
-    cap.textContent = appState.wifiRadio && st.name && st.name !== 'Not connected' ? st.name : '';
-  }
-  const sub = document.getElementById('wifi-sub');
-  if (sub && appState.wifiRadio && st.name) sub.textContent = st.name;
-  if (appState.currentView === 'view-wifi') loadWifiList(true);
+  if (!appState.stats) appState.stats = {};
+  appState.stats.wifi_name = st.name;
+  appState.stats.wifi_signal = st.signal;
+  syncWifiCaption(st.name);
+  if (isWifiViewOpen()) void loadWifiList(true);
 }
 
 export function onTauriEvent<T = unknown>(name: string, fn: (ev: TauriEvent<T>) => void): void {

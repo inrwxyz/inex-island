@@ -686,7 +686,7 @@ pub async fn bt_unpair(app: AppHandle, name: String) -> bool {
 
 /// Returns "ok" | "notfound" | "noradio" | "error"
 #[tauri::command]
-pub async fn bt_set_connection(name: String, on: bool) -> String {
+pub async fn bt_set_connection(app: AppHandle, name: String, on: bool) -> String {
     if !crate::live::bt_present() {
         return "noradio".into();
     }
@@ -697,7 +697,7 @@ pub async fn bt_set_connection(name: String, on: bool) -> String {
             return "notfound".into();
         }
         // the driver can hang for a long time: never leave the UI on "Disconnecting..." for ever
-        tauri::async_runtime::spawn_blocking(move || {
+        let out = tauri::async_runtime::spawn_blocking(move || {
             let (tx, rx) = mpsc::channel::<String>();
             std::thread::spawn(move || {
                 com_init();
@@ -706,11 +706,15 @@ pub async fn bt_set_connection(name: String, on: bool) -> String {
             rx.recv_timeout(std::time::Duration::from_secs(22)).unwrap_or_else(|_| "timeout".to_string())
         })
         .await
-        .unwrap_or_else(|_| "error".into())
+        .unwrap_or_else(|_| "error".into());
+        if out == "ok" {
+            let _ = app.emit("bluetooth-changed", ());
+        }
+        out
     }
     #[cfg(not(target_os = "windows"))]
     {
-        let _ = (name, on);
+        let _ = (app, name, on);
         "error".into()
     }
 }
@@ -733,13 +737,19 @@ fn send_audio_oneshot_by_name(name: &str, connect: bool) -> bool {
             return false;
         };
 
-        let wanted = name.to_lowercase();
+        let wanted = name.trim().to_lowercase();
         let total = endpoints.GetCount().unwrap_or(0);
-        // first matching endpoint that accepts the request wins
-        (0..total)
+        // Signal all matching endpoints (e.g. both A2DP Stereo and HFP Hands-Free)
+        let mut sent = false;
+        for ep in (0..total)
             .filter_map(|i| endpoints.Item(i).ok())
-            .filter(|ep| endpoint_label(ep).is_some_and(|label| labels_overlap(&label, &wanted)))
-            .any(|ep| ks_audio_oneshot(&enumerator, &ep, connect).is_some())
+            .filter(|ep| endpoint_label(ep).is_some_and(|label| labels_overlap(label.trim(), &wanted)))
+        {
+            if ks_audio_oneshot(&enumerator, &ep, connect).is_some() {
+                sent = true;
+            }
+        }
+        sent
     }
 }
 
@@ -847,7 +857,7 @@ fn set_connection_blocking(name: &str, on: bool) -> String {
     }
     // 1) the audio driver's own one-shot request (fast; this is what drops / restores the link)
     let sent = send_audio_oneshot_by_name(name, on);
-    if on && sent && wait_state(name, true, 5000) {
+    if on && sent && wait_state(name, true, 2500) {
         return "ok".into();
     }
     // 2) switch the audio services off (disconnect) or off+on (connect). For a disconnect this is also what
@@ -916,7 +926,7 @@ fn set_services_blocking(name: &str, on: bool) -> String {
         loop {
             let len = di.szName.iter().position(|&c| c == 0).unwrap_or(di.szName.len());
             let dev_name = String::from_utf16_lossy(&di.szName[..len]);
-            if dev_name.eq_ignore_ascii_case(name) {
+            if dev_name.trim().eq_ignore_ascii_case(name.trim()) {
                 let mut ok = false;
                 for g in services.iter() {
                     if on {

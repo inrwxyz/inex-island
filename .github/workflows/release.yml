@@ -53,10 +53,9 @@ jobs:
             ## Inex Island v__VERSION__
 
             ### ✨ What's New in v__VERSION__
-            - 🧠 **Strict TypeScript & Vite 8 Architecture**: Migrated the entire Island & Settings frontend to strict TypeScript with modular `styles-parts/` and automated Vitest + Cargo + Clippy + Playwright Golden UI verification.
-            - 📉 **Idle RAM & 5-Band Visualizer Optimization**: Enabled WebView2 `MEMORY_USAGE_TARGET_LEVEL_LOW` + working-set trim on idle/hide, and auto-paused Rust WASAPI loopback 512-point FFT capture when media stops or Smart Mode hides the island.
-            - 🔒 **Quick Share / Inex Drop Engine Hardening**: Synced the hardened `wquickshare` engine (`UKEY2` SHA-512 verification, strict replay protection, 2 MB buffer caps, and path-traversal sanitization) plus parallel `4x4 MB` Speed Test upload calibration.
-            - 🎨 **Settings & Screen Time Polish**: Added 5s cached Screen Time sync across `Apps | Screen Time` tabs and scrollable, high-contrast Settings dropdown menus.
+            - 🎧 **Bluetooth Connect, Disconnect & Unpair Fix**: Fixed Tauri command bindings (`bt_set_connection`, `bt_unpair`), immediate `bluetooth-changed` UI sync, and multi-endpoint (A2DP + HFP) audio oneshot signaling.
+            - 📶 **Wi-Fi Smooth Live Refresh & Connected SSID**: Fixed Control Deck subview live updates (`isWifiViewOpen()`), guarded concurrent scans, and synced `#deck-wifi-sub` (`mqFit`) and `Connected` labels immediately after connect/disconnect/join.
+            - ⛈️ **Severe Thunderstorm Status Alert Style**: Matched the Island compact thunderstorm status alert (`#c-toast.t-storm`) to the Settings preview red danger triangle icon & badge while preserving compact pill dimensions.
 
             ### 📦 Installation
             Download `Inex Island___VERSION___x64-setup.exe` below and run the installer.

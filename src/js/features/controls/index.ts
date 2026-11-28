@@ -139,7 +139,7 @@ export async function toggleRadio(kind: 'wifi' | 'bt', on: boolean): Promise<voi
   }
   const real = await invokeTauri<boolean>('get_radio_state', { kind });
   if (typeof real === 'boolean') applyRadio(kind, real);
-  if (kind === 'wifi' && appState.currentView === 'view-wifi') setTimeout(loadWifiList, on ? 2000 : 0);
+  if (kind === 'wifi' && isWifiViewOpen()) setTimeout(() => void loadWifiList(true), on ? 1200 : 0);
 }
 
 export const ACTION_TILE_ICONS: Record<string, string> = {
@@ -593,7 +593,7 @@ export function initControls(): void {
   document.getElementById('bt-master-toggle')?.addEventListener('change', async (e) => {
     const checked = (e.target as HTMLInputElement).checked;
     await toggleRadio('bt', checked);
-    if (appState.currentView === 'view-bt') setTimeout(loadBtList, checked ? 1500 : 0);
+    if (isBtViewOpen()) setTimeout(() => void loadBtList(true), checked ? 1500 : 0);
   });
 
   document.getElementById('m-vol-toggle')?.addEventListener('click', () => {

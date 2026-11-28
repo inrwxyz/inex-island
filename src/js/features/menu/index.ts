@@ -267,6 +267,7 @@ export function openControlMenu(): void {
     switchView('view-control', 'state-control', 316, 292);
   }
   refreshBtCaption();
+  if (typeof window.refreshWifiNow === 'function') void window.refreshWifiNow();
   refreshMic();
 }
 
